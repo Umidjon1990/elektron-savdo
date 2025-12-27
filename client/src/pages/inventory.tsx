@@ -3,7 +3,7 @@ import { SidebarNav } from "@/components/layout/sidebar-nav";
 import { useProducts } from "@/lib/product-context";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Search, Plus, Filter, MoreHorizontal, ScanBarcode, ArrowRight, Check, X, RotateCcw, PackagePlus } from "lucide-react";
+import { Search, Plus, Filter, MoreHorizontal, ScanBarcode, ArrowRight, Check, X, RotateCcw, PackagePlus, ScanText } from "lucide-react";
 import { ScannerOverlay } from "@/components/pos/scanner-overlay";
 import { KNOWN_BOOKS_DB } from "@/data/mock-external-books";
 import {
@@ -47,7 +47,12 @@ export default function Inventory() {
   const { products, addProduct, updateStock } = useProducts();
   const [searchQuery, setSearchQuery] = useState("");
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
+  
+  // Scanner States
   const [isScannerOpen, setIsScannerOpen] = useState(false);
+  const [scannerMode, setScannerMode] = useState<"barcode" | "text">("barcode");
+  const [scanningField, setScanningField] = useState<"barcode" | "name" | "author">("barcode");
+
   const [step, setStep] = useState<1 | 2>(1); // 1: Scan/Enter ISBN, 2: Details
   const { toast } = useToast();
 
@@ -72,9 +77,29 @@ export default function Inventory() {
     }
   }, [isAddDialogOpen]);
 
-  const handleScan = (code: string) => {
+  const openScanner = (mode: "barcode" | "text", field: "barcode" | "name" | "author") => {
+    setScannerMode(mode);
+    setScanningField(field);
+    setIsScannerOpen(true);
+  };
+
+  const handleScanResult = (result: string) => {
     setIsScannerOpen(false);
-    checkIsbnAndProceed(code);
+    
+    if (scannerMode === "barcode") {
+        checkIsbnAndProceed(result);
+    } else {
+        // Text Scan Result
+        if (scanningField === "name") {
+            setNewProduct(prev => ({ ...prev, name: result }));
+        } else if (scanningField === "author") {
+            setNewProduct(prev => ({ ...prev, author: result }));
+        }
+        toast({
+            title: "Matn aniqlandi",
+            description: `"${result}" maydonga yozildi`,
+        });
+    }
   };
 
   const checkIsbnAndProceed = (code: string) => {
@@ -219,7 +244,7 @@ export default function Inventory() {
 
                   {step === 1 ? (
                     <div className="py-6 flex flex-col items-center gap-6">
-                      <div className="w-full flex flex-col items-center gap-4 p-6 border-2 border-dashed rounded-xl bg-gray-50 hover:bg-gray-100 transition-colors cursor-pointer" onClick={() => setIsScannerOpen(true)}>
+                      <div className="w-full flex flex-col items-center gap-4 p-6 border-2 border-dashed rounded-xl bg-gray-50 hover:bg-gray-100 transition-colors cursor-pointer" onClick={() => openScanner("barcode", "barcode")}>
                         <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center">
                           <ScanBarcode className="h-8 w-8 text-primary" />
                         </div>
@@ -269,24 +294,46 @@ export default function Inventory() {
                         <div className="grid grid-cols-2 gap-4">
                           <div className="space-y-2 col-span-2">
                             <Label htmlFor="name">Kitob nomi</Label>
-                            <Input 
-                              id="name" 
-                              required 
-                              value={newProduct.name}
-                              onChange={(e) => setNewProduct({...newProduct, name: e.target.value})}
-                              placeholder="Masalan: Atomic Habits"
-                              className="font-medium"
-                            />
+                            <div className="flex gap-2">
+                              <Input 
+                                id="name" 
+                                required 
+                                value={newProduct.name}
+                                onChange={(e) => setNewProduct({...newProduct, name: e.target.value})}
+                                placeholder="Masalan: Atomic Habits"
+                                className="font-medium"
+                              />
+                              <Button 
+                                type="button" 
+                                variant="outline" 
+                                size="icon"
+                                title="Kamera orqali o'qish"
+                                onClick={() => openScanner("text", "name")}
+                              >
+                                <ScanText className="h-4 w-4" />
+                              </Button>
+                            </div>
                           </div>
                           <div className="space-y-2 col-span-2 sm:col-span-1">
                             <Label htmlFor="author">Muallif</Label>
-                            <Input 
-                              id="author" 
-                              required
-                              value={newProduct.author}
-                              onChange={(e) => setNewProduct({...newProduct, author: e.target.value})}
-                              placeholder="Masalan: James Clear"
-                            />
+                            <div className="flex gap-2">
+                                <Input 
+                                id="author" 
+                                required
+                                value={newProduct.author}
+                                onChange={(e) => setNewProduct({...newProduct, author: e.target.value})}
+                                placeholder="Masalan: James Clear"
+                                />
+                                <Button 
+                                    type="button" 
+                                    variant="outline" 
+                                    size="icon"
+                                    title="Kamera orqali o'qish"
+                                    onClick={() => openScanner("text", "author")}
+                                >
+                                    <ScanText className="h-4 w-4" />
+                                </Button>
+                            </div>
                           </div>
                           <div className="space-y-2 col-span-2 sm:col-span-1">
                             <Label htmlFor="category">Janr</Label>
@@ -481,7 +528,8 @@ export default function Inventory() {
       <ScannerOverlay 
         isOpen={isScannerOpen} 
         onClose={() => setIsScannerOpen(false)} 
-        onScan={handleScan}
+        onScan={handleScanResult}
+        mode={scannerMode}
       />
 
       <Dialog open={!!restockProduct} onOpenChange={(open) => !open && setRestockProduct(null)}>

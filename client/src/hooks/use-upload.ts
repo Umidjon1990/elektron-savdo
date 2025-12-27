@@ -17,6 +17,66 @@ interface UploadResponse {
 interface UseUploadOptions {
   onSuccess?: (response: UploadResponse) => void;
   onError?: (error: Error) => void;
+  maxWidth?: number;
+  maxHeight?: number;
+  quality?: number;
+}
+
+async function compressImage(
+  file: File,
+  maxWidth: number = 800,
+  maxHeight: number = 1200,
+  quality: number = 0.8
+): Promise<File> {
+  if (!file.type.startsWith("image/")) {
+    return file;
+  }
+
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    const canvas = document.createElement("canvas");
+    const ctx = canvas.getContext("2d");
+
+    img.onload = () => {
+      let { width, height } = img;
+
+      if (width > maxWidth || height > maxHeight) {
+        const ratio = Math.min(maxWidth / width, maxHeight / height);
+        width = Math.round(width * ratio);
+        height = Math.round(height * ratio);
+      }
+
+      canvas.width = width;
+      canvas.height = height;
+
+      if (ctx) {
+        ctx.fillStyle = "#FFFFFF";
+        ctx.fillRect(0, 0, width, height);
+        ctx.drawImage(img, 0, 0, width, height);
+
+        canvas.toBlob(
+          (blob) => {
+            if (blob) {
+              const compressedFile = new File([blob], file.name.replace(/\.[^.]+$/, ".jpg"), {
+                type: "image/jpeg",
+                lastModified: Date.now(),
+              });
+              resolve(compressedFile);
+            } else {
+              resolve(file);
+            }
+          },
+          "image/jpeg",
+          quality
+        );
+      } else {
+        resolve(file);
+      }
+    };
+
+    img.onerror = () => resolve(file);
+    img.src = URL.createObjectURL(file);
+  });
 }
 
 /**
@@ -112,6 +172,7 @@ export function useUpload(options: UseUploadOptions = {}) {
 
   /**
    * Upload a file using the presigned URL flow.
+   * Images are automatically compressed before uploading.
    *
    * @param file - The file to upload
    * @returns The upload response containing the object path
@@ -123,13 +184,22 @@ export function useUpload(options: UseUploadOptions = {}) {
       setProgress(0);
 
       try {
-        // Step 1: Request presigned URL (send metadata as JSON)
-        setProgress(10);
-        const uploadResponse = await requestUploadUrl(file);
+        // Step 1: Compress image if it's an image file
+        setProgress(5);
+        const processedFile = await compressImage(
+          file,
+          options.maxWidth || 800,
+          options.maxHeight || 1200,
+          options.quality || 0.8
+        );
+        
+        // Step 2: Request presigned URL (send metadata as JSON)
+        setProgress(20);
+        const uploadResponse = await requestUploadUrl(processedFile);
 
-        // Step 2: Upload file directly to presigned URL
-        setProgress(30);
-        await uploadToPresignedUrl(file, uploadResponse.uploadUrl);
+        // Step 3: Upload compressed file directly to presigned URL
+        setProgress(40);
+        await uploadToPresignedUrl(processedFile, uploadResponse.uploadUrl);
 
         setProgress(100);
         options.onSuccess?.(uploadResponse);

@@ -86,7 +86,7 @@ export async function getTransactionsFromCache(): Promise<CachedTransaction[]> {
 }
 
 export async function getPendingTransactions(): Promise<CachedTransaction[]> {
-  return await db.transactions.where('synced').equals(0).toArray();
+  return await db.transactions.where('synced').equals(false).toArray();
 }
 
 export async function markTransactionSynced(id: string): Promise<void> {

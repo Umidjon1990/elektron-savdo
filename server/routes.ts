@@ -15,8 +15,16 @@ export async function registerRoutes(
   // Products API
   app.get("/api/products", async (req, res) => {
     try {
-      const products = await storage.getAllProducts();
-      res.json(products);
+      const limit = parseInt(req.query.limit as string) || 100;
+      const offset = parseInt(req.query.offset as string) || 0;
+      
+      if (req.query.paginated === 'true') {
+        const result = await storage.getProductsPaginated(Math.min(limit, 100), offset);
+        res.json(result);
+      } else {
+        const products = await storage.getAllProducts();
+        res.json(products);
+      }
     } catch (error) {
       console.error("Error fetching products:", error);
       res.status(500).json({ error: "Failed to fetch products" });

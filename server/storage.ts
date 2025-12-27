@@ -1,7 +1,7 @@
 import { db } from "@db";
 import { users, products, orders, categories } from "@shared/schema";
 import type { User, InsertUser, Product, InsertProduct, Order, InsertOrder, Category, InsertCategory } from "@shared/schema";
-import { eq, desc } from "drizzle-orm";
+import { eq, desc, sql } from "drizzle-orm";
 
 export interface IStorage {
   // Users
@@ -11,6 +11,7 @@ export interface IStorage {
   
   // Products
   getAllProducts(): Promise<Product[]>;
+  getProductsPaginated(limit: number, offset: number): Promise<{ products: Product[]; total: number }>;
   getProduct(id: string): Promise<Product | undefined>;
   getProductByBarcode(barcode: string): Promise<Product | undefined>;
   createProduct(product: InsertProduct): Promise<Product>;
@@ -50,6 +51,14 @@ export class DatabaseStorage implements IStorage {
   // Products
   async getAllProducts(): Promise<Product[]> {
     return await db.select().from(products);
+  }
+
+  async getProductsPaginated(limit: number, offset: number): Promise<{ products: Product[]; total: number }> {
+    const [productList, countResult] = await Promise.all([
+      db.select().from(products).orderBy(products.name).limit(limit).offset(offset),
+      db.select({ count: sql<number>`count(*)::int` }).from(products)
+    ]);
+    return { products: productList, total: countResult[0]?.count || 0 };
   }
 
   async getProduct(id: string): Promise<Product | undefined> {

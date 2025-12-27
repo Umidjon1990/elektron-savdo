@@ -10,6 +10,17 @@ if (!process.env.DATABASE_URL) {
 
 export const pool = new pg.Pool({
   connectionString: process.env.DATABASE_URL,
+  max: 5,
+  idleTimeoutMillis: 10000,
+  connectionTimeoutMillis: 5000,
+});
+
+process.on('SIGTERM', () => {
+  pool.end();
+});
+
+process.on('SIGINT', () => {
+  pool.end();
 });
 
 export const db = drizzle(pool, { schema });

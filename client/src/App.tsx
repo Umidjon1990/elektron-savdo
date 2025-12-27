@@ -9,17 +9,27 @@ import { TransactionProvider } from "@/lib/transaction-context";
 import { CartProvider } from "@/lib/cart-context";
 import { OrderProvider } from "@/lib/order-context";
 import { AuthProvider, useAuth } from "@/lib/auth-context";
-import NotFound from "@/pages/not-found";
-import Dashboard from "@/pages/dashboard";
-import Inventory from "@/pages/inventory";
-import History from "@/pages/history";
-import OrdersPage from "@/pages/orders";
-import CustomersPage from "@/pages/customers";
-import StoreHome from "@/pages/store/home";
-import CartPage from "@/pages/store/cart";
-import LoginPage from "@/pages/auth/login";
-import SettingsPage from "@/pages/settings";
-import CategoriesPage from "@/pages/categories";
+import { lazy, Suspense } from "react";
+
+const NotFound = lazy(() => import("@/pages/not-found"));
+const Dashboard = lazy(() => import("@/pages/dashboard"));
+const Inventory = lazy(() => import("@/pages/inventory"));
+const History = lazy(() => import("@/pages/history"));
+const OrdersPage = lazy(() => import("@/pages/orders"));
+const CustomersPage = lazy(() => import("@/pages/customers"));
+const StoreHome = lazy(() => import("@/pages/store/home"));
+const CartPage = lazy(() => import("@/pages/store/cart"));
+const LoginPage = lazy(() => import("@/pages/auth/login"));
+const SettingsPage = lazy(() => import("@/pages/settings"));
+const CategoriesPage = lazy(() => import("@/pages/categories"));
+
+function PageLoader() {
+  return (
+    <div className="flex items-center justify-center h-screen bg-slate-50">
+      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+    </div>
+  );
+}
 
 function ProtectedRoute({ component: Component }: { component: React.ComponentType }) {
   const { isAuthenticated } = useAuth();
@@ -76,7 +86,9 @@ function App() {
             <OrderProvider>
               <CartProvider>
                 <TooltipProvider>
-                  <Router />
+                  <Suspense fallback={<PageLoader />}>
+                    <Router />
+                  </Suspense>
                   <Toaster />
                   <SonnerToaster position="top-center" richColors />
                 </TooltipProvider>

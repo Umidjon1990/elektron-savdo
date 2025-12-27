@@ -29,6 +29,9 @@ export interface CartItem {
   quantity: number;
 }
 
+const popSound = typeof window !== 'undefined' ? new Audio("https://codeskulptor-demos.commondatastorage.googleapis.com/pang/pop.mp3") : null;
+const beepSound = typeof window !== 'undefined' ? new Audio("https://codeskulptor-demos.commondatastorage.googleapis.com/assets/sounddogs/soundtrack.mp3") : null;
+
 export default function Dashboard() {
   const { products, updateStock } = useProducts();
   const { addTransaction, getStats } = useTransactions();
@@ -66,10 +69,11 @@ export default function Dashboard() {
       return [...prev, { product, quantity: 1 }];
     });
     
-    // Play sound mock
-    const audio = new Audio("https://codeskulptor-demos.commondatastorage.googleapis.com/pang/pop.mp3");
-    audio.volume = 0.5;
-    audio.play().catch(() => {});
+    if (popSound) {
+      popSound.currentTime = 0;
+      popSound.volume = 0.5;
+      popSound.play().catch(() => {});
+    }
   };
 
   const handleScannedProductAdd = (product: Product) => {
@@ -141,10 +145,11 @@ export default function Dashboard() {
     if (product) {
       setIsScannerOpen(false);
       setScannedProduct(product);
-      // Play beep sound
-      const audio = new Audio("https://codeskulptor-demos.commondatastorage.googleapis.com/assets/sounddogs/soundtrack.mp3"); // Short beep ideally
-      audio.volume = 0.5;
-      audio.play().catch(() => {});
+      if (beepSound) {
+        beepSound.currentTime = 0;
+        beepSound.volume = 0.5;
+        beepSound.play().catch(() => {});
+      }
     } else {
       toast({
         title: "Xatolik",

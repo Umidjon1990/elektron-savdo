@@ -1,36 +1,63 @@
+import { useState } from "react";
 import { SidebarNav } from "@/components/layout/sidebar-nav";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useTransactions } from "@/lib/transaction-context";
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, AreaChart, Area } from "recharts";
-import { TrendingUp, ShoppingBag, CreditCard, DollarSign, Calendar, ArrowUp, ArrowDown } from "lucide-react";
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, AreaChart, Area, PieChart, Pie, Cell, LineChart, Line } from "recharts";
+import { TrendingUp, TrendingDown, ShoppingBag, CreditCard, DollarSign, Calendar, ArrowUp, ArrowDown, Wallet, Receipt, Clock, Filter, ChevronDown, Banknote, Users } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Button } from "@/components/ui/button";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+
+const COLORS = ['#3b82f6', '#8b5cf6', '#10b981', '#f59e0b', '#ef4444', '#06b6d4'];
 
 export default function History() {
   const { transactions, getStats } = useTransactions();
   const stats = getStats();
+  const [period, setPeriod] = useState<"today" | "week" | "month">("week");
 
-  const chartData = [
-    { name: 'Dush', total: 400000 },
-    { name: 'Sesh', total: 300000 },
-    { name: 'Chor', total: 200000 },
-    { name: 'Pay', total: 278000 },
-    { name: 'Jum', total: 189000 },
-    { name: 'Shan', total: 239000 },
-    { name: 'Yak', total: 349000 },
+  const weekDays = ['Dush', 'Sesh', 'Chor', 'Pay', 'Jum', 'Shan', 'Yak'];
+  const chartData = weekDays.map((name, i) => ({
+    name,
+    total: Math.floor(Math.random() * 500000) + 100000,
+    orders: Math.floor(Math.random() * 20) + 5,
+  }));
+
+  const hourlyData = Array.from({ length: 12 }, (_, i) => ({
+    hour: `${9 + i}:00`,
+    sales: Math.floor(Math.random() * 300000) + 50000,
+  }));
+
+  const monthlyData = ['Yan', 'Fev', 'Mar', 'Apr', 'May', 'Iyun'].map(name => ({
+    name,
+    total: Math.floor(Math.random() * 5000000) + 1000000,
+  }));
+
+  const categoryData = [
+    { name: "Biznes", value: 35, color: "#3b82f6" },
+    { name: "Bolalar", value: 25, color: "#8b5cf6" },
+    { name: "O'zbek", value: 20, color: "#10b981" },
+    { name: "Jahon", value: 15, color: "#f59e0b" },
+    { name: "Til", value: 5, color: "#06b6d4" },
   ];
 
-  const hourlyData = [
-    { hour: '09', sales: 120000 },
-    { hour: '10', sales: 180000 },
-    { hour: '11', sales: 250000 },
-    { hour: '12', sales: 320000 },
-    { hour: '13', sales: 280000 },
-    { hour: '14', sales: 200000 },
-    { hour: '15', sales: 350000 },
-    { hour: '16', sales: 420000 },
-    { hour: '17', sales: 380000 },
-    { hour: '18', sales: 290000 },
+  const topProducts = [
+    { name: "Atomic Habits", sold: 45, revenue: 8325000 },
+    { name: "Zero to One", sold: 32, revenue: 4800000 },
+    { name: "Rich Dad Poor Dad", sold: 28, revenue: 3920000 },
+    { name: "O'tkan kunlar", sold: 25, revenue: 1625000 },
+    { name: "1984", sold: 22, revenue: 2090000 },
   ];
+
+  const avgOrderValue = stats.todayCount > 0 ? Math.round(stats.todayTotal / stats.todayCount) : 0;
+  const prevDayTotal = stats.todayTotal * 0.85;
+  const growthPercent = prevDayTotal > 0 ? ((stats.todayTotal - prevDayTotal) / prevDayTotal * 100).toFixed(1) : 0;
+  const isGrowth = Number(growthPercent) >= 0;
 
   return (
     <div className="flex h-screen bg-slate-50 overflow-hidden font-sans">
@@ -39,159 +66,336 @@ export default function History() {
       <div className="flex-1 flex flex-col min-w-0 overflow-y-auto pb-20 md:pb-0">
         <header className="h-16 bg-white border-b border-slate-200 flex items-center justify-between px-4 md:px-6 shrink-0 sticky top-0 z-10 shadow-sm">
           <div>
-            <h1 className="text-lg md:text-xl font-bold text-slate-800">Moliya va Tarix</h1>
-            <p className="text-xs text-slate-500 hidden md:block">Savdo statistikasi va tahlili</p>
+            <h1 className="text-lg md:text-xl font-bold text-slate-800">Moliya va Hisobotlar</h1>
+            <p className="text-xs text-slate-500 hidden md:block">Savdo tahlili va statistika</p>
           </div>
-          <div className="flex items-center gap-2 text-sm bg-slate-100 px-3 py-1.5 rounded-full">
-            <Calendar className="h-4 w-4 text-slate-500" />
-            <span className="text-slate-700 font-medium">{new Date().toLocaleDateString('uz-UZ')}</span>
+          <div className="flex items-center gap-2">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="sm" className="gap-2">
+                  <Calendar className="h-4 w-4" />
+                  <span className="hidden sm:inline">
+                    {period === "today" ? "Bugun" : period === "week" ? "Hafta" : "Oy"}
+                  </span>
+                  <ChevronDown className="h-3 w-3" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={() => setPeriod("today")}>Bugun</DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setPeriod("week")}>Bu hafta</DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setPeriod("month")}>Bu oy</DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         </header>
 
-        <div className="p-4 md:p-6 space-y-6 max-w-7xl mx-auto w-full">
-          {/* Stats Grid */}
+        <div className="p-4 md:p-6 space-y-4 md:space-y-6 max-w-7xl mx-auto w-full">
+          {/* Main KPI Cards */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4">
-            <div className="bg-white rounded-2xl p-4 md:p-5 shadow-sm border border-slate-100">
-              <div className="flex items-center justify-between mb-3">
-                <div className="w-10 h-10 md:w-12 md:h-12 rounded-xl bg-gradient-to-br from-green-400 to-emerald-600 flex items-center justify-center">
-                  <DollarSign className="w-5 h-5 md:w-6 md:h-6 text-white" />
+            <Card className="border-0 shadow-sm bg-gradient-to-br from-green-500 to-emerald-600 text-white">
+              <CardContent className="p-4 md:p-5">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center">
+                    <DollarSign className="w-5 h-5" />
+                  </div>
+                  <div className={`flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-full ${isGrowth ? 'bg-white/20' : 'bg-red-500/30'}`}>
+                    {isGrowth ? <ArrowUp className="w-3 h-3" /> : <ArrowDown className="w-3 h-3" />}
+                    {growthPercent}%
+                  </div>
                 </div>
-                <div className="flex items-center gap-1 text-emerald-600 text-xs font-semibold bg-emerald-50 px-2 py-1 rounded-full">
-                  <ArrowUp className="w-3 h-3" />
-                  20.1%
-                </div>
-              </div>
-              <p className="text-xs text-slate-500 mb-1">Bugungi Savdo</p>
-              <p className="text-xl md:text-2xl font-bold text-slate-800">{stats.todayTotal.toLocaleString()}</p>
-              <p className="text-[10px] text-slate-400 mt-1">so'm</p>
-            </div>
+                <p className="text-xs opacity-80 mb-0.5">Bugungi savdo</p>
+                <p className="text-xl md:text-2xl font-bold">{stats.todayTotal.toLocaleString()}</p>
+                <p className="text-[10px] opacity-60 mt-1">so'm</p>
+              </CardContent>
+            </Card>
 
-            <div className="bg-white rounded-2xl p-4 md:p-5 shadow-sm border border-slate-100">
-              <div className="flex items-center justify-between mb-3">
-                <div className="w-10 h-10 md:w-12 md:h-12 rounded-xl bg-gradient-to-br from-blue-400 to-blue-600 flex items-center justify-center">
-                  <CreditCard className="w-5 h-5 md:w-6 md:h-6 text-white" />
+            <Card className="border-0 shadow-sm bg-gradient-to-br from-blue-500 to-blue-600 text-white">
+              <CardContent className="p-4 md:p-5">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center">
+                    <Receipt className="w-5 h-5" />
+                  </div>
+                  <div className="flex items-center gap-1 text-xs font-semibold bg-white/20 px-2 py-0.5 rounded-full">
+                    <ArrowUp className="w-3 h-3" />
+                    12%
+                  </div>
                 </div>
-                <div className="flex items-center gap-1 text-blue-600 text-xs font-semibold bg-blue-50 px-2 py-1 rounded-full">
-                  <ArrowUp className="w-3 h-3" />
-                  12%
-                </div>
-              </div>
-              <p className="text-xs text-slate-500 mb-1">Cheklar Soni</p>
-              <p className="text-xl md:text-2xl font-bold text-slate-800">{stats.todayCount}</p>
-              <p className="text-[10px] text-slate-400 mt-1">ta bugun</p>
-            </div>
+                <p className="text-xs opacity-80 mb-0.5">Cheklar soni</p>
+                <p className="text-xl md:text-2xl font-bold">{stats.todayCount}</p>
+                <p className="text-[10px] opacity-60 mt-1">ta bugun</p>
+              </CardContent>
+            </Card>
 
-            <div className="bg-white rounded-2xl p-4 md:p-5 shadow-sm border border-slate-100">
-              <div className="flex items-center justify-between mb-3">
-                <div className="w-10 h-10 md:w-12 md:h-12 rounded-xl bg-gradient-to-br from-purple-400 to-purple-600 flex items-center justify-center">
-                  <ShoppingBag className="w-5 h-5 md:w-6 md:h-6 text-white" />
+            <Card className="border-0 shadow-sm bg-gradient-to-br from-purple-500 to-purple-600 text-white">
+              <CardContent className="p-4 md:p-5">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center">
+                    <Wallet className="w-5 h-5" />
+                  </div>
+                  <div className="flex items-center gap-1 text-xs font-semibold bg-white/20 px-2 py-0.5 rounded-full">
+                    <TrendingUp className="w-3 h-3" />
+                  </div>
                 </div>
-                <div className="flex items-center gap-1 text-purple-600 text-xs font-semibold bg-purple-50 px-2 py-1 rounded-full">
-                  <ArrowUp className="w-3 h-3" />
-                  8%
-                </div>
-              </div>
-              <p className="text-xs text-slate-500 mb-1">Sotilgan Kitoblar</p>
-              <p className="text-xl md:text-2xl font-bold text-slate-800">{stats.totalItemsSold}</p>
-              <p className="text-[10px] text-slate-400 mt-1">dona jami</p>
-            </div>
+                <p className="text-xs opacity-80 mb-0.5">O'rtacha chek</p>
+                <p className="text-xl md:text-2xl font-bold">{avgOrderValue.toLocaleString()}</p>
+                <p className="text-[10px] opacity-60 mt-1">so'm</p>
+              </CardContent>
+            </Card>
 
-            <div className="bg-white rounded-2xl p-4 md:p-5 shadow-sm border border-slate-100">
-              <div className="flex items-center justify-between mb-3">
-                <div className="w-10 h-10 md:w-12 md:h-12 rounded-xl bg-gradient-to-br from-orange-400 to-orange-600 flex items-center justify-center">
-                  <TrendingUp className="w-5 h-5 md:w-6 md:h-6 text-white" />
+            <Card className="border-0 shadow-sm bg-gradient-to-br from-orange-500 to-amber-600 text-white">
+              <CardContent className="p-4 md:p-5">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center">
+                    <ShoppingBag className="w-5 h-5" />
+                  </div>
+                  <div className="flex items-center gap-1 text-xs font-semibold bg-white/20 px-2 py-0.5 rounded-full">
+                    <ArrowUp className="w-3 h-3" />
+                    8%
+                  </div>
                 </div>
-                <div className="flex items-center gap-1 text-orange-600 text-xs font-semibold bg-orange-50 px-2 py-1 rounded-full">
-                  <ArrowUp className="w-3 h-3" />
-                  15%
-                </div>
-              </div>
-              <p className="text-xs text-slate-500 mb-1">Oylik Daromad</p>
-              <p className="text-xl md:text-2xl font-bold text-slate-800">{stats.monthTotal.toLocaleString()}</p>
-              <p className="text-[10px] text-slate-400 mt-1">so'm</p>
-            </div>
+                <p className="text-xs opacity-80 mb-0.5">Sotilgan kitob</p>
+                <p className="text-xl md:text-2xl font-bold">{stats.totalItemsSold}</p>
+                <p className="text-[10px] opacity-60 mt-1">dona jami</p>
+              </CardContent>
+            </Card>
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-7 gap-4 md:gap-6">
-            {/* Chart */}
-            <Card className="col-span-1 lg:col-span-4 border-0 shadow-sm">
+          {/* Secondary Stats */}
+          <div className="grid grid-cols-3 gap-3">
+            <Card className="border-0 shadow-sm">
+              <CardContent className="p-4 flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-green-100 flex items-center justify-center">
+                  <Banknote className="w-5 h-5 text-green-600" />
+                </div>
+                <div>
+                  <p className="text-[10px] md:text-xs text-slate-500">Naqd to'lov</p>
+                  <p className="text-sm md:text-base font-bold text-slate-800">72%</p>
+                </div>
+              </CardContent>
+            </Card>
+            <Card className="border-0 shadow-sm">
+              <CardContent className="p-4 flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-blue-100 flex items-center justify-center">
+                  <CreditCard className="w-5 h-5 text-blue-600" />
+                </div>
+                <div>
+                  <p className="text-[10px] md:text-xs text-slate-500">Karta to'lov</p>
+                  <p className="text-sm md:text-base font-bold text-slate-800">28%</p>
+                </div>
+              </CardContent>
+            </Card>
+            <Card className="border-0 shadow-sm">
+              <CardContent className="p-4 flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-purple-100 flex items-center justify-center">
+                  <Users className="w-5 h-5 text-purple-600" />
+                </div>
+                <div>
+                  <p className="text-[10px] md:text-xs text-slate-500">Mijozlar</p>
+                  <p className="text-sm md:text-base font-bold text-slate-800">156</p>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Charts Section */}
+          <Tabs defaultValue="weekly" className="w-full">
+            <TabsList className="bg-white border shadow-sm mb-4">
+              <TabsTrigger value="hourly" className="text-xs md:text-sm">Soatlik</TabsTrigger>
+              <TabsTrigger value="weekly" className="text-xs md:text-sm">Haftalik</TabsTrigger>
+              <TabsTrigger value="monthly" className="text-xs md:text-sm">Oylik</TabsTrigger>
+            </TabsList>
+
+            <TabsContent value="hourly">
+              <Card className="border-0 shadow-sm">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-base font-semibold text-slate-800 flex items-center gap-2">
+                    <Clock className="w-4 h-4 text-purple-500" />
+                    Bugungi soatlik savdo
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="h-[280px] md:h-[320px]">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <AreaChart data={hourlyData}>
+                        <defs>
+                          <linearGradient id="hourlyGradient" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="0%" stopColor="#8b5cf6" stopOpacity={0.4}/>
+                            <stop offset="100%" stopColor="#8b5cf6" stopOpacity={0}/>
+                          </linearGradient>
+                        </defs>
+                        <XAxis dataKey="hour" stroke="#94a3b8" fontSize={10} tickLine={false} axisLine={false} />
+                        <YAxis stroke="#94a3b8" fontSize={10} tickLine={false} axisLine={false} tickFormatter={(v) => `${v/1000}k`} />
+                        <Tooltip 
+                          formatter={(value: number) => [`${value.toLocaleString()} so'm`, 'Savdo']}
+                          contentStyle={{ backgroundColor: '#1e293b', border: 'none', borderRadius: '8px', color: '#fff', fontSize: '12px' }}
+                        />
+                        <Area type="monotone" dataKey="sales" stroke="#8b5cf6" strokeWidth={2} fill="url(#hourlyGradient)" />
+                      </AreaChart>
+                    </ResponsiveContainer>
+                  </div>
+                </CardContent>
+              </Card>
+            </TabsContent>
+
+            <TabsContent value="weekly">
+              <Card className="border-0 shadow-sm">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-base font-semibold text-slate-800 flex items-center gap-2">
+                    <Calendar className="w-4 h-4 text-blue-500" />
+                    Haftalik savdo statistikasi
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="h-[280px] md:h-[320px]">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart data={chartData}>
+                        <defs>
+                          <linearGradient id="barGradient" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="0%" stopColor="#3b82f6" stopOpacity={1}/>
+                            <stop offset="100%" stopColor="#1d4ed8" stopOpacity={1}/>
+                          </linearGradient>
+                        </defs>
+                        <XAxis dataKey="name" stroke="#94a3b8" fontSize={11} tickLine={false} axisLine={false} />
+                        <YAxis stroke="#94a3b8" fontSize={11} tickLine={false} axisLine={false} tickFormatter={(v) => `${v/1000}k`} />
+                        <Tooltip 
+                          formatter={(value: number, name: string) => [
+                            name === 'total' ? `${value.toLocaleString()} so'm` : `${value} ta`,
+                            name === 'total' ? 'Savdo' : 'Buyurtmalar'
+                          ]}
+                          contentStyle={{ backgroundColor: '#1e293b', border: 'none', borderRadius: '8px', color: '#fff', fontSize: '12px' }}
+                        />
+                        <Bar dataKey="total" fill="url(#barGradient)" radius={[6, 6, 0, 0]} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                </CardContent>
+              </Card>
+            </TabsContent>
+
+            <TabsContent value="monthly">
+              <Card className="border-0 shadow-sm">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-base font-semibold text-slate-800 flex items-center gap-2">
+                    <TrendingUp className="w-4 h-4 text-green-500" />
+                    Oylik savdo trendi
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="h-[280px] md:h-[320px]">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <LineChart data={monthlyData}>
+                        <XAxis dataKey="name" stroke="#94a3b8" fontSize={11} tickLine={false} axisLine={false} />
+                        <YAxis stroke="#94a3b8" fontSize={11} tickLine={false} axisLine={false} tickFormatter={(v) => `${v/1000000}M`} />
+                        <Tooltip 
+                          formatter={(value: number) => [`${value.toLocaleString()} so'm`, 'Savdo']}
+                          contentStyle={{ backgroundColor: '#1e293b', border: 'none', borderRadius: '8px', color: '#fff', fontSize: '12px' }}
+                        />
+                        <Line type="monotone" dataKey="total" stroke="#10b981" strokeWidth={3} dot={{ fill: '#10b981', strokeWidth: 2, r: 4 }} />
+                      </LineChart>
+                    </ResponsiveContainer>
+                  </div>
+                </CardContent>
+              </Card>
+            </TabsContent>
+          </Tabs>
+
+          {/* Bottom Section: Categories + Top Products + Transactions */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 md:gap-6">
+            {/* Category Distribution */}
+            <Card className="border-0 shadow-sm">
               <CardHeader className="pb-2">
-                <CardTitle className="text-base font-semibold text-slate-800">Haftalik Statistika</CardTitle>
-                <p className="text-xs text-slate-500">Oxirgi 7 kunlik savdo</p>
+                <CardTitle className="text-base font-semibold text-slate-800">Kategoriya bo'yicha</CardTitle>
               </CardHeader>
-              <CardContent className="pl-2">
-                <div className="h-[280px] md:h-[320px]">
+              <CardContent>
+                <div className="h-[180px] mb-4">
                   <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={chartData}>
-                      <XAxis 
-                        dataKey="name" 
-                        stroke="#94a3b8" 
-                        fontSize={11} 
-                        tickLine={false} 
-                        axisLine={false} 
-                      />
-                      <YAxis 
-                        stroke="#94a3b8" 
-                        fontSize={11} 
-                        tickLine={false} 
-                        axisLine={false} 
-                        tickFormatter={(value) => `${value / 1000}k`} 
-                      />
-                      <Tooltip 
-                        formatter={(value: number) => [`${value.toLocaleString()} so'm`, 'Savdo']}
-                        cursor={{fill: 'rgba(59, 130, 246, 0.1)'}}
-                        contentStyle={{
-                          backgroundColor: '#1e293b',
-                          border: 'none',
-                          borderRadius: '8px',
-                          color: '#fff',
-                          fontSize: '12px'
-                        }}
-                      />
-                      <Bar 
-                        dataKey="total" 
-                        fill="url(#colorGradient)" 
-                        radius={[6, 6, 0, 0]} 
-                      />
-                      <defs>
-                        <linearGradient id="colorGradient" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="0%" stopColor="#3b82f6" stopOpacity={1}/>
-                          <stop offset="100%" stopColor="#1d4ed8" stopOpacity={1}/>
-                        </linearGradient>
-                      </defs>
-                    </BarChart>
+                    <PieChart>
+                      <Pie
+                        data={categoryData}
+                        cx="50%"
+                        cy="50%"
+                        innerRadius={50}
+                        outerRadius={70}
+                        paddingAngle={3}
+                        dataKey="value"
+                      >
+                        {categoryData.map((entry, index) => (
+                          <Cell key={`cell-${index}`} fill={entry.color} />
+                        ))}
+                      </Pie>
+                      <Tooltip formatter={(value: number) => [`${value}%`, '']} />
+                    </PieChart>
                   </ResponsiveContainer>
+                </div>
+                <div className="space-y-2">
+                  {categoryData.map((cat, i) => (
+                    <div key={i} className="flex items-center justify-between text-sm">
+                      <div className="flex items-center gap-2">
+                        <div className="w-3 h-3 rounded-full" style={{ backgroundColor: cat.color }} />
+                        <span className="text-slate-600">{cat.name}</span>
+                      </div>
+                      <span className="font-semibold text-slate-800">{cat.value}%</span>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Top Selling Products */}
+            <Card className="border-0 shadow-sm">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-base font-semibold text-slate-800">Eng ko'p sotilgan</CardTitle>
+              </CardHeader>
+              <CardContent className="p-0">
+                <div className="divide-y divide-slate-100">
+                  {topProducts.map((product, i) => (
+                    <div key={i} className="flex items-center justify-between px-6 py-3 hover:bg-slate-50 transition-colors">
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500 to-purple-500 flex items-center justify-center text-white font-bold text-sm">
+                          {i + 1}
+                        </div>
+                        <div>
+                          <p className="text-sm font-medium text-slate-800 line-clamp-1">{product.name}</p>
+                          <p className="text-xs text-slate-500">{product.sold} dona</p>
+                        </div>
+                      </div>
+                      <span className="text-sm font-semibold text-green-600">{(product.revenue / 1000000).toFixed(1)}M</span>
+                    </div>
+                  ))}
                 </div>
               </CardContent>
             </Card>
 
             {/* Recent Transactions */}
-            <Card className="col-span-1 lg:col-span-3 h-[380px] md:h-[420px] flex flex-col border-0 shadow-sm">
+            <Card className="border-0 shadow-sm h-[380px] flex flex-col">
               <CardHeader className="pb-2">
-                <CardTitle className="text-base font-semibold text-slate-800">So'nggi Cheklar</CardTitle>
-                <p className="text-xs text-slate-500">Oxirgi 10 ta tranzaksiya</p>
+                <CardTitle className="text-base font-semibold text-slate-800">So'nggi cheklar</CardTitle>
               </CardHeader>
               <CardContent className="flex-1 overflow-hidden p-0">
                 <ScrollArea className="h-full px-6">
-                  <div className="space-y-4 pb-6">
+                  <div className="space-y-3 pb-4">
                     {transactions.length === 0 ? (
                       <div className="text-center py-12">
-                        <ShoppingBag className="w-12 h-12 text-slate-200 mx-auto mb-3" />
+                        <Receipt className="w-12 h-12 text-slate-200 mx-auto mb-3" />
                         <p className="text-sm text-slate-500">Hozircha savdolar yo'q</p>
                       </div>
                     ) : (
                       transactions.slice(0, 10).map((t) => (
                         <div key={t.id} className="flex items-center justify-between p-3 bg-slate-50 rounded-xl hover:bg-slate-100 transition-colors">
                           <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 rounded-full bg-green-100 flex items-center justify-center">
-                              <DollarSign className="w-4 h-4 text-green-600" />
+                            <div className={`w-10 h-10 rounded-full flex items-center justify-center ${t.paymentMethod === 'card' ? 'bg-blue-100' : 'bg-green-100'}`}>
+                              {t.paymentMethod === 'card' ? (
+                                <CreditCard className="w-4 h-4 text-blue-600" />
+                              ) : (
+                                <Banknote className="w-4 h-4 text-green-600" />
+                              )}
                             </div>
                             <div>
                               <p className="text-sm font-medium text-slate-800">
                                 {t.items.length} x Mahsulot
                               </p>
                               <p className="text-xs text-slate-500">
-                                {new Date(t.date).toLocaleTimeString('uz-UZ', { hour: '2-digit', minute: '2-digit' })} • {t.paymentMethod === 'card' ? 'Karta' : 'Naqd'}
+                                {new Date(t.date).toLocaleTimeString('uz-UZ', { hour: '2-digit', minute: '2-digit' })}
                               </p>
                             </div>
                           </div>
@@ -207,56 +411,34 @@ export default function History() {
             </Card>
           </div>
 
-          {/* Hourly Sales Chart */}
-          <Card className="border-0 shadow-sm">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-base font-semibold text-slate-800">Soatlik Savdo</CardTitle>
-              <p className="text-xs text-slate-500">Bugungi kun bo'yicha savdo dinamikasi</p>
-            </CardHeader>
-            <CardContent>
-              <div className="h-[200px] md:h-[250px]">
-                <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={hourlyData}>
-                    <XAxis 
-                      dataKey="hour" 
-                      stroke="#94a3b8" 
-                      fontSize={11} 
-                      tickLine={false} 
-                      axisLine={false}
-                      tickFormatter={(v) => `${v}:00`}
-                    />
-                    <YAxis 
-                      stroke="#94a3b8" 
-                      fontSize={11} 
-                      tickLine={false} 
-                      axisLine={false} 
-                      tickFormatter={(value) => `${value / 1000}k`} 
-                    />
-                    <Tooltip 
-                      formatter={(value: number) => [`${value.toLocaleString()} so'm`, 'Savdo']}
-                      contentStyle={{
-                        backgroundColor: '#1e293b',
-                        border: 'none',
-                        borderRadius: '8px',
-                        color: '#fff',
-                        fontSize: '12px'
-                      }}
-                    />
-                    <defs>
-                      <linearGradient id="areaGradient" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="0%" stopColor="#8b5cf6" stopOpacity={0.4}/>
-                        <stop offset="100%" stopColor="#8b5cf6" stopOpacity={0}/>
-                      </linearGradient>
-                    </defs>
-                    <Area 
-                      type="monotone" 
-                      dataKey="sales" 
-                      stroke="#8b5cf6" 
-                      strokeWidth={2}
-                      fill="url(#areaGradient)"
-                    />
-                  </AreaChart>
-                </ResponsiveContainer>
+          {/* Monthly Summary Card */}
+          <Card className="border-0 shadow-sm bg-gradient-to-r from-slate-800 to-slate-900 text-white">
+            <CardContent className="p-6">
+              <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+                <div>
+                  <p className="text-sm opacity-70 mb-1">Oylik jami daromad</p>
+                  <p className="text-3xl md:text-4xl font-bold">{stats.monthTotal.toLocaleString()} so'm</p>
+                  <p className="text-sm opacity-70 mt-2">Oxirgi 30 kun davomida</p>
+                </div>
+                <div className="flex items-center gap-6">
+                  <div className="text-center">
+                    <p className="text-2xl font-bold">{stats.totalItemsSold}</p>
+                    <p className="text-xs opacity-70">Kitoblar</p>
+                  </div>
+                  <div className="w-px h-12 bg-white/20" />
+                  <div className="text-center">
+                    <p className="text-2xl font-bold">{transactions.length}</p>
+                    <p className="text-xs opacity-70">Tranzaksiyalar</p>
+                  </div>
+                  <div className="w-px h-12 bg-white/20" />
+                  <div className="text-center">
+                    <div className="flex items-center gap-1 justify-center text-green-400">
+                      <TrendingUp className="w-5 h-5" />
+                      <span className="text-2xl font-bold">15%</span>
+                    </div>
+                    <p className="text-xs opacity-70">O'sish</p>
+                  </div>
+                </div>
               </div>
             </CardContent>
           </Card>

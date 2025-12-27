@@ -6,11 +6,15 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { ProductProvider } from "@/lib/product-context";
 import { TransactionProvider } from "@/lib/transaction-context";
 import { CartProvider } from "@/lib/cart-context";
+import { OrderProvider } from "@/lib/order-context";
 import NotFound from "@/pages/not-found";
 import Dashboard from "@/pages/dashboard";
 import Inventory from "@/pages/inventory";
 import History from "@/pages/history";
+import OrdersPage from "@/pages/orders";
+import CustomersPage from "@/pages/customers";
 import StoreHome from "@/pages/store/home";
+import CartPage from "@/pages/store/cart";
 
 function Router() {
   return (
@@ -19,9 +23,12 @@ function Router() {
       <Route path="/" component={Dashboard} />
       <Route path="/inventory" component={Inventory} />
       <Route path="/history" component={History} />
+      <Route path="/orders" component={OrdersPage} />
+      <Route path="/customers" component={CustomersPage} />
       
       {/* Store Routes */}
       <Route path="/store" component={StoreHome} />
+      <Route path="/store/cart" component={CartPage} />
       
       <Route component={NotFound} />
     </Switch>
@@ -33,12 +40,14 @@ function App() {
     <QueryClientProvider client={queryClient}>
       <ProductProvider>
         <TransactionProvider>
-          <CartProvider>
-            <TooltipProvider>
-              <Router />
-              <Toaster />
-            </TooltipProvider>
-          </CartProvider>
+          <OrderProvider>
+            <CartProvider>
+              <TooltipProvider>
+                <Router />
+                <Toaster />
+              </TooltipProvider>
+            </CartProvider>
+          </OrderProvider>
         </TransactionProvider>
       </ProductProvider>
     </QueryClientProvider>

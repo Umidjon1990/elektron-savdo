@@ -1,11 +1,13 @@
 import { Link, useLocation } from "wouter";
 import { cn } from "@/lib/utils";
-import { LayoutDashboard, Package, History, Settings, LogOut, Store } from "lucide-react";
+import { LayoutDashboard, Package, History, Settings, LogOut, Store, ShoppingCart, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 const navItems = [
   { href: "/", icon: LayoutDashboard, label: "Kassa" },
+  { href: "/orders", icon: ShoppingCart, label: "Buyurtmalar" },
   { href: "/inventory", icon: Package, label: "Ombor" },
+  { href: "/customers", icon: Users, label: "Mijozlar" },
   { href: "/history", icon: History, label: "Tarix" },
   { href: "/store", icon: Store, label: "Do'kon" },
   { href: "/settings", icon: Settings, label: "Sozlamalar" },

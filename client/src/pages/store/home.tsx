@@ -8,18 +8,16 @@ import { Search, ShoppingCart, Menu, ArrowRight, Star, TrendingUp, BookOpen, Tru
 import { CATEGORIES } from "@/data/mock-products";
 import { motion } from "framer-motion";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
-import { useCart } from "@/lib/cart-context"; // We need to create this context
+import { useCart } from "@/lib/cart-context";
 import { cn } from "@/lib/utils";
 
 export default function StoreHome() {
   const [, setLocation] = useLocation();
   const { products } = useProducts();
+  const { addItem, itemCount } = useCart();
   const [searchQuery, setSearchQuery] = useState("");
   const [activeCategory, setActiveCategory] = useState("Barchasi");
   
-  // Placeholder for Cart Context usage
-  const cartItemCount = 0; 
-
   const filteredProducts = products.filter(p => 
     (activeCategory === "Barchasi" || p.category === activeCategory) &&
     (p.name.toLowerCase().includes(searchQuery.toLowerCase()) || p.author.toLowerCase().includes(searchQuery.toLowerCase()))
@@ -54,9 +52,9 @@ export default function StoreHome() {
           <div className="flex items-center gap-4">
             <Button variant="ghost" size="icon" className="relative hover:bg-slate-100 rounded-full" onClick={() => setLocation("/store/cart")}>
               <ShoppingCart className="h-6 w-6 text-slate-700" />
-              {cartItemCount > 0 && (
+              {itemCount > 0 && (
                 <span className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white text-xs font-bold flex items-center justify-center rounded-full border-2 border-white">
-                  {cartItemCount}
+                  {itemCount}
                 </span>
               )}
             </Button>
@@ -198,7 +196,11 @@ export default function StoreHome() {
                     <div className="font-bold text-lg text-slate-900">
                       {product.price.toLocaleString()} <span className="text-xs text-slate-500 font-normal">so'm</span>
                     </div>
-                    <Button size="icon" className="h-8 w-8 rounded-full bg-slate-900 text-white hover:bg-indigo-600 transition-colors">
+                    <Button 
+                      size="icon" 
+                      className="h-8 w-8 rounded-full bg-slate-900 text-white hover:bg-indigo-600 transition-colors"
+                      onClick={() => addItem(product)}
+                    >
                       <ShoppingCart className="h-4 w-4" />
                     </Button>
                   </div>

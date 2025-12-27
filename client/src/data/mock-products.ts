@@ -3,6 +3,7 @@ import kidsBook from "@assets/stock_images/childrens_book_cover_068a85dc.jpg";
 import businessBook from "@assets/stock_images/business_book_cover__02bbae3f.jpg";
 import classicBook from "@assets/stock_images/classic_literature_b_88b5c056.jpg";
 import novelBook from "@assets/stock_images/modern_novel_book_co_ac46f790.jpg";
+import arabicBook from "@assets/stock_images/arabic_language_lear_d8bc0c76.jpg";
 
 export interface Product {
   id: string;
@@ -115,6 +116,16 @@ export const MOCK_PRODUCTS: Product[] = [
     category: "O'zbek adabiyoti",
     barcode: "9789943999999",
     image: classicBook
+  },
+  {
+    id: "11",
+    name: "Bosqichli arab tili B1",
+    author: "Abdulloh ibn Muhammad",
+    price: 75000,
+    stock: 100,
+    category: "Til o'rganish",
+    barcode: "9789943112233",
+    image: arabicBook
   }
 ];
 
@@ -125,5 +136,6 @@ export const CATEGORIES = [
   "Biznes va Rivojlanish",
   "Bolalar adabiyoti",
   "Biografiya",
-  "Ilmiy ommabop"
+  "Ilmiy ommabop",
+  "Til o'rganish"
 ];

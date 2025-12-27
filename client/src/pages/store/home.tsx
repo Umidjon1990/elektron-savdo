@@ -58,22 +58,9 @@ export default function StoreHome() {
                 </span>
               )}
             </Button>
-            <Button className="hidden sm:flex bg-indigo-600 hover:bg-indigo-700 text-white rounded-full px-6 shadow-lg shadow-indigo-200" onClick={() => setLocation("/admin")}>
-              Kirish
+            <Button className="bg-indigo-600 hover:bg-indigo-700 text-white rounded-full px-4 sm:px-6 shadow-lg shadow-indigo-200 text-sm sm:text-base" onClick={() => setLocation("/login")}>
+              Admin
             </Button>
-            <Sheet>
-              <SheetTrigger asChild>
-                <Button variant="ghost" size="icon" className="md:hidden">
-                  <Menu className="h-6 w-6" />
-                </Button>
-              </SheetTrigger>
-              <SheetContent>
-                <SheetHeader>
-                  <SheetTitle>Menu</SheetTitle>
-                </SheetHeader>
-                {/* Mobile Menu Content */}
-              </SheetContent>
-            </Sheet>
           </div>
         </div>
       </nav>

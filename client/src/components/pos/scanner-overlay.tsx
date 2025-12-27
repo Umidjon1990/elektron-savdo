@@ -163,14 +163,35 @@ export function ScannerOverlay({ isOpen, onClose, onScan, mode = "barcode" }: Sc
      cropCanvas.width = cropWidth;
      cropCanvas.height = cropHeight;
      const cropCtx = cropCanvas.getContext('2d');
-     cropCtx?.drawImage(canvas, cropX, cropY, cropWidth, cropHeight, 0, 0, cropWidth, cropHeight);
      
-     // Show captured image to user
+     if (!cropCtx) return;
+
+     cropCtx.drawImage(canvas, cropX, cropY, cropWidth, cropHeight, 0, 0, cropWidth, cropHeight);
+     
+     // --- Image Preprocessing for Better OCR ---
+     // Convert to Grayscale & High Contrast (Binarization)
+     const imageData = cropCtx.getImageData(0, 0, cropWidth, cropHeight);
+     const data = imageData.data;
+     
+     for (let i = 0; i < data.length; i += 4) {
+        // Grayscale
+        const avg = (data[i] + data[i + 1] + data[i + 2]) / 3;
+        // Binarization (Thresholding) - 128 is mid-gray
+        const color = avg > 110 ? 255 : 0; 
+        data[i] = color;     // R
+        data[i + 1] = color; // G
+        data[i + 2] = color; // B
+     }
+     cropCtx.putImageData(imageData, 0, 0);
+     // ------------------------------------------
+
+     // Show captured image to user (we show the original, but scan the processed one)
      setCapturedImage(canvas.toDataURL('image/jpeg'));
      setOcrProcessing(true);
 
      try {
        const { data: { text } } = await workerRef.current.recognize(cropCanvas);
+       // Allow more characters for names/authors, but keep it clean
        const cleanText = text.replace(/\n/g, " ").replace(/[^a-zA-Z0-9\s.,'-]/g, "").trim();
        
        if (cleanText.length > 2) {

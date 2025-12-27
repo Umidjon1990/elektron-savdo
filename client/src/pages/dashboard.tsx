@@ -3,12 +3,14 @@ import { SidebarNav } from "@/components/layout/sidebar-nav";
 import { ProductCard } from "@/components/pos/product-card";
 import { CartSidebar } from "@/components/pos/cart-sidebar";
 import { useProducts } from "@/lib/product-context";
+import { useTransactions } from "@/lib/transaction-context";
 import { CATEGORIES, type Product } from "@/data/mock-products";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Search, ScanBarcode, Wifi, WifiOff, Bluetooth, RefreshCw, BookOpen } from "lucide-react";
 import { ScannerOverlay } from "@/components/pos/scanner-overlay";
 import { ProductInfoDialog } from "@/components/pos/product-info-dialog";
+import { ReceiptDialog } from "@/components/pos/receipt-dialog";
 import { useToast } from "@/hooks/use-toast";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
@@ -19,12 +21,15 @@ export interface CartItem {
 }
 
 export default function Dashboard() {
-  const { products } = useProducts();
+  const { products, updateStock } = useProducts();
+  const { addTransaction } = useTransactions();
   const [cart, setCart] = useState<CartItem[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("Barchasi");
   const [isScannerOpen, setIsScannerOpen] = useState(false);
   const [scannedProduct, setScannedProduct] = useState<Product | null>(null);
+  const [lastTransaction, setLastTransaction] = useState<any>(null);
+  const [isReceiptOpen, setIsReceiptOpen] = useState(false);
   const [isOffline, setIsOffline] = useState(false);
   const { toast } = useToast();
 
@@ -72,9 +77,22 @@ export default function Dashboard() {
   const clearCart = () => setCart([]);
 
   const handleCheckout = () => {
+    const total = cart.reduce((acc, item) => acc + item.product.price * item.quantity, 0);
+    
+    // Process transaction
+    const transaction = addTransaction(cart, total, "cash"); // Default to cash for now
+    
+    // Update stock
+    cart.forEach(item => {
+      updateStock(item.product.id, -item.quantity);
+    });
+
+    setLastTransaction(transaction);
+    setIsReceiptOpen(true);
+
     toast({
       title: "To'lov qabul qilindi!",
-      description: `Jami summa: ${cart.reduce((acc, item) => acc + item.product.price * item.quantity, 0).toLocaleString()} so'm`,
+      description: `Jami summa: ${total.toLocaleString()} so'm`,
       className: "bg-green-500 text-white border-none",
     });
     setCart([]);
@@ -221,6 +239,12 @@ export default function Dashboard() {
         isOpen={!!scannedProduct}
         onClose={() => setScannedProduct(null)}
         onAddToCart={handleScannedProductAdd}
+      />
+
+      <ReceiptDialog 
+        transaction={lastTransaction}
+        isOpen={isReceiptOpen}
+        onClose={() => setIsReceiptOpen(false)}
       />
     </div>
   );

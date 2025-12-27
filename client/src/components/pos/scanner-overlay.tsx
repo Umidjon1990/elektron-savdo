@@ -47,10 +47,13 @@ export function ScannerOverlay({ isOpen, onClose, onScan, mode = "barcode" }: Sc
 
         // Optimized config for faster scanning
         const config = { 
-          fps: 25, 
-          qrbox: { width: 300, height: 150 }, 
+          fps: 60, // Maximum FPS for super fast scanning
+          qrbox: { width: 350, height: 200 }, // Larger scanning area
           aspectRatio: 1.0,
           disableFlip: false,
+          experimentalFeatures: {
+            useBarCodeDetectorIfSupported: true
+          },
           formatsToSupport: [ 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15 ] 
         };
         
@@ -61,13 +64,18 @@ export function ScannerOverlay({ isOpen, onClose, onScan, mode = "barcode" }: Sc
             if (scannerRef.current) {
                scannerRef.current.pause(); 
             }
+            // Immediate feedback vibration if supported
+            if (navigator.vibrate) navigator.vibrate(50);
+            
             onScan(decodedText);
+            
+            // Minimal delay just to cleanup
             setTimeout(() => {
                if (scannerRef.current) {
                  scannerRef.current.stop().catch(console.error);
                }
                onClose();
-            }, 200);
+            }, 50);
           },
           (errorMessage) => {
             // Error callback

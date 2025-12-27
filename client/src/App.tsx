@@ -17,6 +17,7 @@ import CustomersPage from "@/pages/customers";
 import StoreHome from "@/pages/store/home";
 import CartPage from "@/pages/store/cart";
 import LoginPage from "@/pages/auth/login";
+import SettingsPage from "@/pages/settings";
 
 function ProtectedRoute({ component: Component }: { component: React.ComponentType }) {
   const { isAuthenticated } = useAuth();
@@ -50,6 +51,9 @@ function Router() {
       </Route>
       <Route path="/admin/customers">
         {() => <ProtectedRoute component={CustomersPage} />}
+      </Route>
+      <Route path="/admin/settings">
+        {() => <ProtectedRoute component={SettingsPage} />}
       </Route>
       
       {/* Catch-all for legacy or unknown routes */}

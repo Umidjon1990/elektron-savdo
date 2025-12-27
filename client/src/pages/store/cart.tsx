@@ -250,6 +250,11 @@ ${items.map(i => `- ${i.product.name} (${i.quantity}x)`).join('\n')}
                         </RadioGroup>
                       </div>
 
+                      <div className="flex items-center space-x-2 bg-indigo-50 p-3 rounded-lg border border-indigo-100">
+                         <div className="h-2 w-2 rounded-full bg-indigo-500 animate-pulse" />
+                         <span className="text-sm text-indigo-700 font-medium">Telegram orqali chek olish</span>
+                      </div>
+
                       <div className="rounded-lg bg-slate-50 p-4 border text-sm text-slate-500">
                         Buyurtma tasdiqlangandan so'ng, ma'lumotlar avtomatik ravishda Telegram botimizga yuboriladi.
                       </div>

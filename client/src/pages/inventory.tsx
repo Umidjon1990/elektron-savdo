@@ -1,9 +1,9 @@
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import { SidebarNav } from "@/components/layout/sidebar-nav";
 import { useProducts } from "@/lib/product-context";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Search, Plus, Filter, MoreHorizontal, Edit, Trash2, ScanBarcode } from "lucide-react";
+import { Search, Plus, Filter, MoreHorizontal, ScanBarcode, ArrowRight, Check, X, RotateCcw } from "lucide-react";
 import { ScannerOverlay } from "@/components/pos/scanner-overlay";
 import { KNOWN_BOOKS_DB } from "@/data/mock-external-books";
 import {
@@ -33,12 +33,14 @@ import {
 import { CATEGORIES } from "@/data/mock-products";
 import { useToast } from "@/hooks/use-toast";
 import { Card, CardContent } from "@/components/ui/card";
+import { cn } from "@/lib/utils";
 
 export default function Inventory() {
   const { products, addProduct } = useProducts();
   const [searchQuery, setSearchQuery] = useState("");
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [isScannerOpen, setIsScannerOpen] = useState(false);
+  const [step, setStep] = useState<1 | 2>(1); // 1: Scan/Enter ISBN, 2: Details
   const { toast } = useToast();
 
   const [newProduct, setNewProduct] = useState({
@@ -51,10 +53,34 @@ export default function Inventory() {
     image: ""
   });
 
+  // Reset state when dialog closes
+  useEffect(() => {
+    if (!isAddDialogOpen) {
+      setStep(1);
+      setNewProduct({ name: "", author: "", price: "", stock: "", category: "", barcode: "", image: "" });
+    }
+  }, [isAddDialogOpen]);
+
   const handleScan = (code: string) => {
     setIsScannerOpen(false);
+    checkIsbnAndProceed(code);
+  };
+
+  const checkIsbnAndProceed = (code: string) => {
+    // Check if product already exists in our inventory
+    const existing = products.find(p => p.barcode === code);
     
-    // Check if we have this book in our "global database"
+    if (existing) {
+      toast({
+        title: "Bu kitob allaqachon mavjud!",
+        description: `"${existing.name}" omborda bor. Qoldig'ini o'zgartirishingiz mumkin.`,
+        variant: "destructive"
+      });
+      // Optionally could switch to "Edit" mode here, but for now just warn
+      return;
+    }
+
+    // Check external DB
     const knownBook = KNOWN_BOOKS_DB[code];
     
     if (knownBook) {
@@ -66,22 +92,28 @@ export default function Inventory() {
         category: knownBook.category,
         image: knownBook.image
       }));
-      
       toast({
         title: "Kitob topildi!",
         description: "Ma'lumotlar avtomatik to'ldirildi",
       });
     } else {
-      setNewProduct(prev => ({
-        ...prev,
-        barcode: code
-      }));
-      
+      setNewProduct(prev => ({ ...prev, barcode: code }));
       toast({
-        title: "Shtrix kod skanerlandi",
-        description: "Kitob ma'lumotlarini qo'lda kiriting",
+        title: "Yangi kitob",
+        description: "Iltimos, kitob ma'lumotlarini kiriting",
       });
     }
+    
+    setStep(2);
+  };
+
+  const handleManualIsbnSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (newProduct.barcode.length < 3) {
+      toast({ title: "Shtrix kod juda qisqa", variant: "destructive" });
+      return;
+    }
+    checkIsbnAndProceed(newProduct.barcode);
   };
 
   const handleAddProduct = (e: React.FormEvent) => {
@@ -93,10 +125,9 @@ export default function Inventory() {
       stock: Number(newProduct.stock),
       category: newProduct.category || "Jahon adabiyoti",
       barcode: newProduct.barcode || Math.random().toString().slice(2, 14),
-      image: newProduct.image || "https://images.unsplash.com/photo-1543002588-bfa74002ed7e?auto=format&fit=crop&q=80&w=300&h=400" // Placeholder
+      image: newProduct.image || "https://images.unsplash.com/photo-1543002588-bfa74002ed7e?auto=format&fit=crop&q=80&w=300&h=400"
     });
     setIsAddDialogOpen(false);
-    setNewProduct({ name: "", author: "", price: "", stock: "", category: "", barcode: "", image: "" });
     toast({
       title: "Muvaffaqiyatli qo'shildi",
       description: `${newProduct.name} bazaga kiritildi`,
@@ -150,104 +181,135 @@ export default function Inventory() {
                   </Button>
                 </DialogTrigger>
                 <DialogContent className="sm:max-w-[500px] max-h-[90vh] overflow-y-auto">
-                  <form onSubmit={handleAddProduct}>
-                    <DialogHeader>
-                      <DialogTitle>Yangi kitob qo'shish</DialogTitle>
-                    </DialogHeader>
-                    <div className="grid gap-4 py-4">
-                      <div className="col-span-2 flex items-end gap-2">
-                         <div className="space-y-2 flex-1">
-                          <Label htmlFor="barcode">ISBN / Shtrix kod</Label>
-                          <div className="flex gap-2">
+                  <DialogHeader>
+                    <DialogTitle>
+                      {step === 1 ? "1-qadam: Shtrix kodni aniqlash" : "2-qadam: Ma'lumotlarni to'ldirish"}
+                    </DialogTitle>
+                  </DialogHeader>
+
+                  {step === 1 ? (
+                    <div className="py-6 flex flex-col items-center gap-6">
+                      <div className="w-full flex flex-col items-center gap-4 p-6 border-2 border-dashed rounded-xl bg-gray-50 hover:bg-gray-100 transition-colors cursor-pointer" onClick={() => setIsScannerOpen(true)}>
+                        <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center">
+                          <ScanBarcode className="h-8 w-8 text-primary" />
+                        </div>
+                        <div className="text-center">
+                          <h3 className="font-medium">Skanerni ishga tushirish</h3>
+                          <p className="text-sm text-muted-foreground">Kamerani ochish uchun bosing</p>
+                        </div>
+                      </div>
+
+                      <div className="relative w-full">
+                        <div className="absolute inset-0 flex items-center">
+                          <span className="w-full border-t" />
+                        </div>
+                        <div className="relative flex justify-center text-xs uppercase">
+                          <span className="bg-background px-2 text-muted-foreground">Yoki qo'lda kiriting</span>
+                        </div>
+                      </div>
+
+                      <form onSubmit={handleManualIsbnSubmit} className="w-full flex gap-2">
+                        <Input 
+                          placeholder="ISBN / Shtrix kod..." 
+                          className="font-mono text-lg"
+                          value={newProduct.barcode}
+                          onChange={(e) => setNewProduct({...newProduct, barcode: e.target.value})}
+                          autoFocus
+                        />
+                        <Button type="submit" disabled={!newProduct.barcode}>
+                          Davom etish
+                          <ArrowRight className="h-4 w-4 ml-2" />
+                        </Button>
+                      </form>
+                    </div>
+                  ) : (
+                    <form onSubmit={handleAddProduct}>
+                      <div className="grid gap-4 py-4">
+                        <div className="flex items-center justify-between bg-blue-50 p-3 rounded-lg border border-blue-100">
+                          <div className="flex items-center gap-2">
+                            <ScanBarcode className="h-4 w-4 text-blue-600" />
+                            <span className="font-mono font-medium text-blue-900">{newProduct.barcode}</span>
+                          </div>
+                          <Button type="button" variant="ghost" size="sm" onClick={() => setStep(1)} className="h-8 text-blue-600 hover:text-blue-800 hover:bg-blue-100">
+                            <RotateCcw className="h-3 w-3 mr-1" />
+                            O'zgartirish
+                          </Button>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-4">
+                          <div className="space-y-2 col-span-2">
+                            <Label htmlFor="name">Kitob nomi</Label>
                             <Input 
-                              id="barcode"
-                              value={newProduct.barcode}
-                              onChange={(e) => setNewProduct({...newProduct, barcode: e.target.value})}
-                              placeholder="Skanerlang yoki kiriting"
-                              className="font-mono"
+                              id="name" 
+                              required 
+                              value={newProduct.name}
+                              onChange={(e) => setNewProduct({...newProduct, name: e.target.value})}
+                              placeholder="Masalan: Atomic Habits"
+                              className="font-medium"
                             />
-                            <Button 
-                              type="button" 
-                              variant="outline" 
-                              size="icon"
-                              onClick={() => setIsScannerOpen(true)}
-                              title="Skanerlash"
+                          </div>
+                          <div className="space-y-2 col-span-2 sm:col-span-1">
+                            <Label htmlFor="author">Muallif</Label>
+                            <Input 
+                              id="author" 
+                              required
+                              value={newProduct.author}
+                              onChange={(e) => setNewProduct({...newProduct, author: e.target.value})}
+                              placeholder="Masalan: James Clear"
+                            />
+                          </div>
+                          <div className="space-y-2 col-span-2 sm:col-span-1">
+                            <Label htmlFor="category">Janr</Label>
+                            <Select 
+                              value={newProduct.category} 
+                              onValueChange={(val) => setNewProduct({...newProduct, category: val})}
                             >
-                              <ScanBarcode className="h-4 w-4" />
-                            </Button>
+                              <SelectTrigger>
+                                <SelectValue placeholder="Tanlang" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {CATEGORIES.filter(c => c !== "Barchasi").map(c => (
+                                  <SelectItem key={c} value={c}>{c}</SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-4 bg-gray-50 p-4 rounded-lg">
+                          <div className="space-y-2">
+                             <Label htmlFor="price">Narxi (so'm)</Label>
+                            <Input 
+                              id="price" 
+                              type="number" 
+                              required
+                              value={newProduct.price}
+                              onChange={(e) => setNewProduct({...newProduct, price: e.target.value})}
+                              className="bg-white"
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <Label htmlFor="stock">Soni (dona)</Label>
+                            <Input 
+                              id="stock" 
+                              type="number" 
+                              required
+                              value={newProduct.stock}
+                              onChange={(e) => setNewProduct({...newProduct, stock: e.target.value})}
+                              className="bg-white"
+                            />
                           </div>
                         </div>
                       </div>
-
-                      <div className="grid grid-cols-2 gap-4">
-                        <div className="space-y-2 col-span-2 sm:col-span-1">
-                          <Label htmlFor="name">Kitob nomi</Label>
-                          <Input 
-                            id="name" 
-                            required 
-                            value={newProduct.name}
-                            onChange={(e) => setNewProduct({...newProduct, name: e.target.value})}
-                            placeholder="Masalan: Atomic Habits"
-                          />
-                        </div>
-                        <div className="space-y-2 col-span-2 sm:col-span-1">
-                          <Label htmlFor="author">Muallif</Label>
-                          <Input 
-                            id="author" 
-                            required
-                            value={newProduct.author}
-                            onChange={(e) => setNewProduct({...newProduct, author: e.target.value})}
-                            placeholder="Masalan: James Clear"
-                          />
-                        </div>
-                      </div>
-                      
-                      <div className="grid grid-cols-2 gap-4">
-                        <div className="space-y-2 col-span-2 sm:col-span-1">
-                          <Label htmlFor="category">Janr</Label>
-                          <Select 
-                            value={newProduct.category} 
-                            onValueChange={(val) => setNewProduct({...newProduct, category: val})}
-                          >
-                            <SelectTrigger>
-                              <SelectValue placeholder="Tanlang" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {CATEGORIES.filter(c => c !== "Barchasi").map(c => (
-                                <SelectItem key={c} value={c}>{c}</SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </div>
-                        <div className="space-y-2 col-span-2 sm:col-span-1">
-                           <Label htmlFor="price">Narxi (so'm)</Label>
-                          <Input 
-                            id="price" 
-                            type="number" 
-                            required
-                            value={newProduct.price}
-                            onChange={(e) => setNewProduct({...newProduct, price: e.target.value})}
-                          />
-                        </div>
-                      </div>
-
-                      <div className="grid grid-cols-2 gap-4">
-                        <div className="space-y-2 col-span-2 sm:col-span-1">
-                          <Label htmlFor="stock">Soni (dona)</Label>
-                          <Input 
-                            id="stock" 
-                            type="number" 
-                            required
-                            value={newProduct.stock}
-                            onChange={(e) => setNewProduct({...newProduct, stock: e.target.value})}
-                          />
-                        </div>
-                      </div>
-                    </div>
-                    <DialogFooter>
-                      <Button type="submit">Saqlash</Button>
-                    </DialogFooter>
-                  </form>
+                      <DialogFooter className="gap-2">
+                        <Button type="button" variant="outline" onClick={() => setIsAddDialogOpen(false)}>Bekor qilish</Button>
+                        <Button type="submit" className="gap-2">
+                          <Check className="h-4 w-4" />
+                          Saqlash
+                        </Button>
+                      </DialogFooter>
+                    </form>
+                  )}
                 </DialogContent>
               </Dialog>
             </div>

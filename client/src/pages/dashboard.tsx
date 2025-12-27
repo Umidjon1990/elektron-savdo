@@ -156,7 +156,7 @@ export default function Dashboard() {
   const cartItemCount = cart.reduce((acc, item) => acc + item.quantity, 0);
 
   return (
-    <div className="flex flex-col md:flex-row h-screen bg-background overflow-hidden font-sans">
+    <div className="flex flex-col md:flex-row min-h-screen font-sans" style={{backgroundColor: '#f1f5f9'}}>
       <SidebarNav />
       
       <div className="flex-1 flex flex-col min-w-0 pb-16 md:pb-0">

@@ -66,11 +66,14 @@ export function SidebarNav() {
         </nav>
 
         <div className="px-2 w-full space-y-2">
-          {!isInstalled && installPrompt && (
+          {!isInstalled && (
             <Button 
               variant="ghost" 
-              onClick={handleInstall}
+              onClick={installPrompt ? handleInstall : () => {
+                alert("O'rnatish uchun:\n1. Chrome/Edge brauzerida oching\n2. Manzil satrida ⋮ menyusini bosing\n3. 'Ilovani o'rnatish' ni tanlang");
+              }}
               className="w-full h-12 rounded-xl text-green-400 hover:text-green-300 hover:bg-green-400/10 flex flex-col items-center justify-center gap-1"
+              data-testid="button-install"
             >
               <Download className="h-5 w-5" />
               <span className="text-[9px]">O'rnatish</span>

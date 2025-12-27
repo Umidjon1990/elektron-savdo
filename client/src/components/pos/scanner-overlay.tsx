@@ -26,73 +26,86 @@ export function ScannerOverlay({ isOpen, onClose, onScan, mode = "barcode" }: Sc
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const workerRef = useRef<Tesseract.Worker | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
+  const isStoppingRef = useRef(false);
+
+  // Helper to safely stop and clear scanner
+  const cleanupScanner = async () => {
+    if (!scannerRef.current || isStoppingRef.current) return;
+    
+    try {
+      isStoppingRef.current = true;
+      if (scannerRef.current.isScanning) {
+        await scannerRef.current.stop();
+      }
+      scannerRef.current.clear();
+    } catch (err) {
+      console.warn("Scanner cleanup warning:", err);
+    } finally {
+      isStoppingRef.current = false;
+      scannerRef.current = null;
+    }
+  };
 
   // Initialize Barcode Scanner
   useEffect(() => {
     let isMounted = true;
 
-    if (isOpen && mode === "barcode" && !cameraError) {
-      setScanning(true);
-      const scannerId = "reader";
-      
-      // Clear any previous instance first
-      if (scannerRef.current) {
-         scannerRef.current.clear().catch(console.error);
-         scannerRef.current = null;
-      }
-
-      setTimeout(() => {
-        if (!isMounted || !document.getElementById(scannerId)) return;
-
-        const html5QrCode = new Html5Qrcode(scannerId);
-        scannerRef.current = html5QrCode;
-
-        const config = { 
-          fps: 30, // Reduced to 30 for stability across devices
-          qrbox: { width: 250, height: 250 }, // Standard square box
-          aspectRatio: 1.0,
-          disableFlip: false,
-          formatsToSupport: [ 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15 ] 
-        };
+    const startScanner = async () => {
+      if (isOpen && mode === "barcode" && !cameraError) {
+        setScanning(true);
+        const scannerId = "reader";
         
-        html5QrCode.start(
-          { facingMode: "environment" }, 
-          config,
-          (decodedText) => {
-            if (scannerRef.current) scannerRef.current.pause();
-            if (navigator.vibrate) navigator.vibrate(50);
-            onScan(decodedText);
+        // Ensure previous instance is gone
+        await cleanupScanner();
+
+        setTimeout(async () => {
+          if (!isMounted || !document.getElementById(scannerId)) return;
+
+          try {
+            const html5QrCode = new Html5Qrcode(scannerId);
+            scannerRef.current = html5QrCode;
+
+            const config = { 
+              fps: 30, 
+              qrbox: { width: 250, height: 250 },
+              aspectRatio: 1.0,
+              disableFlip: false,
+              formatsToSupport: [ 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15 ] 
+            };
             
-            // Graceful cleanup
-            setTimeout(() => {
-               if (scannerRef.current) {
-                 scannerRef.current.stop()
-                   .then(() => scannerRef.current?.clear())
-                   .catch(console.error);
-               }
-               onClose();
-            }, 50);
-          },
-          () => {} // Ignore per-frame errors
-        ).catch((err) => {
-          console.error("Error starting barcode scanner", err);
-          if (isMounted) {
-            setCameraError(true);
-            setErrorMessage("Kamerani ishga tushirib bo'lmadi. Qayta urinib ko'ring.");
+            await html5QrCode.start(
+              { facingMode: "environment" }, 
+              config,
+              (decodedText) => {
+                if (scannerRef.current) scannerRef.current.pause();
+                if (navigator.vibrate) navigator.vibrate(50);
+                onScan(decodedText);
+                
+                // Graceful cleanup
+                setTimeout(() => {
+                   cleanupScanner().then(() => {
+                     if (isMounted) onClose();
+                   });
+                }, 50);
+              },
+              () => {} 
+            );
+          } catch (err) {
+            console.error("Error starting barcode scanner", err);
+            if (isMounted) {
+              setCameraError(true);
+              setErrorMessage("Kamerani ishga tushirib bo'lmadi. Qayta urinib ko'ring.");
+            }
           }
-        });
-      }, 300); // Increased delay for DOM readiness
-    }
+        }, 300);
+      }
+    };
+
+    startScanner();
     
     return () => {
       isMounted = false;
-      if (scannerRef.current) {
-        if (scannerRef.current.isScanning) {
-           scannerRef.current.stop().catch(console.error);
-        }
-        scannerRef.current.clear().catch(console.error);
-        scannerRef.current = null;
-      }
+      cleanupScanner();
     };
   }, [isOpen, mode, cameraError]);
 
@@ -180,7 +193,7 @@ export function ScannerOverlay({ isOpen, onClose, onScan, mode = "barcode" }: Sc
         } catch (e) {
           console.error(e);
         }
-      }, 1000); // 1s interval for better responsiveness
+      }, 1000); 
     }
 
     return () => clearInterval(interval);

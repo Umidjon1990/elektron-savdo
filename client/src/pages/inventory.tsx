@@ -3,9 +3,10 @@ import { SidebarNav } from "@/components/layout/sidebar-nav";
 import { useProducts } from "@/lib/product-context";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Search, Plus, Filter, MoreHorizontal, ScanBarcode, ArrowRight, Check, X, RotateCcw, PackagePlus, ScanText, Upload, Image as ImageIcon } from "lucide-react";
+import { Search, Plus, Filter, MoreHorizontal, ScanBarcode, ArrowRight, Check, X, RotateCcw, PackagePlus, ScanText, Upload, Image as ImageIcon, Loader2 } from "lucide-react";
 import { ScannerOverlay } from "@/components/pos/scanner-overlay";
 import { KNOWN_BOOKS_DB } from "@/data/mock-external-books";
+import { useUpload } from "@/hooks/use-upload";
 import {
   Table,
   TableBody,
@@ -72,6 +73,25 @@ export default function Inventory() {
   });
   
   const fileInputRef = useRef<HTMLInputElement>(null);
+  
+  // Cloud storage upload hook
+  const { uploadFile, isUploading } = useUpload({
+    onSuccess: (response) => {
+      setNewProduct(prev => ({ ...prev, image: response.objectPath }));
+      toast({
+        title: "Rasm yuklandi",
+        description: "Rasm cloud xotirasiga saqlandi",
+        className: "bg-green-500 text-white border-none",
+      });
+    },
+    onError: (error) => {
+      toast({
+        title: "Xatolik",
+        description: "Rasm yuklashda xatolik yuz berdi",
+        variant: "destructive",
+      });
+    }
+  });
 
   // Reset state when dialog closes
   useEffect(() => {
@@ -173,28 +193,20 @@ export default function Inventory() {
     checkIsbnAndProceed(cleanBarcode);
   };
 
-  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      if (file.size > 5 * 1024 * 1024) { // 5MB limit check
+      if (file.size > 10 * 1024 * 1024) { // 10MB limit for cloud storage
         toast({
            title: "Rasm hajmi juda katta",
-           description: "Iltimos 5MB dan kichik rasm yuklang (Browser xotirasi uchun)",
+           description: "Iltimos 10MB dan kichik rasm yuklang",
            variant: "destructive"
         });
         return;
       }
 
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        const base64String = reader.result as string;
-        setNewProduct(prev => ({ ...prev, image: base64String }));
-        toast({
-          title: "Rasm yuklandi",
-          description: "Rasm browser xotirasiga saqlandi",
-        });
-      };
-      reader.readAsDataURL(file);
+      // Upload to cloud storage
+      await uploadFile(file);
     }
   };
 
@@ -367,12 +379,15 @@ export default function Inventory() {
 
                         {/* Image Upload Section */}
                         <div className="flex justify-center mb-2">
-                           <div className="relative group cursor-pointer" onClick={() => fileInputRef.current?.click()}>
+                           <div className="relative group cursor-pointer" onClick={() => !isUploading && fileInputRef.current?.click()}>
                              <div className="w-24 h-36 bg-gray-100 rounded-lg border-2 border-dashed border-gray-300 flex items-center justify-center overflow-hidden hover:bg-gray-50 transition-colors">
-                                {newProduct.image && !newProduct.image.includes("unsplash") ? (
+                                {isUploading ? (
+                                  <div className="flex flex-col items-center text-blue-500">
+                                    <Loader2 className="h-8 w-8 mb-1 animate-spin" />
+                                    <span className="text-[10px]">Yuklanmoqda...</span>
+                                  </div>
+                                ) : newProduct.image ? (
                                   <img src={newProduct.image} alt="Preview" className="w-full h-full object-cover" />
-                                ) : (newProduct.image && newProduct.image.includes("unsplash")) ? (
-                                    <img src={newProduct.image} alt="Preview" className="w-full h-full object-cover opacity-80" />
                                 ) : (
                                   <div className="flex flex-col items-center text-gray-400">
                                     <ImageIcon className="h-8 w-8 mb-1" />
@@ -380,9 +395,11 @@ export default function Inventory() {
                                   </div>
                                 )}
                                 
-                                <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                                   <Upload className="h-6 w-6 text-white" />
-                                </div>
+                                {!isUploading && (
+                                  <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                                     <Upload className="h-6 w-6 text-white" />
+                                  </div>
+                                )}
                              </div>
                              <input 
                                type="file" 
@@ -390,6 +407,7 @@ export default function Inventory() {
                                className="hidden" 
                                accept="image/*"
                                onChange={handleImageUpload}
+                               disabled={isUploading}
                              />
                            </div>
                         </div>

@@ -1,10 +1,12 @@
 import { useState, useEffect } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { SidebarNav } from "@/components/layout/sidebar-nav";
 import { ProductCard } from "@/components/pos/product-card";
 import { CartSidebar } from "@/components/pos/cart-sidebar";
 import { useProducts } from "@/lib/product-context";
 import { useTransactions } from "@/lib/transaction-context";
-import { CATEGORIES, type Product } from "@/data/mock-products";
+import type { Product } from "@/data/mock-products";
+import type { Category } from "@shared/schema";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Search, ScanBarcode, Wifi, WifiOff, Bluetooth, RefreshCw, BookOpen, ShoppingCart, Filter, ChevronDown, Check, TrendingUp, DollarSign, CreditCard, Package } from "lucide-react";
@@ -31,6 +33,15 @@ export default function Dashboard() {
   const { products, updateStock } = useProducts();
   const { addTransaction, getStats } = useTransactions();
   const stats = getStats();
+  
+  const { data: categories = [] } = useQuery<Category[]>({
+    queryKey: ["/api/categories"],
+    queryFn: async () => {
+      const res = await fetch("/api/categories");
+      if (!res.ok) throw new Error("Failed to fetch categories");
+      return res.json();
+    },
+  });
   const [cart, setCart] = useState<CartItem[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("Barchasi");
@@ -279,15 +290,23 @@ export default function Dashboard() {
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="start" className="w-56" style={{backgroundColor: '#ffffff'}}>
-                  {CATEGORIES.map(category => (
+                  <DropdownMenuItem
+                    onClick={() => setSelectedCategory("Barchasi")}
+                    className="cursor-pointer"
+                    style={{color: '#1e293b'}}
+                  >
+                    <span className="flex-1">Barchasi</span>
+                    {selectedCategory === "Barchasi" && <Check className="h-4 w-4 text-primary" />}
+                  </DropdownMenuItem>
+                  {categories.map(category => (
                     <DropdownMenuItem
-                      key={category}
-                      onClick={() => setSelectedCategory(category)}
+                      key={category.id}
+                      onClick={() => setSelectedCategory(category.name)}
                       className="cursor-pointer"
                       style={{color: '#1e293b'}}
                     >
-                      <span className="flex-1">{category}</span>
-                      {selectedCategory === category && <Check className="h-4 w-4 text-primary" />}
+                      <span className="flex-1">{category.name}</span>
+                      {selectedCategory === category.name && <Check className="h-4 w-4 text-primary" />}
                     </DropdownMenuItem>
                   ))}
                 </DropdownMenuContent>

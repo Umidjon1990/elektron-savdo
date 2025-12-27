@@ -2,33 +2,39 @@ import { useState } from "react";
 import { type Product } from "@/data/mock-products";
 import { Card } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
-import { BookOpen, Plus } from "lucide-react";
+import { BookOpen, Plus, ShoppingCart } from "lucide-react";
 
 interface ProductCardProps {
   product: Product;
   onClick: (product: Product) => void;
+  size?: "default" | "large";
 }
 
-export function ProductCard({ product, onClick }: ProductCardProps) {
+export function ProductCard({ product, onClick, size = "default" }: ProductCardProps) {
   const [imgLoaded, setImgLoaded] = useState(false);
   const [imgError, setImgError] = useState(false);
+
+  const isLarge = size === "large";
 
   return (
     <Card 
       className={cn(
-        "cursor-pointer transition-all hover:shadow-lg active:scale-[0.98] border border-gray-100 hover:border-blue-200 group overflow-hidden"
+        "cursor-pointer transition-all hover:shadow-xl active:scale-[0.98] border-0 group overflow-hidden relative",
+        "bg-white rounded-xl shadow-sm hover:shadow-lg"
       )}
       onClick={() => onClick(product)}
       data-testid={`product-card-${product.id}`}
-      style={{backgroundColor: '#ffffff', borderRadius: '8px'}}
     >
-      <div style={{aspectRatio: '1/1', position: 'relative', overflow: 'hidden', backgroundColor: '#f8fafc'}}>
+      <div 
+        className="relative overflow-hidden bg-gradient-to-b from-slate-50 to-slate-100"
+        style={{ aspectRatio: isLarge ? '3/4' : '1/1' }}
+      >
         {!imgError && (
           <img 
             src={product.image} 
             alt={product.name}
             className={cn(
-              "w-full h-full object-cover transition-transform group-hover:scale-105",
+              "w-full h-full object-cover transition-all duration-300 group-hover:scale-110",
               imgLoaded ? "opacity-100" : "opacity-0"
             )}
             onLoad={() => setImgLoaded(true)}
@@ -37,36 +43,63 @@ export function ProductCard({ product, onClick }: ProductCardProps) {
           />
         )}
         {(!imgLoaded || imgError) && (
-          <div style={{position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', background: 'linear-gradient(180deg, #eff6ff 0%, #f1f5f9 100%)', padding: '8px'}}>
-            <BookOpen style={{width: '24px', height: '24px', color: '#93c5fd', marginBottom: '4px'}} />
-            <p style={{color: '#475569', fontSize: '10px', fontWeight: 500, textAlign: 'center', margin: 0, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' as any}}>{product.name}</p>
+          <div className="absolute inset-0 flex flex-col items-center justify-center bg-gradient-to-b from-blue-50 to-slate-100 p-4">
+            <BookOpen className={cn("text-blue-300 mb-2", isLarge ? "w-12 h-12" : "w-8 h-8")} />
+            <p className={cn("text-slate-600 font-medium text-center line-clamp-2", isLarge ? "text-sm" : "text-xs")}>
+              {product.name}
+            </p>
           </div>
         )}
         
         {product.stock <= 5 && (
-          <div style={{position: 'absolute', top: '4px', left: '4px', backgroundColor: '#ef4444', color: '#ffffff', fontSize: '8px', fontWeight: 700, padding: '2px 6px', borderRadius: '4px', textTransform: 'uppercase', letterSpacing: '0.5px'}}>
-            Kam
+          <div className="absolute top-2 left-2 bg-red-500 text-white text-[10px] font-bold px-2 py-1 rounded-full uppercase tracking-wide shadow-lg">
+            Kam qoldi
           </div>
         )}
+
+        <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/60 to-transparent p-3 pt-8 opacity-0 group-hover:opacity-100 transition-opacity">
+          <div className="flex items-center justify-center">
+            <div className="bg-white text-blue-600 rounded-full px-4 py-2 flex items-center gap-2 font-semibold text-sm shadow-lg transform translate-y-2 group-hover:translate-y-0 transition-transform">
+              <ShoppingCart className="w-4 h-4" />
+              Qo'shish
+            </div>
+          </div>
+        </div>
         
-        <div style={{position: 'absolute', bottom: '4px', right: '4px', backgroundColor: 'rgba(255,255,255,0.95)', padding: '2px 6px', borderRadius: '4px', fontSize: '10px', fontWeight: 600, color: product.stock < 10 ? '#dc2626' : '#16a34a'}}>
+        <div className={cn(
+          "absolute top-2 right-2 bg-white/95 backdrop-blur-sm rounded-full font-bold shadow-md",
+          isLarge ? "px-3 py-1.5 text-sm" : "px-2 py-1 text-xs",
+          product.stock < 10 ? "text-red-600" : "text-emerald-600"
+        )}>
           {product.stock} ta
         </div>
       </div>
       
-      <div style={{padding: '8px', backgroundColor: '#ffffff'}}>
-        <p style={{color: '#1e293b', fontSize: '11px', fontWeight: 600, lineHeight: '1.3', margin: 0, marginBottom: '2px', overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' as any, minHeight: '28px'}}>
+      <div className={cn("bg-white", isLarge ? "p-4" : "p-3")}>
+        <p className={cn(
+          "text-slate-800 font-semibold line-clamp-2 leading-tight mb-1",
+          isLarge ? "text-base min-h-[48px]" : "text-sm min-h-[40px]"
+        )}>
           {product.name}
         </p>
-        <p style={{color: '#64748b', fontSize: '10px', margin: 0, marginBottom: '4px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap'}}>
+        <p className={cn(
+          "text-slate-500 truncate mb-2",
+          isLarge ? "text-sm" : "text-xs"
+        )}>
           {product.author}
         </p>
-        <div style={{display: 'flex', alignItems: 'center', justifyContent: 'space-between'}}>
-          <span style={{color: '#2563eb', fontSize: '12px', fontWeight: 700, fontFamily: 'JetBrains Mono, monospace'}}>
-            {product.price.toLocaleString()}
+        <div className="flex items-center justify-between">
+          <span className={cn(
+            "text-blue-600 font-bold font-mono",
+            isLarge ? "text-lg" : "text-base"
+          )}>
+            {product.price.toLocaleString()} <span className="text-slate-400 font-normal text-xs">so'm</span>
           </span>
-          <div style={{width: '22px', height: '22px', borderRadius: '50%', backgroundColor: '#3b82f6', display: 'flex', alignItems: 'center', justifyContent: 'center', opacity: 0, transition: 'opacity 0.2s'}} className="group-hover:opacity-100">
-            <Plus style={{width: '14px', height: '14px', color: '#ffffff'}} />
+          <div className={cn(
+            "rounded-full bg-blue-500 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all transform scale-75 group-hover:scale-100",
+            isLarge ? "w-10 h-10" : "w-8 h-8"
+          )}>
+            <Plus className={isLarge ? "w-5 h-5" : "w-4 h-4"} />
           </div>
         </div>
       </div>

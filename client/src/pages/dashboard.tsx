@@ -7,7 +7,7 @@ import { useTransactions } from "@/lib/transaction-context";
 import { CATEGORIES, type Product } from "@/data/mock-products";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Search, ScanBarcode, Wifi, WifiOff, Bluetooth, RefreshCw, BookOpen, ShoppingCart, Filter, ChevronDown, Check } from "lucide-react";
+import { Search, ScanBarcode, Wifi, WifiOff, Bluetooth, RefreshCw, BookOpen, ShoppingCart, Filter, ChevronDown, Check, TrendingUp, DollarSign, CreditCard, Package } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -29,7 +29,8 @@ export interface CartItem {
 
 export default function Dashboard() {
   const { products, updateStock } = useProducts();
-  const { addTransaction } = useTransactions();
+  const { addTransaction, getStats } = useTransactions();
+  const stats = getStats();
   const [cart, setCart] = useState<CartItem[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("Barchasi");
@@ -243,6 +244,46 @@ export default function Dashboard() {
         {/* Content */}
         <div className="flex-1 flex min-h-0 bg-gray-50/50">
           <div className="flex-1 flex flex-col p-4 md:p-6 min-w-0">
+            {/* KPI Stats Row */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+              <div className="bg-white rounded-xl p-3 md:p-4 shadow-sm border border-slate-100 flex items-center gap-3">
+                <div className="w-10 h-10 md:w-12 md:h-12 rounded-xl bg-gradient-to-br from-green-400 to-green-600 flex items-center justify-center shrink-0">
+                  <DollarSign className="w-5 h-5 md:w-6 md:h-6 text-white" />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-[10px] md:text-xs text-slate-500 font-medium">Bugun</p>
+                  <p className="text-sm md:text-lg font-bold text-slate-800 truncate">{stats.todayTotal.toLocaleString()}</p>
+                </div>
+              </div>
+              <div className="bg-white rounded-xl p-3 md:p-4 shadow-sm border border-slate-100 flex items-center gap-3">
+                <div className="w-10 h-10 md:w-12 md:h-12 rounded-xl bg-gradient-to-br from-blue-400 to-blue-600 flex items-center justify-center shrink-0">
+                  <CreditCard className="w-5 h-5 md:w-6 md:h-6 text-white" />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-[10px] md:text-xs text-slate-500 font-medium">Cheklar</p>
+                  <p className="text-sm md:text-lg font-bold text-slate-800">{stats.todayCount} ta</p>
+                </div>
+              </div>
+              <div className="bg-white rounded-xl p-3 md:p-4 shadow-sm border border-slate-100 flex items-center gap-3">
+                <div className="w-10 h-10 md:w-12 md:h-12 rounded-xl bg-gradient-to-br from-purple-400 to-purple-600 flex items-center justify-center shrink-0">
+                  <Package className="w-5 h-5 md:w-6 md:h-6 text-white" />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-[10px] md:text-xs text-slate-500 font-medium">Sotilgan</p>
+                  <p className="text-sm md:text-lg font-bold text-slate-800">{stats.totalItemsSold} dona</p>
+                </div>
+              </div>
+              <div className="bg-white rounded-xl p-3 md:p-4 shadow-sm border border-slate-100 flex items-center gap-3">
+                <div className="w-10 h-10 md:w-12 md:h-12 rounded-xl bg-gradient-to-br from-orange-400 to-orange-600 flex items-center justify-center shrink-0">
+                  <TrendingUp className="w-5 h-5 md:w-6 md:h-6 text-white" />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-[10px] md:text-xs text-slate-500 font-medium">Oylik</p>
+                  <p className="text-sm md:text-lg font-bold text-slate-800 truncate">{stats.monthTotal.toLocaleString()}</p>
+                </div>
+              </div>
+            </div>
+
             {/* Category Filter Dropdown */}
             <div className="mb-4 flex items-center gap-3">
               <DropdownMenu>
@@ -272,12 +313,13 @@ export default function Dashboard() {
 
             {/* Product Grid */}
             <div className="flex-1 overflow-y-scroll pb-20 md:pb-0">
-              <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-7 2xl:grid-cols-8 gap-2 md:gap-3">
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-3 md:gap-4">
                 {filteredProducts.map(product => (
                   <ProductCard 
                     key={product.id} 
                     product={product} 
-                    onClick={addToCart} 
+                    onClick={addToCart}
+                    size="large"
                   />
                 ))}
               </div>

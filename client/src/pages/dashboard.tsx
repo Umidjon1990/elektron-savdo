@@ -5,7 +5,7 @@ import { CartSidebar } from "@/components/pos/cart-sidebar";
 import { MOCK_PRODUCTS, CATEGORIES, type Product } from "@/data/mock-products";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Search, ScanBarcode, Wifi, WifiOff, Bluetooth, RefreshCw, Package } from "lucide-react";
+import { Search, ScanBarcode, Wifi, WifiOff, Bluetooth, RefreshCw, BookOpen } from "lucide-react";
 import { ScannerOverlay } from "@/components/pos/scanner-overlay";
 import { useToast } from "@/hooks/use-toast";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -73,13 +73,13 @@ export default function Dashboard() {
       addToCart(product);
       setIsScannerOpen(false);
       toast({
-        title: "Mahsulot topildi",
-        description: product.name,
+        title: "Kitob topildi",
+        description: `${product.name} - ${product.author}`,
       });
     } else {
       toast({
         title: "Xatolik",
-        description: "Mahsulot topilmadi",
+        description: "Kitob topilmadi",
         variant: "destructive",
       });
       setIsScannerOpen(false);
@@ -87,7 +87,9 @@ export default function Dashboard() {
   };
 
   const filteredProducts = MOCK_PRODUCTS.filter(product => {
-    const matchesSearch = product.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
+    const searchLower = searchQuery.toLowerCase();
+    const matchesSearch = product.name.toLowerCase().includes(searchLower) || 
+                          product.author.toLowerCase().includes(searchLower) ||
                           product.barcode.includes(searchQuery);
     const matchesCategory = selectedCategory === "Barchasi" || product.category === selectedCategory;
     return matchesSearch && matchesCategory;
@@ -104,7 +106,7 @@ export default function Dashboard() {
             <div className="relative w-full max-w-md">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
               <Input 
-                placeholder="Mahsulot nomi yoki shtrix kodi..." 
+                placeholder="Kitob nomi, muallif yoki ISBN..." 
                 className="pl-9 bg-gray-50 border-gray-200 focus-visible:ring-primary"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
@@ -177,8 +179,8 @@ export default function Dashboard() {
               </div>
               {filteredProducts.length === 0 && (
                 <div className="h-64 flex flex-col items-center justify-center text-muted-foreground">
-                  <Package className="h-12 w-12 mb-4 opacity-20" />
-                  <p>Mahsulotlar topilmadi</p>
+                  <BookOpen className="h-12 w-12 mb-4 opacity-20" />
+                  <p>Kitoblar topilmadi</p>
                 </div>
               )}
             </ScrollArea>

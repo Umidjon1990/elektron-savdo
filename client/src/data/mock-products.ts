@@ -1,11 +1,13 @@
-import assets from "@assets/stock_images/assorted_supermarket_e341f817.jpg"; // Placeholder fallback
-import drinkImg from "@assets/stock_images/beverages_and_drinks_08bd9a25.jpg";
-import snackImg from "@assets/stock_images/snacks_and_chips_pac_4a8cb024.jpg";
-import fruitImg from "@assets/stock_images/fresh_fruits_and_veg_5354bac0.jpg";
+import bestSeller from "@assets/stock_images/bestseller_book_cove_7c925997.jpg";
+import kidsBook from "@assets/stock_images/childrens_book_cover_068a85dc.jpg";
+import businessBook from "@assets/stock_images/business_book_cover__02bbae3f.jpg";
+import classicBook from "@assets/stock_images/classic_literature_b_88b5c056.jpg";
+import novelBook from "@assets/stock_images/modern_novel_book_co_ac46f790.jpg";
 
 export interface Product {
   id: string;
   name: string;
+  author: string;
   price: number;
   stock: number;
   category: string;
@@ -16,84 +18,112 @@ export interface Product {
 export const MOCK_PRODUCTS: Product[] = [
   {
     id: "1",
-    name: "Coca Cola Classic 1.5L",
-    price: 12000,
+    name: "Atomic Habits",
+    author: "James Clear",
+    price: 185000,
     stock: 45,
-    category: "Ichimliklar",
-    barcode: "890123456789",
-    image: drinkImg
+    category: "Biznes va Rivojlanish",
+    barcode: "9781847941831",
+    image: bestSeller
   },
   {
     id: "2",
-    name: "Lays Chips Pishloqli 140g",
-    price: 15000,
+    name: "Garri Potter va Falsafa toshi",
+    author: "J.K. Rowling",
+    price: 120000,
     stock: 24,
-    category: "Sneaklar",
-    barcode: "460123456789",
-    image: snackImg
+    category: "Bolalar adabiyoti",
+    barcode: "9780747532743",
+    image: kidsBook
   },
   {
     id: "3",
-    name: "Fanta Apelsin 1L",
-    price: 10000,
+    name: "Zero to One",
+    author: "Peter Thiel",
+    price: 150000,
     stock: 30,
-    category: "Ichimliklar",
-    barcode: "890987654321",
-    image: drinkImg
+    category: "Biznes va Rivojlanish",
+    barcode: "9780804139298",
+    image: businessBook
   },
   {
     id: "4",
-    name: "Olma Fuji (kg)",
-    price: 18000,
+    name: "O'tkan kunlar",
+    author: "Abdulla Qodiriy",
+    price: 65000,
     stock: 120,
-    category: "Mevalar",
-    barcode: "200000000001",
-    image: fruitImg
+    category: "O'zbek adabiyoti",
+    barcode: "9789943234567",
+    image: classicBook
   },
   {
     id: "5",
-    name: "Nestle Sut 1L 3.2%",
-    price: 14500,
-    stock: 8,
-    category: "Sut mahsulotlari",
-    barcode: "460555555555",
-    image: assets
+    name: "1984",
+    author: "George Orwell",
+    price: 95000,
+    stock: 15,
+    category: "Jahon adabiyoti",
+    barcode: "9780451524935",
+    image: novelBook
   },
   {
     id: "6",
-    name: "Snickers Super",
-    price: 8000,
-    stock: 150,
-    category: "Shirinliklar",
-    barcode: "500015941111",
-    image: snackImg
+    name: "Rich Dad Poor Dad",
+    author: "Robert Kiyosaki",
+    price: 140000,
+    stock: 50,
+    category: "Biznes va Rivojlanish",
+    barcode: "9781612680194",
+    image: businessBook
   },
   {
     id: "7",
-    name: "Non (Buxanka)",
-    price: 3000,
+    name: "Sariq devni minib",
+    author: "Xudoyberdi To'xtaboyev",
+    price: 45000,
     stock: 40,
-    category: "Non mahsulotlari",
-    barcode: "200000000002",
-    image: assets
+    category: "Bolalar adabiyoti",
+    barcode: "9789943555555",
+    image: kidsBook
   },
   {
     id: "8",
-    name: "Pepsi Cola 0.5L",
-    price: 6000,
+    name: "Alximik",
+    author: "Paulo Coelho",
+    price: 85000,
     stock: 60,
-    category: "Ichimliklar",
-    barcode: "890111222333",
-    image: drinkImg
+    category: "Jahon adabiyoti",
+    barcode: "9780062315007",
+    image: novelBook
+  },
+  {
+    id: "9",
+    name: "Steve Jobs",
+    author: "Walter Isaacson",
+    price: 210000,
+    stock: 10,
+    category: "Biografiya",
+    barcode: "9781451648539",
+    image: bestSeller
+  },
+  {
+    id: "10",
+    name: "Boburnoma",
+    author: "Zahiriddin Muhammad Bobur",
+    price: 180000,
+    stock: 5,
+    category: "O'zbek adabiyoti",
+    barcode: "9789943999999",
+    image: classicBook
   }
 ];
 
 export const CATEGORIES = [
   "Barchasi",
-  "Ichimliklar",
-  "Sneaklar",
-  "Mevalar",
-  "Sut mahsulotlari",
-  "Shirinliklar",
-  "Non mahsulotlari"
+  "Jahon adabiyoti",
+  "O'zbek adabiyoti",
+  "Biznes va Rivojlanish",
+  "Bolalar adabiyoti",
+  "Biografiya",
+  "Ilmiy ommabop"
 ];

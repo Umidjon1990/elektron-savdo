@@ -104,7 +104,16 @@ export default function Dashboard() {
   const handleScan = (code: string) => {
     // Try to find exact match or match after trimming
     const cleanCode = code.trim();
-    const product = products.find(p => p.barcode === cleanCode || p.barcode.trim() === cleanCode);
+    
+    // Fuzzy search for barcode (handle EAN-13 vs UPC-A leading zero issues)
+    const product = products.find(p => {
+      const pBarcode = p.barcode.trim();
+      return (
+        pBarcode === cleanCode || 
+        pBarcode === "0" + cleanCode || 
+        "0" + pBarcode === cleanCode
+      );
+    });
     
     if (product) {
       setIsScannerOpen(false);
@@ -118,6 +127,14 @@ export default function Dashboard() {
         title: "Xatolik",
         description: `Kitob topilmadi: ${cleanCode}`,
         variant: "destructive",
+        action: (
+           <Button variant="outline" size="sm" className="bg-white text-black border-none hover:bg-gray-100" onClick={() => {
+              // Copy to clipboard or navigate to inventory (future improvement)
+              navigator.clipboard.writeText(cleanCode);
+           }}>
+             Nusxalash
+           </Button>
+        )
       });
       setIsScannerOpen(false);
     }

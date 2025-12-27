@@ -13,12 +13,21 @@ import {
 import { Search, User, Phone, ShoppingBag, Calendar } from "lucide-react";
 import { format } from "date-fns";
 
+interface CustomerData {
+  name: string;
+  phone: string;
+  totalOrders: number;
+  totalSpent: number;
+  lastOrderDate: string;
+  history: any[];
+}
+
 export default function CustomersPage() {
   const { orders } = useOrders();
   const [search, setSearch] = useState("");
 
   // Aggregate customer data from orders
-  const customersMap = new Map();
+  const customersMap = new Map<string, CustomerData>();
 
   orders.forEach(order => {
     if (!customersMap.has(order.customerPhone)) {

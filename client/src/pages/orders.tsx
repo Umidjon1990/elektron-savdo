@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { useOrders, type Order } from "@/lib/order-context";
+import { useOrders } from "@/lib/order-context";
+import type { Order } from "@/lib/order-context";
 import { SidebarNav } from "@/components/layout/sidebar-nav";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";

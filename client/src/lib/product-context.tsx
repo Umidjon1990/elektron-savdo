@@ -1,55 +1,90 @@
-import { createContext, useContext, useState, type ReactNode } from "react";
-import { MOCK_PRODUCTS, type Product } from "@/data/mock-products";
+import { createContext, useContext, type ReactNode } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+
+interface Product {
+  id: string;
+  name: string;
+  author: string;
+  price: number;
+  stock: number;
+  category: string;
+  barcode: string;
+  image: string;
+}
 
 interface ProductContextType {
   products: Product[];
-  addProduct: (product: Omit<Product, "id">) => void;
-  updateStock: (id: string, delta: number) => void;
-  updateProduct: (id: string, updates: Partial<Product>) => void;
+  isLoading: boolean;
+  addProduct: (product: Omit<Product, "id">) => Promise<void>;
+  updateStock: (id: string, delta: number) => Promise<void>;
+  updateProduct: (id: string, updates: Partial<Omit<Product, "id">>) => Promise<void>;
 }
 
 const ProductContext = createContext<ProductContextType | undefined>(undefined);
 
 export function ProductProvider({ children }: { children: ReactNode }) {
-  const [products, setProducts] = useState<Product[]>(() => {
-    try {
-      const saved = localStorage.getItem("pos_products");
-      return saved ? JSON.parse(saved) : MOCK_PRODUCTS;
-    } catch (e) {
-      return MOCK_PRODUCTS;
-    }
+  const queryClient = useQueryClient();
+
+  const { data: products = [], isLoading } = useQuery({
+    queryKey: ["products"],
+    queryFn: async () => {
+      const res = await fetch("/api/products");
+      if (!res.ok) throw new Error("Failed to fetch products");
+      return res.json() as Promise<Product[]>;
+    },
   });
 
-  // Save to localStorage whenever products change
-  const saveProducts = (newProducts: Product[]) => {
-    setProducts(newProducts);
-    localStorage.setItem("pos_products", JSON.stringify(newProducts));
+  const addProductMutation = useMutation({
+    mutationFn: async (product: Omit<Product, "id">) => {
+      const res = await fetch("/api/products", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(product),
+      });
+      if (!res.ok) throw new Error("Failed to add product");
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["products"] });
+    },
+  });
+
+  const updateProductMutation = useMutation({
+    mutationFn: async ({ id, data }: { id: string; data: Partial<Omit<Product, "id">> }) => {
+      const res = await fetch(`/api/products/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      });
+      if (!res.ok) throw new Error("Failed to update product");
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["products"] });
+    },
+  });
+
+  const addProduct = async (product: Omit<Product, "id">) => {
+    await addProductMutation.mutateAsync(product);
   };
 
-  const addProduct = (newProduct: Omit<Product, "id">) => {
-    const product = {
-      ...newProduct,
-      id: Math.random().toString(36).substr(2, 9),
-    };
-    saveProducts([product, ...products]);
+  const updateStock = async (id: string, delta: number) => {
+    const product = products.find(p => p.id === id);
+    if (!product) return;
+    await updateProductMutation.mutateAsync({ 
+      id, 
+      data: { stock: Math.max(0, product.stock + delta) } 
+    });
   };
 
-  const updateStock = (id: string, delta: number) => {
-    const updated = products.map((p) =>
-      p.id === id ? { ...p, stock: Math.max(0, p.stock + delta) } : p
-    );
-    saveProducts(updated);
-  };
-
-  const updateProduct = (id: string, updates: Partial<Product>) => {
-    const updated = products.map((p) =>
-      p.id === id ? { ...p, ...updates } : p
-    );
-    saveProducts(updated);
+  const updateProduct = async (id: string, updates: Partial<Omit<Product, "id">>) => {
+    await updateProductMutation.mutateAsync({ id, data: updates });
   };
 
   return (
-    <ProductContext.Provider value={{ products, addProduct, updateStock, updateProduct }}>
+    <ProductContext.Provider
+      value={{ products, isLoading, addProduct, updateStock, updateProduct }}
+    >
       {children}
     </ProductContext.Provider>
   );

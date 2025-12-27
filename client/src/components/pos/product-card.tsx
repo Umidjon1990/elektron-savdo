@@ -21,7 +21,7 @@ export function ProductCard({ product, onClick }: ProductCardProps) {
       onClick={() => onClick(product)}
       data-testid={`product-card-${product.id}`}
     >
-      <div className="aspect-[2/3] relative overflow-hidden bg-gray-100">
+      <div className="aspect-[3/4] relative overflow-hidden bg-gray-100">
         {!imgError && (
           <img 
             src={product.image} 
@@ -51,22 +51,22 @@ export function ProductCard({ product, onClick }: ProductCardProps) {
           </div>
         )}
       </div>
-      <CardContent className="p-3">
-        <div className="space-y-1 mb-2">
-          <div className="font-medium text-sm line-clamp-2 leading-tight min-h-[2.5em]" style={{color: '#1e293b'}}>
+      <CardContent className="p-2">
+        <div className="space-y-0.5 mb-1">
+          <div className="font-medium text-xs line-clamp-2 leading-tight min-h-[2em]" style={{color: '#1e293b'}}>
             {product.name}
           </div>
-          <div className="text-xs truncate font-medium" style={{color: '#64748b'}}>
+          <div className="text-[10px] truncate" style={{color: '#64748b'}}>
             {product.author}
           </div>
         </div>
         
         <div className="flex items-center justify-between">
-          <div className="font-mono font-bold whitespace-nowrap" style={{color: '#3b82f6'}}>
-            {product.price.toLocaleString()} so'm
+          <div className="font-mono text-xs font-bold whitespace-nowrap" style={{color: '#3b82f6'}}>
+            {product.price.toLocaleString()}
           </div>
-          <span className="text-xs font-medium" style={{color: product.stock < 10 ? '#ef4444' : '#64748b'}}>
-            {product.stock} dona
+          <span className="text-[10px]" style={{color: product.stock < 10 ? '#ef4444' : '#64748b'}}>
+            {product.stock}
           </span>
         </div>
       </CardContent>

@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Search, ScanBarcode, Wifi, WifiOff, Bluetooth, RefreshCw, BookOpen } from "lucide-react";
 import { ScannerOverlay } from "@/components/pos/scanner-overlay";
+import { ProductInfoDialog } from "@/components/pos/product-info-dialog";
 import { useToast } from "@/hooks/use-toast";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
@@ -23,6 +24,7 @@ export default function Dashboard() {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("Barchasi");
   const [isScannerOpen, setIsScannerOpen] = useState(false);
+  const [scannedProduct, setScannedProduct] = useState<Product | null>(null);
   const [isOffline, setIsOffline] = useState(false);
   const { toast } = useToast();
 
@@ -43,6 +45,15 @@ export default function Dashboard() {
     const audio = new Audio("https://codeskulptor-demos.commondatastorage.googleapis.com/pang/pop.mp3");
     audio.volume = 0.5;
     audio.play().catch(() => {});
+  };
+
+  const handleScannedProductAdd = (product: Product) => {
+    addToCart(product);
+    setScannedProduct(null);
+    toast({
+      title: "Savatchaga qo'shildi",
+      description: `${product.name} - ${product.price.toLocaleString()} so'm`,
+    });
   };
 
   const updateQuantity = (id: string, delta: number) => {
@@ -72,12 +83,12 @@ export default function Dashboard() {
   const handleScan = (code: string) => {
     const product = products.find(p => p.barcode === code);
     if (product) {
-      addToCart(product);
       setIsScannerOpen(false);
-      toast({
-        title: "Kitob topildi",
-        description: `${product.name} - ${product.author}`,
-      });
+      setScannedProduct(product);
+      // Play beep sound
+      const audio = new Audio("https://codeskulptor-demos.commondatastorage.googleapis.com/assets/sounddogs/soundtrack.mp3"); // Short beep ideally
+      audio.volume = 0.5;
+      audio.play().catch(() => {});
     } else {
       toast({
         title: "Xatolik",
@@ -203,6 +214,13 @@ export default function Dashboard() {
         isOpen={isScannerOpen} 
         onClose={() => setIsScannerOpen(false)} 
         onScan={handleScan}
+      />
+      
+      <ProductInfoDialog 
+        product={scannedProduct}
+        isOpen={!!scannedProduct}
+        onClose={() => setScannedProduct(null)}
+        onAddToCart={handleScannedProductAdd}
       />
     </div>
   );

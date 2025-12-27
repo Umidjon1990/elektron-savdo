@@ -1,6 +1,6 @@
 import { Link, useLocation } from "wouter";
 import { cn } from "@/lib/utils";
-import { LayoutDashboard, Package, History, Settings, LogOut, Store, ShoppingCart, Users, Download, MoreHorizontal } from "lucide-react";
+import { LayoutDashboard, Package, History, Settings, LogOut, Store, ShoppingCart, Users, Download, MoreHorizontal, Layers } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useState, useEffect } from "react";
 import {
@@ -15,6 +15,7 @@ const navItems = [
   { href: "/admin/orders", icon: ShoppingCart, label: "Buyurtmalar", primary: true },
   { href: "/admin/inventory", icon: Package, label: "Ombor", primary: true },
   { href: "/admin/history", icon: History, label: "Tarix", primary: true },
+  { href: "/admin/categories", icon: Layers, label: "Kategoriyalar", primary: false },
   { href: "/admin/customers", icon: Users, label: "Mijozlar", primary: false },
   { href: "/", icon: Store, label: "Do'kon", primary: false },
   { href: "/admin/settings", icon: Settings, label: "Sozlamalar", primary: false },

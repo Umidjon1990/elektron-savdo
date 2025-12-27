@@ -7,7 +7,13 @@ import { useTransactions } from "@/lib/transaction-context";
 import { CATEGORIES, type Product } from "@/data/mock-products";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Search, ScanBarcode, Wifi, WifiOff, Bluetooth, RefreshCw, BookOpen, ShoppingCart } from "lucide-react";
+import { Search, ScanBarcode, Wifi, WifiOff, Bluetooth, RefreshCw, BookOpen, ShoppingCart, Filter, ChevronDown, Check } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { ScannerOverlay } from "@/components/pos/scanner-overlay";
 import { ProductInfoDialog } from "@/components/pos/product-info-dialog";
 import { ReceiptDialog } from "@/components/pos/receipt-dialog";
@@ -237,24 +243,31 @@ export default function Dashboard() {
         {/* Content */}
         <div className="flex-1 flex min-h-0 bg-gray-50/50">
           <div className="flex-1 flex flex-col p-4 md:p-6 min-w-0">
-            {/* Categories */}
-            <div className="mb-6 overflow-x-auto pb-2 -mx-4 px-4 md:-mx-6 md:px-6 scrollbar-hide">
-              <div className="flex gap-2">
-                {CATEGORIES.map(category => (
-                  <button
-                    key={category}
-                    onClick={() => setSelectedCategory(category)}
-                    className={cn(
-                      "px-4 py-2 rounded-full text-sm font-medium transition-all whitespace-nowrap border",
-                      selectedCategory === category
-                        ? "bg-primary text-white border-primary shadow-md shadow-primary/20"
-                        : "bg-white text-gray-600 border-gray-200 hover:bg-gray-100 hover:border-gray-300"
-                    )}
-                  >
-                    {category}
-                  </button>
-                ))}
-              </div>
+            {/* Category Filter Dropdown */}
+            <div className="mb-4 flex items-center gap-3">
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" className="gap-2" style={{backgroundColor: '#ffffff', color: '#1e293b', borderColor: '#e2e8f0'}}>
+                    <Filter className="h-4 w-4" />
+                    <span>{selectedCategory}</span>
+                    <ChevronDown className="h-4 w-4 opacity-50" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start" className="w-56" style={{backgroundColor: '#ffffff'}}>
+                  {CATEGORIES.map(category => (
+                    <DropdownMenuItem
+                      key={category}
+                      onClick={() => setSelectedCategory(category)}
+                      className="cursor-pointer"
+                      style={{color: '#1e293b'}}
+                    >
+                      <span className="flex-1">{category}</span>
+                      {selectedCategory === category && <Check className="h-4 w-4 text-primary" />}
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
+              <span style={{color: '#64748b', fontSize: '14px'}}>{filteredProducts.length} ta kitob</span>
             </div>
 
             {/* Product Grid */}

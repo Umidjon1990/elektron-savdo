@@ -32,6 +32,7 @@ import {
 } from "@/components/ui/select";
 import { CATEGORIES } from "@/data/mock-products";
 import { useToast } from "@/hooks/use-toast";
+import { Card, CardContent } from "@/components/ui/card";
 
 export default function Inventory() {
   const { products, addProduct } = useProducts();
@@ -81,9 +82,6 @@ export default function Inventory() {
         description: "Kitob ma'lumotlarini qo'lda kiriting",
       });
     }
-    
-    // If the dialog wasn't open, open it now (if we implement a scan button outside)
-    // But here we are scanning inside the dialog flow or triggering it from there
   };
 
   const handleAddProduct = (e: React.FormEvent) => {
@@ -112,45 +110,46 @@ export default function Inventory() {
   );
 
   return (
-    <div className="flex h-screen bg-background overflow-hidden font-sans">
+    <div className="flex flex-col md:flex-row h-screen bg-background overflow-hidden font-sans">
       <SidebarNav />
       
-      <div className="flex-1 flex flex-col min-w-0 bg-gray-50/50">
-        <header className="h-16 bg-white border-b flex items-center justify-between px-6 shrink-0">
-          <h1 className="text-xl font-semibold">Ombor va Mahsulotlar</h1>
+      <div className="flex-1 flex flex-col min-w-0 bg-gray-50/50 pb-16 md:pb-0">
+        <header className="h-16 bg-white border-b flex items-center justify-between px-4 md:px-6 shrink-0">
+          <h1 className="text-lg md:text-xl font-semibold">Ombor</h1>
           <div className="flex items-center gap-4">
-             <div className="text-sm text-muted-foreground">
-                Jami: <span className="font-medium text-foreground">{products.length} ta kitob</span>
+             <div className="text-xs md:text-sm text-muted-foreground">
+                Jami: <span className="font-medium text-foreground">{products.length} ta</span>
              </div>
           </div>
         </header>
 
-        <div className="p-6 flex-1 overflow-hidden flex flex-col">
-          <div className="flex items-center justify-between mb-6 gap-4">
-            <div className="relative flex-1 max-w-md">
+        <div className="p-4 md:p-6 flex-1 overflow-hidden flex flex-col">
+          <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between mb-6 gap-3">
+            <div className="relative flex-1 w-full md:max-w-md">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
               <Input 
                 placeholder="Qidiruv..." 
-                className="pl-9 bg-white"
+                className="pl-9 bg-white w-full"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
               />
             </div>
             
             <div className="flex gap-2">
-              <Button variant="outline" className="gap-2">
+              <Button variant="outline" className="gap-2 flex-1 md:flex-none justify-center">
                 <Filter className="h-4 w-4" />
                 Filter
               </Button>
               
               <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
                 <DialogTrigger asChild>
-                  <Button className="gap-2">
+                  <Button className="gap-2 flex-1 md:flex-none justify-center">
                     <Plus className="h-4 w-4" />
-                    Yangi kitob qo'shish
+                    <span className="hidden sm:inline">Yangi kitob</span>
+                    <span className="sm:hidden">Qo'shish</span>
                   </Button>
                 </DialogTrigger>
-                <DialogContent className="sm:max-w-[500px]">
+                <DialogContent className="sm:max-w-[500px] max-h-[90vh] overflow-y-auto">
                   <form onSubmit={handleAddProduct}>
                     <DialogHeader>
                       <DialogTitle>Yangi kitob qo'shish</DialogTitle>
@@ -181,7 +180,7 @@ export default function Inventory() {
                       </div>
 
                       <div className="grid grid-cols-2 gap-4">
-                        <div className="space-y-2">
+                        <div className="space-y-2 col-span-2 sm:col-span-1">
                           <Label htmlFor="name">Kitob nomi</Label>
                           <Input 
                             id="name" 
@@ -191,7 +190,7 @@ export default function Inventory() {
                             placeholder="Masalan: Atomic Habits"
                           />
                         </div>
-                        <div className="space-y-2">
+                        <div className="space-y-2 col-span-2 sm:col-span-1">
                           <Label htmlFor="author">Muallif</Label>
                           <Input 
                             id="author" 
@@ -204,7 +203,7 @@ export default function Inventory() {
                       </div>
                       
                       <div className="grid grid-cols-2 gap-4">
-                        <div className="space-y-2">
+                        <div className="space-y-2 col-span-2 sm:col-span-1">
                           <Label htmlFor="category">Janr</Label>
                           <Select 
                             value={newProduct.category} 
@@ -220,8 +219,7 @@ export default function Inventory() {
                             </SelectContent>
                           </Select>
                         </div>
-                        <div className="space-y-2">
-                           {/* Empty placeholder for grid alignment if needed, or remove grid cols above */}
+                        <div className="space-y-2 col-span-2 sm:col-span-1">
                            <Label htmlFor="price">Narxi (so'm)</Label>
                           <Input 
                             id="price" 
@@ -234,7 +232,7 @@ export default function Inventory() {
                       </div>
 
                       <div className="grid grid-cols-2 gap-4">
-                        <div className="space-y-2">
+                        <div className="space-y-2 col-span-2 sm:col-span-1">
                           <Label htmlFor="stock">Soni (dona)</Label>
                           <Input 
                             id="stock" 
@@ -255,7 +253,8 @@ export default function Inventory() {
             </div>
           </div>
 
-          <div className="bg-white rounded-lg border shadow-sm flex-1 overflow-hidden">
+          {/* Desktop Table View */}
+          <div className="hidden md:block bg-white rounded-lg border shadow-sm flex-1 overflow-hidden">
             <div className="overflow-y-auto h-full">
               <Table>
                 <TableHeader>
@@ -307,6 +306,50 @@ export default function Inventory() {
                 </TableBody>
               </Table>
             </div>
+          </div>
+
+          {/* Mobile Card View */}
+          <div className="md:hidden flex-1 overflow-y-auto space-y-4 pb-20">
+            {filteredProducts.map((product) => (
+              <Card key={product.id} className="overflow-hidden">
+                <CardContent className="p-3">
+                  <div className="flex gap-3">
+                    <div className="w-16 h-24 bg-gray-100 rounded overflow-hidden flex-shrink-0">
+                      <img src={product.image} alt="" className="w-full h-full object-cover" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex justify-between items-start">
+                        <div>
+                          <h3 className="font-medium text-sm truncate pr-2">{product.name}</h3>
+                          <p className="text-xs text-muted-foreground">{product.author}</p>
+                        </div>
+                        <Button variant="ghost" size="icon" className="h-6 w-6 -mt-1 -mr-1">
+                          <MoreHorizontal className="h-4 w-4" />
+                        </Button>
+                      </div>
+                      
+                      <div className="mt-2 flex flex-wrap gap-2">
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium bg-gray-100 text-gray-800">
+                          {product.category}
+                        </span>
+                      </div>
+                      
+                      <div className="mt-3 flex items-center justify-between">
+                        <span className="font-bold text-primary">
+                          {product.price.toLocaleString()} so'm
+                        </span>
+                        <div className="flex items-center gap-2 text-xs">
+                          <span className="text-muted-foreground">Qoldiq:</span>
+                          <span className={`font-medium ${product.stock < 10 ? 'text-red-500' : 'text-green-600'}`}>
+                            {product.stock}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
           </div>
         </div>
       </div>

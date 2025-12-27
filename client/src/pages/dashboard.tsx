@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { SidebarNav } from "@/components/layout/sidebar-nav";
 import { ProductCard } from "@/components/pos/product-card";
 import { CartSidebar } from "@/components/pos/cart-sidebar";
@@ -7,13 +7,14 @@ import { useTransactions } from "@/lib/transaction-context";
 import { CATEGORIES, type Product } from "@/data/mock-products";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Search, ScanBarcode, Wifi, WifiOff, Bluetooth, RefreshCw, BookOpen } from "lucide-react";
+import { Search, ScanBarcode, Wifi, WifiOff, Bluetooth, RefreshCw, BookOpen, ShoppingCart } from "lucide-react";
 import { ScannerOverlay } from "@/components/pos/scanner-overlay";
 import { ProductInfoDialog } from "@/components/pos/product-info-dialog";
 import { ReceiptDialog } from "@/components/pos/receipt-dialog";
 import { useToast } from "@/hooks/use-toast";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 
 export interface CartItem {
   product: Product;
@@ -31,6 +32,7 @@ export default function Dashboard() {
   const [lastTransaction, setLastTransaction] = useState<any>(null);
   const [isReceiptOpen, setIsReceiptOpen] = useState(false);
   const [isOffline, setIsOffline] = useState(false);
+  const [isMobileCartOpen, setIsMobileCartOpen] = useState(false);
   const { toast } = useToast();
 
   const addToCart = (product: Product) => {
@@ -89,6 +91,7 @@ export default function Dashboard() {
 
     setLastTransaction(transaction);
     setIsReceiptOpen(true);
+    setIsMobileCartOpen(false);
 
     toast({
       title: "To'lov qabul qilindi!",
@@ -126,19 +129,21 @@ export default function Dashboard() {
     return matchesSearch && matchesCategory;
   });
 
+  const cartItemCount = cart.reduce((acc, item) => acc + item.quantity, 0);
+
   return (
-    <div className="flex h-screen bg-background overflow-hidden font-sans">
+    <div className="flex flex-col md:flex-row h-screen bg-background overflow-hidden font-sans">
       <SidebarNav />
       
-      <div className="flex-1 flex flex-col min-w-0">
+      <div className="flex-1 flex flex-col min-w-0 pb-16 md:pb-0">
         {/* Header */}
-        <header className="h-16 bg-white border-b flex items-center justify-between px-6 shrink-0 z-10">
-          <div className="flex items-center gap-4 flex-1">
+        <header className="h-16 bg-white border-b flex items-center justify-between px-4 md:px-6 shrink-0 z-10">
+          <div className="flex items-center gap-2 md:gap-4 flex-1">
             <div className="relative w-full max-w-md">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
               <Input 
-                placeholder="Kitob nomi, muallif yoki ISBN..." 
-                className="pl-9 bg-gray-50 border-gray-200 focus-visible:ring-primary"
+                placeholder="Qidiruv..." 
+                className="pl-9 bg-gray-50 border-gray-200 focus-visible:ring-primary w-full"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
               />
@@ -146,39 +151,70 @@ export default function Dashboard() {
             <Button 
               variant={isScannerOpen ? "default" : "outline"}
               onClick={() => setIsScannerOpen(true)}
-              className="gap-2 border-primary/20 text-primary hover:bg-primary hover:text-white"
+              size="icon"
+              className="md:hidden shrink-0 border-primary/20 text-primary hover:bg-primary hover:text-white"
+            >
+               <ScanBarcode className="h-4 w-4" />
+            </Button>
+            <Button 
+              variant={isScannerOpen ? "default" : "outline"}
+              onClick={() => setIsScannerOpen(true)}
+              className="hidden md:flex gap-2 border-primary/20 text-primary hover:bg-primary hover:text-white"
             >
               <ScanBarcode className="h-4 w-4" />
               Skaner
             </Button>
           </div>
 
-          <div className="flex items-center gap-4">
-            <div className="flex items-center gap-2 text-sm text-muted-foreground bg-gray-50 px-3 py-1.5 rounded-full border border-gray-100">
+          <div className="flex items-center gap-2 md:gap-4 ml-2">
+            <div className="hidden md:flex items-center gap-2 text-sm text-muted-foreground bg-gray-50 px-3 py-1.5 rounded-full border border-gray-100">
               {isOffline ? <WifiOff className="h-4 w-4 text-red-500" /> : <Wifi className="h-4 w-4 text-green-500" />}
-              <span className={cn("hidden sm:inline", isOffline ? "text-red-600" : "text-green-600")}>
+              <span className={cn("hidden lg:inline", isOffline ? "text-red-600" : "text-green-600")}>
                 {isOffline ? "Offline rejim" : "Online"}
               </span>
             </div>
             
-            <Button variant="ghost" size="icon" onClick={() => setIsOffline(!isOffline)} title="Rejimni o'zgartirish">
-              <RefreshCw className="h-4 w-4" />
-            </Button>
-            
-            <div className="h-8 w-px bg-gray-200" />
-            
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-              <Bluetooth className="h-4 w-4 text-blue-500" />
-              <span className="hidden sm:inline">Scanner bog'langan</span>
+            {/* Mobile Cart Trigger */}
+            <Sheet open={isMobileCartOpen} onOpenChange={setIsMobileCartOpen}>
+              <SheetTrigger asChild>
+                <Button className="md:hidden relative" size="icon">
+                  <ShoppingCart className="h-5 w-5" />
+                  {cartItemCount > 0 && (
+                    <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] font-bold w-5 h-5 flex items-center justify-center rounded-full border-2 border-white">
+                      {cartItemCount}
+                    </span>
+                  )}
+                </Button>
+              </SheetTrigger>
+              <SheetContent side="right" className="p-0 w-full sm:max-w-md border-l-0">
+                <CartSidebar 
+                  items={cart} 
+                  onUpdateQuantity={updateQuantity}
+                  onRemove={removeFromCart}
+                  onClear={clearCart}
+                  onCheckout={handleCheckout}
+                />
+              </SheetContent>
+            </Sheet>
+
+            <div className="hidden md:flex items-center gap-2">
+               <Button variant="ghost" size="icon" onClick={() => setIsOffline(!isOffline)} title="Rejimni o'zgartirish">
+                 <RefreshCw className="h-4 w-4" />
+               </Button>
+               <div className="h-8 w-px bg-gray-200" />
+               <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                 <Bluetooth className="h-4 w-4 text-blue-500" />
+                 <span className="hidden lg:inline">Scanner bog'langan</span>
+               </div>
             </div>
           </div>
         </header>
 
         {/* Content */}
         <div className="flex-1 flex min-h-0 bg-gray-50/50">
-          <div className="flex-1 flex flex-col p-6 min-w-0">
+          <div className="flex-1 flex flex-col p-4 md:p-6 min-w-0">
             {/* Categories */}
-            <div className="mb-6 overflow-x-auto pb-2 -mx-6 px-6 scrollbar-hide">
+            <div className="mb-6 overflow-x-auto pb-2 -mx-4 px-4 md:-mx-6 md:px-6 scrollbar-hide">
               <div className="flex gap-2">
                 {CATEGORIES.map(category => (
                   <button
@@ -198,8 +234,8 @@ export default function Dashboard() {
             </div>
 
             {/* Product Grid */}
-            <ScrollArea className="flex-1 -mr-4 pr-4">
-              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4 pb-20">
+            <div className="flex-1 overflow-y-auto -mr-4 pr-4 pb-20 md:pb-0">
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3 md:gap-4">
                 {filteredProducts.map(product => (
                   <ProductCard 
                     key={product.id} 
@@ -214,17 +250,19 @@ export default function Dashboard() {
                   <p>Kitoblar topilmadi</p>
                 </div>
               )}
-            </ScrollArea>
+            </div>
           </div>
 
-          {/* Cart Sidebar */}
-          <CartSidebar 
-            items={cart} 
-            onUpdateQuantity={updateQuantity}
-            onRemove={removeFromCart}
-            onClear={clearCart}
-            onCheckout={handleCheckout}
-          />
+          {/* Desktop Cart Sidebar */}
+          <div className="hidden md:block h-full">
+            <CartSidebar 
+              items={cart} 
+              onUpdateQuantity={updateQuantity}
+              onRemove={removeFromCart}
+              onClear={clearCart}
+              onCheckout={handleCheckout}
+            />
+          </div>
         </div>
       </div>
 
@@ -246,14 +284,6 @@ export default function Dashboard() {
         isOpen={isReceiptOpen}
         onClose={() => setIsReceiptOpen(false)}
       />
-    </div>
-  );
-}
-
-function ScrollArea({ className, children }: { className?: string, children: React.ReactNode }) {
-  return (
-    <div className={cn("overflow-y-auto", className)}>
-      {children}
     </div>
   );
 }

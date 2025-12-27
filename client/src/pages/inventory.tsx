@@ -3,7 +3,9 @@ import { SidebarNav } from "@/components/layout/sidebar-nav";
 import { useProducts } from "@/lib/product-context";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Search, Plus, Filter, MoreHorizontal, Edit, Trash2 } from "lucide-react";
+import { Search, Plus, Filter, MoreHorizontal, Edit, Trash2, ScanBarcode } from "lucide-react";
+import { ScannerOverlay } from "@/components/pos/scanner-overlay";
+import { KNOWN_BOOKS_DB } from "@/data/mock-external-books";
 import {
   Table,
   TableBody,
@@ -35,6 +37,7 @@ export default function Inventory() {
   const { products, addProduct } = useProducts();
   const [searchQuery, setSearchQuery] = useState("");
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
+  const [isScannerOpen, setIsScannerOpen] = useState(false);
   const { toast } = useToast();
 
   const [newProduct, setNewProduct] = useState({
@@ -44,7 +47,44 @@ export default function Inventory() {
     stock: "",
     category: "",
     barcode: "",
+    image: ""
   });
+
+  const handleScan = (code: string) => {
+    setIsScannerOpen(false);
+    
+    // Check if we have this book in our "global database"
+    const knownBook = KNOWN_BOOKS_DB[code];
+    
+    if (knownBook) {
+      setNewProduct(prev => ({
+        ...prev,
+        barcode: code,
+        name: knownBook.name,
+        author: knownBook.author,
+        category: knownBook.category,
+        image: knownBook.image
+      }));
+      
+      toast({
+        title: "Kitob topildi!",
+        description: "Ma'lumotlar avtomatik to'ldirildi",
+      });
+    } else {
+      setNewProduct(prev => ({
+        ...prev,
+        barcode: code
+      }));
+      
+      toast({
+        title: "Shtrix kod skanerlandi",
+        description: "Kitob ma'lumotlarini qo'lda kiriting",
+      });
+    }
+    
+    // If the dialog wasn't open, open it now (if we implement a scan button outside)
+    // But here we are scanning inside the dialog flow or triggering it from there
+  };
 
   const handleAddProduct = (e: React.FormEvent) => {
     e.preventDefault();
@@ -55,10 +95,10 @@ export default function Inventory() {
       stock: Number(newProduct.stock),
       category: newProduct.category || "Jahon adabiyoti",
       barcode: newProduct.barcode || Math.random().toString().slice(2, 14),
-      image: "https://images.unsplash.com/photo-1543002588-bfa74002ed7e?auto=format&fit=crop&q=80&w=300&h=400" // Placeholder
+      image: newProduct.image || "https://images.unsplash.com/photo-1543002588-bfa74002ed7e?auto=format&fit=crop&q=80&w=300&h=400" // Placeholder
     });
     setIsAddDialogOpen(false);
-    setNewProduct({ name: "", author: "", price: "", stock: "", category: "", barcode: "" });
+    setNewProduct({ name: "", author: "", price: "", stock: "", category: "", barcode: "", image: "" });
     toast({
       title: "Muvaffaqiyatli qo'shildi",
       description: `${newProduct.name} bazaga kiritildi`,
@@ -116,6 +156,30 @@ export default function Inventory() {
                       <DialogTitle>Yangi kitob qo'shish</DialogTitle>
                     </DialogHeader>
                     <div className="grid gap-4 py-4">
+                      <div className="col-span-2 flex items-end gap-2">
+                         <div className="space-y-2 flex-1">
+                          <Label htmlFor="barcode">ISBN / Shtrix kod</Label>
+                          <div className="flex gap-2">
+                            <Input 
+                              id="barcode"
+                              value={newProduct.barcode}
+                              onChange={(e) => setNewProduct({...newProduct, barcode: e.target.value})}
+                              placeholder="Skanerlang yoki kiriting"
+                              className="font-mono"
+                            />
+                            <Button 
+                              type="button" 
+                              variant="outline" 
+                              size="icon"
+                              onClick={() => setIsScannerOpen(true)}
+                              title="Skanerlash"
+                            >
+                              <ScanBarcode className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </div>
+                      </div>
+
                       <div className="grid grid-cols-2 gap-4">
                         <div className="space-y-2">
                           <Label htmlFor="name">Kitob nomi</Label>
@@ -124,6 +188,7 @@ export default function Inventory() {
                             required 
                             value={newProduct.name}
                             onChange={(e) => setNewProduct({...newProduct, name: e.target.value})}
+                            placeholder="Masalan: Atomic Habits"
                           />
                         </div>
                         <div className="space-y-2">
@@ -133,6 +198,7 @@ export default function Inventory() {
                             required
                             value={newProduct.author}
                             onChange={(e) => setNewProduct({...newProduct, author: e.target.value})}
+                            placeholder="Masalan: James Clear"
                           />
                         </div>
                       </div>
@@ -155,18 +221,8 @@ export default function Inventory() {
                           </Select>
                         </div>
                         <div className="space-y-2">
-                          <Label htmlFor="barcode">ISBN / Shtrix kod</Label>
-                          <Input 
-                            id="barcode"
-                            value={newProduct.barcode}
-                            onChange={(e) => setNewProduct({...newProduct, barcode: e.target.value})}
-                          />
-                        </div>
-                      </div>
-
-                      <div className="grid grid-cols-2 gap-4">
-                        <div className="space-y-2">
-                          <Label htmlFor="price">Narxi (so'm)</Label>
+                           {/* Empty placeholder for grid alignment if needed, or remove grid cols above */}
+                           <Label htmlFor="price">Narxi (so'm)</Label>
                           <Input 
                             id="price" 
                             type="number" 
@@ -175,6 +231,9 @@ export default function Inventory() {
                             onChange={(e) => setNewProduct({...newProduct, price: e.target.value})}
                           />
                         </div>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-4">
                         <div className="space-y-2">
                           <Label htmlFor="stock">Soni (dona)</Label>
                           <Input 
@@ -251,6 +310,12 @@ export default function Inventory() {
           </div>
         </div>
       </div>
+      
+      <ScannerOverlay 
+        isOpen={isScannerOpen} 
+        onClose={() => setIsScannerOpen(false)} 
+        onScan={handleScan}
+      />
     </div>
   );
 }

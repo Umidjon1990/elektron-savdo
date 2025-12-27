@@ -102,7 +102,10 @@ export default function Dashboard() {
   };
 
   const handleScan = (code: string) => {
-    const product = products.find(p => p.barcode === code);
+    // Try to find exact match or match after trimming
+    const cleanCode = code.trim();
+    const product = products.find(p => p.barcode === cleanCode || p.barcode.trim() === cleanCode);
+    
     if (product) {
       setIsScannerOpen(false);
       setScannedProduct(product);
@@ -113,7 +116,7 @@ export default function Dashboard() {
     } else {
       toast({
         title: "Xatolik",
-        description: "Kitob topilmadi",
+        description: `Kitob topilmadi: ${cleanCode}`,
         variant: "destructive",
       });
       setIsScannerOpen(false);

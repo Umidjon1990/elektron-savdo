@@ -102,12 +102,16 @@ export default function Dashboard() {
   };
 
   const handleScan = (code: string) => {
-    // Try to find exact match or match after trimming
-    const cleanCode = code.trim();
+    // Aggressively normalize: remove all non-numeric characters
+    const normalize = (s: string) => s.replace(/[^0-9]/g, "");
+    
+    const cleanCode = normalize(code);
+    
+    if (!cleanCode) return; // Empty scan
     
     // Fuzzy search for barcode (handle EAN-13 vs UPC-A leading zero issues)
     const product = products.find(p => {
-      const pBarcode = p.barcode.trim();
+      const pBarcode = normalize(p.barcode);
       return (
         pBarcode === cleanCode || 
         pBarcode === "0" + cleanCode || 
@@ -125,12 +129,11 @@ export default function Dashboard() {
     } else {
       toast({
         title: "Xatolik",
-        description: `Kitob topilmadi: ${cleanCode}`,
+        description: `Kitob topilmadi: ${code}`,
         variant: "destructive",
         action: (
            <Button variant="outline" size="sm" className="bg-white text-black border-none hover:bg-gray-100" onClick={() => {
-              // Copy to clipboard or navigate to inventory (future improvement)
-              navigator.clipboard.writeText(cleanCode);
+              navigator.clipboard.writeText(code);
            }}>
              Nusxalash
            </Button>

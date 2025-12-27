@@ -46,7 +46,7 @@ export function ScannerOverlay({ isOpen, onClose, onScan, mode = "barcode" }: Sc
       codeReaderRef.current = codeReader;
 
       codeReader.decodeFromVideoDevice(
-        undefined, // use default device
+        null, // use default device
         'reader-video', // video element id
         (result, err) => {
           if (result) {

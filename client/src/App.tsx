@@ -3,14 +3,16 @@ import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { ProductProvider } from "@/lib/product-context";
 import NotFound from "@/pages/not-found";
 import Dashboard from "@/pages/dashboard";
+import Inventory from "@/pages/inventory";
 
 function Router() {
   return (
     <Switch>
       <Route path="/" component={Dashboard} />
-      {/* We can add inventory page later if requested, simpler to start with just dashboard */}
+      <Route path="/inventory" component={Inventory} />
       <Route component={NotFound} />
     </Switch>
   );
@@ -19,10 +21,12 @@ function Router() {
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
-      <TooltipProvider>
-        <Router />
-        <Toaster />
-      </TooltipProvider>
+      <ProductProvider>
+        <TooltipProvider>
+          <Router />
+          <Toaster />
+        </TooltipProvider>
+      </ProductProvider>
     </QueryClientProvider>
   );
 }

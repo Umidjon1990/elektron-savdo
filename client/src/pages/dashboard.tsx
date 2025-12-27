@@ -2,7 +2,8 @@ import { useState } from "react";
 import { SidebarNav } from "@/components/layout/sidebar-nav";
 import { ProductCard } from "@/components/pos/product-card";
 import { CartSidebar } from "@/components/pos/cart-sidebar";
-import { MOCK_PRODUCTS, CATEGORIES, type Product } from "@/data/mock-products";
+import { useProducts } from "@/lib/product-context";
+import { CATEGORIES, type Product } from "@/data/mock-products";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Search, ScanBarcode, Wifi, WifiOff, Bluetooth, RefreshCw, BookOpen } from "lucide-react";
@@ -17,6 +18,7 @@ export interface CartItem {
 }
 
 export default function Dashboard() {
+  const { products } = useProducts();
   const [cart, setCart] = useState<CartItem[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("Barchasi");
@@ -68,7 +70,7 @@ export default function Dashboard() {
   };
 
   const handleScan = (code: string) => {
-    const product = MOCK_PRODUCTS.find(p => p.barcode === code);
+    const product = products.find(p => p.barcode === code);
     if (product) {
       addToCart(product);
       setIsScannerOpen(false);
@@ -86,7 +88,7 @@ export default function Dashboard() {
     }
   };
 
-  const filteredProducts = MOCK_PRODUCTS.filter(product => {
+  const filteredProducts = products.filter(product => {
     const searchLower = searchQuery.toLowerCase();
     const matchesSearch = product.name.toLowerCase().includes(searchLower) || 
                           product.author.toLowerCase().includes(searchLower) ||

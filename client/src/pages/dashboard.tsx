@@ -258,7 +258,7 @@ export default function Dashboard() {
             </div>
 
             {/* Product Grid */}
-            <div className="flex-1 overflow-y-auto pb-20 md:pb-0" style={{scrollbarWidth: 'thin', scrollbarColor: '#cbd5e1 #f1f5f9'}}>
+            <div className="flex-1 overflow-y-scroll pb-20 md:pb-0">
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-7 gap-2 md:gap-3">
                 {filteredProducts.map(product => (
                   <ProductCard 

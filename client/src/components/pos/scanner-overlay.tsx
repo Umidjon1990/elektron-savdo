@@ -50,7 +50,18 @@ export function ScannerOverlay({ isOpen, onClose, onScan, mode = "barcode" }: Sc
         'reader-video', // video element id
         (result, err) => {
           if (result) {
-            const text = result.getText().trim();
+            let text = result.getText().trim();
+            // If scanner returns multiple lines, take the first one
+            if (text.includes('\n')) {
+               text = text.split('\n')[0].trim();
+            }
+            // If scanner returns concatenated codes (e.g. 12345678912341234567891234), try to split if it's too long
+            if (text.length > 14) {
+               // Heuristic: standard barcodes are usually 8, 12, or 13 digits. 
+               // If > 14, it's likely a double scan or error. We'll truncate to first 13 chars.
+               text = text.substring(0, 13);
+            }
+            
             if (navigator.vibrate) navigator.vibrate(50);
             onScan(text);
             cleanup();

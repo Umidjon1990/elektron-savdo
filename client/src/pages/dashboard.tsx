@@ -60,6 +60,7 @@ export default function Dashboard() {
     toast({
       title: "Savatchaga qo'shildi",
       description: `${product.name} - ${product.price.toLocaleString()} so'm`,
+      duration: 1500, // Disappear faster (1.5s)
     });
   };
 

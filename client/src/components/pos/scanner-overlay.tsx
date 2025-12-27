@@ -67,10 +67,13 @@ export function ScannerOverlay({ isOpen, onClose, onScan, mode = "barcode" }: Sc
             scannerRef.current = html5QrCode;
 
             const config = { 
-              fps: 30, 
-              qrbox: { width: 250, height: 250 },
+              fps: 60, // Boosted back to 60 for "Maximum Speed" requested
+              qrbox: { width: 300, height: 150 }, // Optimized for barcodes (wider)
               aspectRatio: 1.0,
               disableFlip: false,
+              experimentalFeatures: {
+                useBarCodeDetectorIfSupported: true
+              },
               formatsToSupport: [ 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15 ] 
             };
             

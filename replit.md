@@ -57,6 +57,17 @@ Key backend files:
 2. **OCR Support**: Tesseract.js integration for text recognition
 3. **PWA Support**: Service worker and manifest for installable app
 4. **Electron Support**: Desktop app wrapper available in `/electron/`
+5. **Image Storage**: Cloudflare R2 with presigned URL uploads (AWS S3 SDK compatible)
+6. **Modern UI/UX**: Shopify/Square-inspired dashboard with KPI cards and responsive design
+
+### UI/UX Design (2024 Modern Standards)
+- **Dashboard**: KPI stats row with gradient icons (sales, orders, items sold, monthly revenue)
+- **Product Cards**: Large 3:4 aspect ratio cards with hover effects and gradient overlays
+- **Navigation**: 
+  - Desktop: Gradient sidebar with icon+label navigation
+  - Mobile: Clean white bottom nav with primary actions + "More" dropdown
+- **History Page**: Modern analytics with bar charts, area charts, and transaction list
+- **Responsive Grid**: 2 cols mobile → 3 cols tablet → 4-5 cols desktop
 
 ## External Dependencies
 

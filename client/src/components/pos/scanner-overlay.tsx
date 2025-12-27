@@ -1,9 +1,9 @@
 import { motion, AnimatePresence } from "framer-motion";
-import { X, Keyboard, Camera, CameraOff, ScanText, Loader2, RotateCcw, Image as ImageIcon } from "lucide-react";
+import { X, Keyboard, Camera, CameraOff, ScanText, Loader2, RotateCcw } from "lucide-react";
 import { useEffect, useState, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Html5Qrcode } from "html5-qrcode";
+import { BrowserMultiFormatReader, NotFoundException } from '@zxing/library';
 import { createWorker } from "tesseract.js";
 
 interface ScannerOverlayProps {
@@ -22,98 +22,56 @@ export function ScannerOverlay({ isOpen, onClose, onScan, mode = "barcode" }: Sc
   const [capturedImage, setCapturedImage] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState("");
   
-  const scannerRef = useRef<Html5Qrcode | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const workerRef = useRef<Tesseract.Worker | null>(null);
-  const streamRef = useRef<MediaStream | null>(null);
-  const isStoppingRef = useRef(false);
-
-  // Helper to safely stop and clear scanner
-  const cleanupScanner = async () => {
-    if (!scannerRef.current || isStoppingRef.current) return;
-    
-    try {
-      isStoppingRef.current = true;
-      if (scannerRef.current.isScanning) {
-        await scannerRef.current.stop();
-      }
-      scannerRef.current.clear();
-    } catch (err) {
-      console.warn("Scanner cleanup warning:", err);
-    } finally {
-      isStoppingRef.current = false;
-      scannerRef.current = null;
+  const codeReaderRef = useRef<BrowserMultiFormatReader | null>(null);
+  
+  // Clean up function
+  const cleanup = () => {
+    if (codeReaderRef.current) {
+      codeReaderRef.current.reset();
+      codeReaderRef.current = null;
     }
+    setScanning(false);
   };
 
-  // Initialize Barcode Scanner
+  // Initialize Barcode Scanner (ZXing)
   useEffect(() => {
-    let isMounted = true;
+    if (isOpen && mode === "barcode" && !cameraError) {
+      setScanning(true);
+      setErrorMessage("");
+      
+      const codeReader = new BrowserMultiFormatReader();
+      codeReaderRef.current = codeReader;
 
-    const startScanner = async () => {
-      if (isOpen && mode === "barcode" && !cameraError) {
-        setScanning(true);
-        const scannerId = "reader";
-        
-        // Ensure previous instance is gone
-        await cleanupScanner();
-
-        setTimeout(async () => {
-          if (!isMounted || !document.getElementById(scannerId)) return;
-
-          try {
-            const html5QrCode = new Html5Qrcode(scannerId);
-            scannerRef.current = html5QrCode;
-
-            const config = { 
-              fps: 60, // Boosted back to 60 for "Maximum Speed" requested
-              qrbox: { width: 300, height: 150 }, // Optimized for barcodes (wider)
-              aspectRatio: 1.0,
-              disableFlip: false,
-              experimentalFeatures: {
-                useBarCodeDetectorIfSupported: true
-              },
-              formatsToSupport: [ 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15 ] 
-            };
-            
-            await html5QrCode.start(
-              { facingMode: "environment" }, 
-              config,
-              (decodedText) => {
-                if (scannerRef.current) scannerRef.current.pause();
-                if (navigator.vibrate) navigator.vibrate(50);
-                onScan(decodedText);
-                
-                // Graceful cleanup
-                setTimeout(() => {
-                   cleanupScanner().then(() => {
-                     if (isMounted) onClose();
-                   });
-                }, 50);
-              },
-              () => {} 
-            );
-          } catch (err) {
-            console.error("Error starting barcode scanner", err);
-            if (isMounted) {
-              setCameraError(true);
-              setErrorMessage("Kamerani ishga tushirib bo'lmadi. Qayta urinib ko'ring.");
-            }
+      codeReader.decodeFromVideoDevice(
+        undefined, // use default device
+        'reader-video', // video element id
+        (result, err) => {
+          if (result) {
+            const text = result.getText();
+            if (navigator.vibrate) navigator.vibrate(50);
+            onScan(text);
+            cleanup();
+            onClose();
           }
-        }, 300);
-      }
-    };
-
-    startScanner();
+          if (err && !(err instanceof NotFoundException)) {
+            // Only log real errors, not "no code found" errors
+            console.error(err);
+          }
+        }
+      ).catch((err) => {
+        console.error("Error starting scanner", err);
+        setCameraError(true);
+        setErrorMessage("Kamerani ishga tushirib bo'lmadi.");
+      });
+    }
     
-    return () => {
-      isMounted = false;
-      cleanupScanner();
-    };
+    return cleanup;
   }, [isOpen, mode, cameraError]);
 
-  // Initialize Text Scanner (OCR)
+  // Initialize Text Scanner (OCR - Tesseract)
   useEffect(() => {
     let isMounted = true;
 
@@ -140,7 +98,6 @@ export function ScannerOverlay({ isOpen, onClose, onScan, mode = "barcode" }: Sc
              return;
           }
           
-          streamRef.current = stream;
           if (videoRef.current) {
             videoRef.current.srcObject = stream;
             videoRef.current.play().catch(e => console.error("Play error", e));
@@ -164,9 +121,9 @@ export function ScannerOverlay({ isOpen, onClose, onScan, mode = "barcode" }: Sc
         workerRef.current.terminate();
         workerRef.current = null;
       }
-      if (streamRef.current) {
-        streamRef.current.getTracks().forEach(track => track.stop());
-        streamRef.current = null;
+      if (videoRef.current && videoRef.current.srcObject) {
+        const stream = videoRef.current.srcObject as MediaStream;
+        stream.getTracks().forEach(track => track.stop());
       }
     };
   }, [isOpen, mode]);
@@ -197,7 +154,6 @@ export function ScannerOverlay({ isOpen, onClose, onScan, mode = "barcode" }: Sc
      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
      
      // Crop the center region (where the text usually is) to speed up OCR
-     // Crop 80% width, 20% height strip from center
      const cropWidth = canvas.width * 0.9;
      const cropHeight = canvas.height * 0.25;
      const cropX = (canvas.width - cropWidth) / 2;
@@ -209,14 +165,12 @@ export function ScannerOverlay({ isOpen, onClose, onScan, mode = "barcode" }: Sc
      const cropCtx = cropCanvas.getContext('2d');
      cropCtx?.drawImage(canvas, cropX, cropY, cropWidth, cropHeight, 0, 0, cropWidth, cropHeight);
      
-     // Show captured image to user (full frame for context, but we scan cropped)
+     // Show captured image to user
      setCapturedImage(canvas.toDataURL('image/jpeg'));
      setOcrProcessing(true);
 
      try {
-       // Recognize text from the cropped center strip
        const { data: { text } } = await workerRef.current.recognize(cropCanvas);
-       
        const cleanText = text.replace(/\n/g, " ").replace(/[^a-zA-Z0-9\s.,'-]/g, "").trim();
        
        if (cleanText.length > 2) {
@@ -225,7 +179,7 @@ export function ScannerOverlay({ isOpen, onClose, onScan, mode = "barcode" }: Sc
           onClose();
        } else {
           setErrorMessage("Matn aniqlanmadi. Qayta urinib ko'ring.");
-          setCapturedImage(null); // Reset to camera
+          setCapturedImage(null); 
        }
      } catch (e) {
        console.error(e);
@@ -273,83 +227,79 @@ export function ScannerOverlay({ isOpen, onClose, onScan, mode = "barcode" }: Sc
                    </Button>
                  </div>
                ) : (
-                 mode === "text" ? (
-                    <div className="relative w-full h-full">
-                        {capturedImage ? (
-                            <img src={capturedImage} alt="Captured" className="w-full h-full object-cover opacity-50" />
-                        ) : (
-                            <video 
-                                ref={videoRef} 
-                                className="w-full h-full object-cover" 
-                                playsInline 
-                                muted 
-                            />
-                        )}
-                        <canvas ref={canvasRef} className="hidden" />
-                        
-                        {(ocrLoading || ocrProcessing) && (
-                            <div className="absolute inset-0 flex items-center justify-center bg-black/50 z-10">
-                                <div className="text-center text-white">
-                                    <Loader2 className="h-10 w-10 animate-spin mx-auto mb-2" />
-                                    <p>{ocrProcessing ? "Matn o'qilmoqda..." : "AI yuklanmoqda..."}</p>
-                                </div>
+                 <div className="relative w-full h-full">
+                    {mode === "text" && capturedImage && (
+                        <img src={capturedImage} alt="Captured" className="absolute inset-0 w-full h-full object-cover opacity-50 z-10" />
+                    )}
+                    
+                    {/* Unified Video Element for both modes */}
+                    <video 
+                        id="reader-video"
+                        ref={videoRef} 
+                        className="w-full h-full object-cover" 
+                        playsInline 
+                        muted 
+                    />
+                    <canvas ref={canvasRef} className="hidden" />
+                    
+                    {(ocrLoading || ocrProcessing) && (
+                        <div className="absolute inset-0 flex items-center justify-center bg-black/50 z-20">
+                            <div className="text-center text-white">
+                                <Loader2 className="h-10 w-10 animate-spin mx-auto mb-2" />
+                                <p>{ocrProcessing ? "Matn o'qilmoqda..." : "AI yuklanmoqda..."}</p>
                             </div>
-                        )}
-                        
-                        {/* Target Box */}
-                        {!capturedImage && !ocrLoading && (
-                            <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                        </div>
+                    )}
+                    
+                    {/* Scanner Overlays */}
+                    {!cameraError && !capturedImage && !ocrLoading && (
+                        <div className="absolute inset-0 pointer-events-none flex items-center justify-center z-10">
+                            {mode === "barcode" ? (
+                                // Barcode Box
+                                <div className="w-64 h-64 border-2 border-primary/50 rounded-xl relative">
+                                  <div className="absolute top-0 left-0 w-8 h-8 border-t-4 border-l-4 border-primary -mt-1 -ml-1" />
+                                  <div className="absolute top-0 right-0 w-8 h-8 border-t-4 border-r-4 border-primary -mt-1 -mr-1" />
+                                  <div className="absolute bottom-0 left-0 w-8 h-8 border-b-4 border-l-4 border-primary -mb-1 -ml-1" />
+                                  <div className="absolute bottom-0 right-0 w-8 h-8 border-b-4 border-r-4 border-primary -mb-1 -mr-1" />
+                                  <motion.div
+                                    animate={{ top: ["0%", "100%", "0%"] }}
+                                    transition={{ duration: 1.5, repeat: Infinity, ease: "linear" }}
+                                    className="absolute left-0 right-0 h-0.5 bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.8)]"
+                                  />
+                                </div>
+                            ) : (
+                                // Text Box
                                 <div className="w-[90%] h-[25%] border-2 border-primary/70 rounded-lg relative bg-white/5 backdrop-blur-[2px]">
                                     <div className="absolute -top-6 left-0 right-0 text-center">
                                         <span className="text-xs text-white bg-black/50 px-2 py-1 rounded">Matnni shu yerga to'g'irlang</span>
                                     </div>
                                 </div>
-                            </div>
-                        )}
-                        
+                            )}
+                        </div>
+                    )}
+                    
+                    {/* Text Capture Button */}
+                    {mode === "text" && !capturedImage && !ocrLoading && (
                         <div className="absolute bottom-8 left-0 right-0 z-20 flex justify-center">
-                             {!capturedImage && !ocrLoading && (
-                                <Button 
-                                    size="lg"
-                                    className="rounded-full h-16 w-16 bg-white hover:bg-gray-200 text-black border-4 border-gray-300 p-0 flex items-center justify-center shadow-lg"
-                                    onClick={takePictureAndScan}
-                                >
-                                    <Camera className="h-8 w-8" />
-                                </Button>
-                             )}
-                             {errorMessage && !capturedImage && (
+                            <Button 
+                                size="lg"
+                                className="rounded-full h-16 w-16 bg-white hover:bg-gray-200 text-black border-4 border-gray-300 p-0 flex items-center justify-center shadow-lg"
+                                onClick={takePictureAndScan}
+                            >
+                                <Camera className="h-8 w-8" />
+                            </Button>
+                             {errorMessage && (
                                  <div className="absolute -top-12 bg-red-500/90 text-white px-4 py-2 rounded-full text-sm">
                                      {errorMessage}
                                  </div>
                              )}
                         </div>
-                    </div>
-                 ) : (
-                    <div id="reader" className="w-full h-full [&>video]:object-cover [&>video]:w-full [&>video]:h-full" />
-                 )
-               )}
-
-               {/* Custom Overlay for Barcode */}
-               {!cameraError && mode === "barcode" && (
-                 <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
-                    <div className="w-64 h-64 border-2 border-primary/50 rounded-xl relative">
-                      <div className="absolute top-0 left-0 w-8 h-8 border-t-4 border-l-4 border-primary -mt-1 -ml-1" />
-                      <div className="absolute top-0 right-0 w-8 h-8 border-t-4 border-r-4 border-primary -mt-1 -mr-1" />
-                      <div className="absolute bottom-0 left-0 w-8 h-8 border-b-4 border-l-4 border-primary -mb-1 -ml-1" />
-                      <div className="absolute bottom-0 right-0 w-8 h-8 border-b-4 border-r-4 border-primary -mb-1 -mr-1" />
-                      
-                      {scanning && (
-                        <motion.div
-                          animate={{ top: ["0%", "100%", "0%"] }}
-                          transition={{ duration: 1.5, repeat: Infinity, ease: "linear" }}
-                          className="absolute left-0 right-0 h-0.5 bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.8)]"
-                        />
-                      )}
-                    </div>
+                    )}
                  </div>
                )}
             </div>
 
+            {/* Manual Entry for Barcode Mode */}
             {mode === "barcode" && (
                 <div className="p-6 bg-zinc-900 border-t border-white/10 shrink-0">
                   <p className="text-white font-medium mb-4 text-center">

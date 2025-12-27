@@ -1,5 +1,5 @@
 import { motion, AnimatePresence } from "framer-motion";
-import { X, Keyboard, Camera, CameraOff, ScanText, Loader2, RotateCcw } from "lucide-react";
+import { X, Keyboard, Camera, CameraOff, ScanText, Loader2, RotateCcw, Image as ImageIcon } from "lucide-react";
 import { useEffect, useState, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -18,7 +18,8 @@ export function ScannerOverlay({ isOpen, onClose, onScan, mode = "barcode" }: Sc
   const [manualCode, setManualCode] = useState("");
   const [cameraError, setCameraError] = useState(false);
   const [ocrLoading, setOcrLoading] = useState(false);
-  const [recognizedText, setRecognizedText] = useState("");
+  const [ocrProcessing, setOcrProcessing] = useState(false);
+  const [capturedImage, setCapturedImage] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState("");
   
   const scannerRef = useRef<Html5Qrcode | null>(null);
@@ -115,7 +116,7 @@ export function ScannerOverlay({ isOpen, onClose, onScan, mode = "barcode" }: Sc
 
     if (isOpen && mode === "text") {
       setOcrLoading(true);
-      setRecognizedText("");
+      setCapturedImage(null);
       
       (async () => {
         try {
@@ -167,37 +168,6 @@ export function ScannerOverlay({ isOpen, onClose, onScan, mode = "barcode" }: Sc
     };
   }, [isOpen, mode]);
 
-  // OCR Loop
-  useEffect(() => {
-    let interval: NodeJS.Timeout;
-    
-    if (isOpen && mode === "text" && !ocrLoading && scanning) {
-      interval = setInterval(async () => {
-        if (!workerRef.current || !videoRef.current || !canvasRef.current) return;
-        
-        const video = videoRef.current;
-        const canvas = canvasRef.current;
-        const ctx = canvas.getContext('2d');
-        if (!ctx || video.videoWidth === 0) return;
-
-        canvas.width = video.videoWidth;
-        canvas.height = video.videoHeight;
-        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-        
-        try {
-           const { data: { text } } = await workerRef.current.recognize(canvas);
-           const cleanText = text.replace(/\n/g, " ").trim();
-           if (cleanText.length > 2) {
-             setRecognizedText(cleanText);
-           }
-        } catch (e) {
-          console.error(e);
-        }
-      }, 1000); 
-    }
-
-    return () => clearInterval(interval);
-  }, [isOpen, mode, ocrLoading, scanning]);
 
   const handleManualSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -207,17 +177,66 @@ export function ScannerOverlay({ isOpen, onClose, onScan, mode = "barcode" }: Sc
     }
   };
 
-  const captureText = () => {
-    if (recognizedText) {
-        if (navigator.vibrate) navigator.vibrate(50);
-        onScan(recognizedText);
-        onClose();
-    }
+  const takePictureAndScan = async () => {
+     if (!videoRef.current || !canvasRef.current || !workerRef.current) return;
+
+     const video = videoRef.current;
+     const canvas = canvasRef.current;
+     const ctx = canvas.getContext('2d');
+     
+     if (!ctx || video.videoWidth === 0) return;
+
+     // Set canvas size to video size
+     canvas.width = video.videoWidth;
+     canvas.height = video.videoHeight;
+     
+     // Draw the full frame
+     ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+     
+     // Crop the center region (where the text usually is) to speed up OCR
+     // Crop 80% width, 20% height strip from center
+     const cropWidth = canvas.width * 0.9;
+     const cropHeight = canvas.height * 0.25;
+     const cropX = (canvas.width - cropWidth) / 2;
+     const cropY = (canvas.height - cropHeight) / 2;
+
+     const cropCanvas = document.createElement('canvas');
+     cropCanvas.width = cropWidth;
+     cropCanvas.height = cropHeight;
+     const cropCtx = cropCanvas.getContext('2d');
+     cropCtx?.drawImage(canvas, cropX, cropY, cropWidth, cropHeight, 0, 0, cropWidth, cropHeight);
+     
+     // Show captured image to user (full frame for context, but we scan cropped)
+     setCapturedImage(canvas.toDataURL('image/jpeg'));
+     setOcrProcessing(true);
+
+     try {
+       // Recognize text from the cropped center strip
+       const { data: { text } } = await workerRef.current.recognize(cropCanvas);
+       
+       const cleanText = text.replace(/\n/g, " ").replace(/[^a-zA-Z0-9\s.,'-]/g, "").trim();
+       
+       if (cleanText.length > 2) {
+          if (navigator.vibrate) navigator.vibrate(50);
+          onScan(cleanText);
+          onClose();
+       } else {
+          setErrorMessage("Matn aniqlanmadi. Qayta urinib ko'ring.");
+          setCapturedImage(null); // Reset to camera
+       }
+     } catch (e) {
+       console.error(e);
+       setErrorMessage("Xatolik yuz berdi");
+       setCapturedImage(null);
+     } finally {
+       setOcrProcessing(false);
+     }
   };
 
   const retryCamera = () => {
     setCameraError(false);
     setErrorMessage("");
+    setCapturedImage(null);
   };
 
   return (
@@ -253,38 +272,53 @@ export function ScannerOverlay({ isOpen, onClose, onScan, mode = "barcode" }: Sc
                ) : (
                  mode === "text" ? (
                     <div className="relative w-full h-full">
-                        <video 
-                            ref={videoRef} 
-                            className="w-full h-full object-cover" 
-                            playsInline 
-                            muted 
-                        />
+                        {capturedImage ? (
+                            <img src={capturedImage} alt="Captured" className="w-full h-full object-cover opacity-50" />
+                        ) : (
+                            <video 
+                                ref={videoRef} 
+                                className="w-full h-full object-cover" 
+                                playsInline 
+                                muted 
+                            />
+                        )}
                         <canvas ref={canvasRef} className="hidden" />
                         
-                        {ocrLoading && (
+                        {(ocrLoading || ocrProcessing) && (
                             <div className="absolute inset-0 flex items-center justify-center bg-black/50 z-10">
                                 <div className="text-center text-white">
                                     <Loader2 className="h-10 w-10 animate-spin mx-auto mb-2" />
-                                    <p>AI yuklanmoqda...</p>
+                                    <p>{ocrProcessing ? "Matn o'qilmoqda..." : "AI yuklanmoqda..."}</p>
                                 </div>
                             </div>
                         )}
                         
-                        <div className="absolute bottom-4 left-4 right-4 z-20">
-                            <div className="bg-black/80 backdrop-blur border border-white/20 p-4 rounded-xl">
-                                <p className="text-xs text-white/60 mb-1">Aniqlangan matn:</p>
-                                <p className="text-lg font-medium text-white mb-3 min-h-[30px] line-clamp-2">
-                                    {recognizedText || "Matn qidirilmoqda..."}
-                                </p>
-                                <Button 
-                                    className="w-full bg-primary hover:bg-primary/90" 
-                                    onClick={captureText}
-                                    disabled={!recognizedText}
-                                >
-                                    <ScanText className="mr-2 h-4 w-4" />
-                                    Tanlash
-                                </Button>
+                        {/* Target Box */}
+                        {!capturedImage && !ocrLoading && (
+                            <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                                <div className="w-[90%] h-[25%] border-2 border-primary/70 rounded-lg relative bg-white/5 backdrop-blur-[2px]">
+                                    <div className="absolute -top-6 left-0 right-0 text-center">
+                                        <span className="text-xs text-white bg-black/50 px-2 py-1 rounded">Matnni shu yerga to'g'irlang</span>
+                                    </div>
+                                </div>
                             </div>
+                        )}
+                        
+                        <div className="absolute bottom-8 left-0 right-0 z-20 flex justify-center">
+                             {!capturedImage && !ocrLoading && (
+                                <Button 
+                                    size="lg"
+                                    className="rounded-full h-16 w-16 bg-white hover:bg-gray-200 text-black border-4 border-gray-300 p-0 flex items-center justify-center shadow-lg"
+                                    onClick={takePictureAndScan}
+                                >
+                                    <Camera className="h-8 w-8" />
+                                </Button>
+                             )}
+                             {errorMessage && !capturedImage && (
+                                 <div className="absolute -top-12 bg-red-500/90 text-white px-4 py-2 rounded-full text-sm">
+                                     {errorMessage}
+                                 </div>
+                             )}
                         </div>
                     </div>
                  ) : (

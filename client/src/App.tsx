@@ -2,6 +2,7 @@ import { Switch, Route, Redirect } from "wouter";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
+import { Toaster as SonnerToaster } from "sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { ProductProvider } from "@/lib/product-context";
 import { TransactionProvider } from "@/lib/transaction-context";
@@ -77,6 +78,7 @@ function App() {
                 <TooltipProvider>
                   <Router />
                   <Toaster />
+                  <SonnerToaster position="top-center" richColors />
                 </TooltipProvider>
               </CartProvider>
             </OrderProvider>

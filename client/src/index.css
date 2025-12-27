@@ -2,36 +2,36 @@
 @import "tw-animate-css";
 
 @theme inline {
-  --color-background: hsl(220 14% 96%);
-  --color-foreground: hsl(222 47% 11%);
+  --color-background: #f1f5f9;
+  --color-foreground: #1e293b;
   
-  --color-card: hsl(0 0% 100%);
-  --color-card-foreground: hsl(222 47% 11%);
+  --color-card: #ffffff;
+  --color-card-foreground: #1e293b;
   
-  --color-popover: hsl(0 0% 100%);
-  --color-popover-foreground: hsl(222 47% 11%);
+  --color-popover: #ffffff;
+  --color-popover-foreground: #1e293b;
   
-  --color-primary: hsl(221 83% 53%);
-  --color-primary-foreground: hsl(210 40% 98%);
+  --color-primary: #3b82f6;
+  --color-primary-foreground: #f8fafc;
   
-  --color-secondary: hsl(210 40% 96.1%);
-  --color-secondary-foreground: hsl(222 47% 11.2%);
+  --color-secondary: #f1f5f9;
+  --color-secondary-foreground: #1e293b;
   
-  --color-muted: hsl(210 40% 96.1%);
-  --color-muted-foreground: hsl(215.4 16.3% 46.9%);
+  --color-muted: #f1f5f9;
+  --color-muted-foreground: #64748b;
   
-  --color-accent: hsl(210 40% 96.1%);
-  --color-accent-foreground: hsl(222 47% 11.2%);
+  --color-accent: #f1f5f9;
+  --color-accent-foreground: #1e293b;
   
-  --color-destructive: hsl(0 84.2% 60.2%);
-  --color-destructive-foreground: hsl(210 40% 98%);
+  --color-destructive: #ef4444;
+  --color-destructive-foreground: #f8fafc;
 
-  --color-success: hsl(142 76% 36%);
-  --color-success-foreground: hsl(355 100% 97%);
+  --color-success: #16a34a;
+  --color-success-foreground: #fef2f2;
   
-  --color-border: hsl(214.3 31.8% 91.4%);
-  --color-input: hsl(214.3 31.8% 91.4%);
-  --color-ring: hsl(221 83% 53%);
+  --color-border: #e2e8f0;
+  --color-input: #e2e8f0;
+  --color-ring: #3b82f6;
   
   --radius-sm: 0.3rem;
   --radius-md: 0.5rem;
@@ -44,13 +44,47 @@
 @layer base {
   * {
     @apply border-border;
+    box-sizing: border-box;
+  }
+  html {
+    color: #1e293b;
+    background-color: #f1f5f9;
   }
   body {
-    @apply font-sans antialiased bg-background text-foreground;
-    color: #1e293b;
+    @apply font-sans antialiased;
+    color: #1e293b !important;
+    background-color: #f1f5f9 !important;
   }
-  input, textarea, select, button {
+  h1, h2, h3, h4, h5, h6, p, span, div, a, label {
     color: inherit;
+  }
+  input, textarea, select {
+    color: #1e293b !important;
+    background-color: #ffffff !important;
+  }
+  button {
+    color: inherit;
+  }
+  .text-white {
+    color: #ffffff !important;
+  }
+  .text-slate-900, .text-gray-900 {
+    color: #0f172a !important;
+  }
+  .text-slate-700, .text-gray-700 {
+    color: #334155 !important;
+  }
+  .text-slate-500, .text-gray-500, .text-muted-foreground {
+    color: #64748b !important;
+  }
+  .bg-white {
+    background-color: #ffffff !important;
+  }
+  .bg-slate-900 {
+    background-color: #0f172a !important;
+  }
+  .bg-primary {
+    background-color: #3b82f6 !important;
   }
 }
 

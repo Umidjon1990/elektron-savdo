@@ -8,9 +8,10 @@ interface UploadMetadata {
 }
 
 interface UploadResponse {
-  uploadURL: string;
+  uploadUrl: string;
+  objectKey: string;
+  publicUrl: string;
   objectPath: string;
-  metadata: UploadMetadata;
 }
 
 interface UseUploadOptions {
@@ -57,19 +58,18 @@ export function useUpload(options: UseUploadOptions = {}) {
   const [progress, setProgress] = useState(0);
 
   /**
-   * Request a presigned URL from the backend.
+   * Request a presigned URL from the backend (Cloudflare R2).
    * IMPORTANT: Send JSON metadata, NOT the file itself.
    */
   const requestUploadUrl = useCallback(
     async (file: File): Promise<UploadResponse> => {
-      const response = await fetch("/api/uploads/request-url", {
+      const response = await fetch("/api/r2/request-url", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          name: file.name,
-          size: file.size,
+          filename: file.name,
           contentType: file.type || "application/octet-stream",
         }),
       });
@@ -79,7 +79,13 @@ export function useUpload(options: UseUploadOptions = {}) {
         throw new Error(errorData.error || "Failed to get upload URL");
       }
 
-      return response.json();
+      const data = await response.json();
+      return {
+        uploadUrl: data.uploadUrl,
+        objectKey: data.objectKey,
+        publicUrl: data.publicUrl,
+        objectPath: data.publicUrl,
+      };
     },
     []
   );
@@ -123,7 +129,7 @@ export function useUpload(options: UseUploadOptions = {}) {
 
         // Step 2: Upload file directly to presigned URL
         setProgress(30);
-        await uploadToPresignedUrl(file, uploadResponse.uploadURL);
+        await uploadToPresignedUrl(file, uploadResponse.uploadUrl);
 
         setProgress(100);
         options.onSuccess?.(uploadResponse);
@@ -161,15 +167,14 @@ export function useUpload(options: UseUploadOptions = {}) {
       url: string;
       headers?: Record<string, string>;
     }> => {
-      // Use the actual file properties to request a per-file presigned URL
-      const response = await fetch("/api/uploads/request-url", {
+      // Use the actual file properties to request a per-file presigned URL from R2
+      const response = await fetch("/api/r2/request-url", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          name: file.name,
-          size: file.size,
+          filename: file.name,
           contentType: file.type || "application/octet-stream",
         }),
       });
@@ -181,7 +186,7 @@ export function useUpload(options: UseUploadOptions = {}) {
       const data = await response.json();
       return {
         method: "PUT",
-        url: data.uploadURL,
+        url: data.uploadUrl,
         headers: { "Content-Type": file.type || "application/octet-stream" },
       };
     },

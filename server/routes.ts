@@ -2,15 +2,15 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { insertProductSchema, insertOrderSchema } from "@shared/schema";
-import { registerObjectStorageRoutes } from "./replit_integrations/object_storage";
+import { registerR2Routes } from "./integrations/r2-routes";
 
 export async function registerRoutes(
   httpServer: Server,
   app: Express
 ): Promise<Server> {
   
-  // Register Object Storage routes for file uploads
-  registerObjectStorageRoutes(app);
+  // Register Cloudflare R2 routes for file uploads
+  registerR2Routes(app);
   
   // Products API
   app.get("/api/products", async (req, res) => {

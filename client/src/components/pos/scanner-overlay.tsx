@@ -32,16 +32,31 @@ export function ScannerOverlay({ isOpen, onClose, onScan }: ScannerOverlayProps)
         const html5QrCode = new Html5Qrcode(scannerId);
         scannerRef.current = html5QrCode;
 
-        const config = { fps: 10, qrbox: { width: 250, height: 250 } };
+        // Optimized config for faster scanning
+        const config = { 
+          fps: 25, // Increased FPS for faster detection
+          qrbox: { width: 300, height: 150 }, // Wider box for barcodes
+          aspectRatio: 1.0,
+          disableFlip: false,
+          formatsToSupport: [ 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15 ] // Support all formats including 1D barcodes
+        };
         
         html5QrCode.start(
           { facingMode: "environment" }, 
           config,
           (decodedText) => {
-            // Success callback
+            // Immediate success callback
+            if (scannerRef.current) {
+               scannerRef.current.pause(); // Pause immediately to prevent multiple scans
+            }
             onScan(decodedText);
-            html5QrCode.stop().catch(console.error);
-            onClose();
+            // Delay stop slightly to ensure UI transition is smooth, but scan is already captured
+            setTimeout(() => {
+               if (scannerRef.current) {
+                 scannerRef.current.stop().catch(console.error);
+               }
+               onClose();
+            }, 200);
           },
           (errorMessage) => {
             // Error callback - ignore frame read errors

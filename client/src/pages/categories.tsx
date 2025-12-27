@@ -326,7 +326,7 @@ export default function Categories() {
                           className="w-12 h-12 md:w-16 md:h-16" 
                           style={{ color: category.color }} 
                         />
-                        <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity flex gap-1">
+                        <div className="absolute top-2 right-2 flex gap-1">
                           <button
                             onClick={(e) => {
                               e.stopPropagation();

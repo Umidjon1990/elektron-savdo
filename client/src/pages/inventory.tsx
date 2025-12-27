@@ -165,11 +165,12 @@ export default function Inventory() {
 
   const handleManualIsbnSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (newProduct.barcode.length < 3) {
+    const cleanBarcode = newProduct.barcode.trim();
+    if (cleanBarcode.length < 3) {
       toast({ title: "Shtrix kod juda qisqa", variant: "destructive" });
       return;
     }
-    checkIsbnAndProceed(newProduct.barcode);
+    checkIsbnAndProceed(cleanBarcode);
   };
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -207,7 +208,7 @@ export default function Inventory() {
         price: Number(newProduct.price),
         stock: Number(newProduct.stock),
         category: newProduct.category || "Jahon adabiyoti",
-        barcode: newProduct.barcode,
+        barcode: newProduct.barcode.trim(),
         image: newProduct.image
       });
       toast({
@@ -221,7 +222,7 @@ export default function Inventory() {
         price: Number(newProduct.price),
         stock: Number(newProduct.stock),
         category: newProduct.category || "Jahon adabiyoti",
-        barcode: newProduct.barcode || Math.random().toString().slice(2, 14),
+        barcode: newProduct.barcode.trim() || Math.random().toString().slice(2, 14),
         image: newProduct.image || "https://images.unsplash.com/photo-1543002588-bfa74002ed7e?auto=format&fit=crop&q=80&w=300&h=400"
       });
       toast({

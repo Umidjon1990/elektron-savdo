@@ -50,7 +50,7 @@ export function ScannerOverlay({ isOpen, onClose, onScan, mode = "barcode" }: Sc
         'reader-video', // video element id
         (result, err) => {
           if (result) {
-            const text = result.getText();
+            const text = result.getText().trim();
             if (navigator.vibrate) navigator.vibrate(50);
             onScan(text);
             cleanup();

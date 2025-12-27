@@ -1,0 +1,107 @@
+import { useState } from "react";
+import { Button } from "@/components/ui/button";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Separator } from "@/components/ui/separator";
+import { CreditCard, Banknote, QrCode, Trash2, ShoppingBag } from "lucide-react";
+import { CartItem } from "./cart-item";
+import type { CartItem as CartItemType } from "@/pages/dashboard";
+
+interface CartSidebarProps {
+  items: CartItemType[];
+  onUpdateQuantity: (id: string, delta: number) => void;
+  onRemove: (id: string) => void;
+  onClear: () => void;
+  onCheckout: () => void;
+}
+
+export function CartSidebar({ items, onUpdateQuantity, onRemove, onClear, onCheckout }: CartSidebarProps) {
+  const total = items.reduce((acc, item) => acc + (item.product.price * item.quantity), 0);
+  const itemCount = items.reduce((acc, item) => acc + item.quantity, 0);
+
+  return (
+    <div className="flex flex-col h-full bg-white border-l shadow-xl w-[400px]">
+      <div className="p-4 border-b flex items-center justify-between bg-gray-50/50">
+        <div className="flex items-center gap-2">
+          <div className="p-2 bg-primary/10 rounded-lg text-primary">
+            <ShoppingBag className="h-5 w-5" />
+          </div>
+          <div>
+            <h2 className="font-semibold text-lg leading-none">Savatcha</h2>
+            <span className="text-xs text-muted-foreground">№ 000124 • Kassa 1</span>
+          </div>
+        </div>
+        {items.length > 0 && (
+          <Button 
+            variant="ghost" 
+            size="sm" 
+            className="text-red-500 hover:text-red-600 hover:bg-red-50"
+            onClick={onClear}
+          >
+            <Trash2 className="h-4 w-4 mr-2" />
+            Tozalash
+          </Button>
+        )}
+      </div>
+
+      <ScrollArea className="flex-1 p-4">
+        {items.length === 0 ? (
+          <div className="h-full flex flex-col items-center justify-center text-center text-muted-foreground p-8 min-h-[300px]">
+            <div className="w-16 h-16 rounded-full bg-gray-100 flex items-center justify-center mb-4">
+              <ShoppingBag className="h-8 w-8 text-gray-300" />
+            </div>
+            <p className="font-medium text-gray-900">Savatcha bo'sh</p>
+            <p className="text-sm mt-1 max-w-[200px]">
+              Mahsulot qo'shish uchun shtrix kodni skanerlang yoki ro'yxatdan tanlang
+            </p>
+          </div>
+        ) : (
+          <div className="space-y-1">
+            {items.map((item) => (
+              <CartItem 
+                key={item.product.id} 
+                item={item} 
+                onUpdateQuantity={onUpdateQuantity}
+                onRemove={onRemove}
+              />
+            ))}
+          </div>
+        )}
+      </ScrollArea>
+
+      <div className="p-4 bg-gray-50 border-t space-y-4">
+        <div className="space-y-2">
+          <div className="flex justify-between text-sm">
+            <span className="text-muted-foreground">Jami mahsulot:</span>
+            <span className="font-medium">{itemCount} dona</span>
+          </div>
+          <div className="flex justify-between text-sm">
+            <span className="text-muted-foreground">QQS (12%):</span>
+            <span className="font-medium font-mono">{(total * 0.12).toLocaleString()} so'm</span>
+          </div>
+          <Separator className="my-2" />
+          <div className="flex justify-between items-baseline">
+            <span className="font-semibold text-lg">Jami summa:</span>
+            <span className="font-bold text-2xl font-mono text-primary">
+              {total.toLocaleString()} so'm
+            </span>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-2">
+          <Button variant="outline" className="flex flex-col items-center justify-center h-20 gap-2 border-2 hover:border-primary hover:bg-primary/5 transition-all" onClick={onCheckout}>
+            <Banknote className="h-6 w-6" />
+            <span className="text-xs font-semibold">Naqd</span>
+          </Button>
+          <Button variant="outline" className="flex flex-col items-center justify-center h-20 gap-2 border-2 hover:border-primary hover:bg-primary/5 transition-all" onClick={onCheckout}>
+            <CreditCard className="h-6 w-6" />
+            <span className="text-xs font-semibold">Karta</span>
+          </Button>
+        </div>
+        
+        <Button size="lg" className="w-full text-lg h-14 bg-primary hover:bg-primary/90 shadow-lg shadow-primary/25" onClick={onCheckout} disabled={items.length === 0}>
+          To'lov qilish
+        </Button>
+      </div>
+    </div>
+  );
+}

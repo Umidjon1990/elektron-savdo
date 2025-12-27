@@ -10,6 +10,9 @@ const httpServer = createServer(app);
 // Serve attached_assets as static files
 app.use("/assets", express.static(path.resolve(process.cwd(), "attached_assets")));
 
+// Serve PWA files from client/public
+app.use(express.static(path.resolve(process.cwd(), "client/public")));
+
 declare module "http" {
   interface IncomingMessage {
     rawBody: unknown;

@@ -219,11 +219,11 @@ export default function Categories() {
                 <span className="hidden sm:inline">Yangi</span>
               </Button>
             </DialogTrigger>
-            <DialogContent className="max-w-md">
+            <DialogContent className="max-w-sm max-h-[85vh] overflow-y-auto">
               <DialogHeader>
                 <DialogTitle>{editingCategory ? "Kategoriyani tahrirlash" : "Yangi kategoriya"}</DialogTitle>
               </DialogHeader>
-              <form onSubmit={handleSubmit} className="space-y-4">
+              <form onSubmit={handleSubmit} className="space-y-3">
                 <div>
                   <Label htmlFor="name">Nomi</Label>
                   <Input
@@ -236,38 +236,36 @@ export default function Categories() {
                 </div>
 
                 <div>
-                  <Label>Ikonka tanlang</Label>
-                  <ScrollArea className="h-48 mt-2 border rounded-lg p-2">
-                    <div className="grid grid-cols-6 gap-2">
-                      {AVAILABLE_ICONS.map(({ name, icon: Icon }) => (
-                        <button
-                          key={name}
-                          type="button"
-                          onClick={() => setFormData({ ...formData, icon: name })}
-                          className={`p-2.5 rounded-lg border-2 transition-all ${
-                            formData.icon === name
-                              ? "border-blue-500 bg-blue-50"
-                              : "border-transparent bg-slate-100 hover:bg-slate-200"
-                          }`}
-                          data-testid={`icon-${name}`}
-                        >
-                          <Icon className="w-5 h-5 text-slate-700" />
-                        </button>
-                      ))}
-                    </div>
-                  </ScrollArea>
+                  <Label>Ikonka</Label>
+                  <div className="grid grid-cols-8 gap-1.5 mt-2">
+                    {AVAILABLE_ICONS.slice(0, 16).map(({ name, icon: Icon }) => (
+                      <button
+                        key={name}
+                        type="button"
+                        onClick={() => setFormData({ ...formData, icon: name })}
+                        className={`p-2 rounded-lg border-2 transition-all ${
+                          formData.icon === name
+                            ? "border-blue-500 bg-blue-50"
+                            : "border-transparent bg-slate-100 hover:bg-slate-200"
+                        }`}
+                        data-testid={`icon-${name}`}
+                      >
+                        <Icon className="w-4 h-4 text-slate-700" />
+                      </button>
+                    ))}
+                  </div>
                 </div>
 
                 <div>
-                  <Label>Rang tanlang</Label>
-                  <div className="grid grid-cols-5 gap-2 mt-2">
+                  <Label>Rang</Label>
+                  <div className="grid grid-cols-8 gap-1.5 mt-2">
                     {AVAILABLE_COLORS.map((color) => (
                       <button
                         key={color}
                         type="button"
                         onClick={() => setFormData({ ...formData, color })}
                         className={`w-full aspect-square rounded-lg border-2 transition-all ${
-                          formData.color === color ? "border-slate-800 scale-110" : "border-transparent"
+                          formData.color === color ? "border-slate-800 scale-105" : "border-transparent"
                         }`}
                         style={{ backgroundColor: color }}
                         data-testid={`color-${color}`}
@@ -276,9 +274,9 @@ export default function Categories() {
                   </div>
                 </div>
 
-                <div className="flex gap-2 pt-2">
+                <div className="flex gap-2 pt-3">
                   <Button type="button" variant="outline" className="flex-1" onClick={() => setIsDialogOpen(false)}>
-                    Bekor qilish
+                    Bekor
                   </Button>
                   <Button 
                     type="submit" 

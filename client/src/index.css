@@ -49,3 +49,34 @@
     @apply font-sans antialiased bg-background text-foreground;
   }
 }
+
+@media print {
+  @page {
+    size: 80mm auto;
+    margin: 0;
+  }
+  
+  body * {
+    visibility: hidden;
+  }
+  
+  #receipt-area,
+  #receipt-area * {
+    visibility: visible;
+  }
+  
+  #receipt-area {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 80mm;
+    padding: 5mm;
+    font-size: 12px;
+    background: white !important;
+    color: black !important;
+  }
+  
+  .print\\:hidden {
+    display: none !important;
+  }
+}

@@ -245,42 +245,26 @@ export default function Dashboard() {
         <div className="flex-1 flex min-h-0 bg-gray-50/50">
           <div className="flex-1 flex flex-col p-4 md:p-6 min-w-0">
             {/* KPI Stats Row */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
-              <div className="bg-white rounded-xl p-3 md:p-4 shadow-sm border border-slate-100 flex items-center gap-3">
-                <div className="w-10 h-10 md:w-12 md:h-12 rounded-xl bg-gradient-to-br from-green-400 to-green-600 flex items-center justify-center shrink-0">
-                  <DollarSign className="w-5 h-5 md:w-6 md:h-6 text-white" />
-                </div>
-                <div className="min-w-0">
-                  <p className="text-[10px] md:text-xs text-slate-500 font-medium">Bugun</p>
-                  <p className="text-sm md:text-lg font-bold text-slate-800 truncate">{stats.todayTotal.toLocaleString()}</p>
-                </div>
+            <div className="grid grid-cols-4 gap-2 md:gap-3 mb-4">
+              <div className="bg-gradient-to-br from-green-500 to-emerald-600 rounded-xl p-2.5 md:p-4 shadow-sm text-white text-center">
+                <DollarSign className="w-5 h-5 md:w-6 md:h-6 mx-auto mb-1 opacity-80" />
+                <p className="text-[9px] md:text-xs opacity-80 font-medium">Bugun</p>
+                <p className="text-xs md:text-lg font-bold">{(stats.todayTotal / 1000).toFixed(0)}k</p>
               </div>
-              <div className="bg-white rounded-xl p-3 md:p-4 shadow-sm border border-slate-100 flex items-center gap-3">
-                <div className="w-10 h-10 md:w-12 md:h-12 rounded-xl bg-gradient-to-br from-blue-400 to-blue-600 flex items-center justify-center shrink-0">
-                  <CreditCard className="w-5 h-5 md:w-6 md:h-6 text-white" />
-                </div>
-                <div className="min-w-0">
-                  <p className="text-[10px] md:text-xs text-slate-500 font-medium">Cheklar</p>
-                  <p className="text-sm md:text-lg font-bold text-slate-800">{stats.todayCount} ta</p>
-                </div>
+              <div className="bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl p-2.5 md:p-4 shadow-sm text-white text-center">
+                <CreditCard className="w-5 h-5 md:w-6 md:h-6 mx-auto mb-1 opacity-80" />
+                <p className="text-[9px] md:text-xs opacity-80 font-medium">Cheklar</p>
+                <p className="text-xs md:text-lg font-bold">{stats.todayCount}</p>
               </div>
-              <div className="bg-white rounded-xl p-3 md:p-4 shadow-sm border border-slate-100 flex items-center gap-3">
-                <div className="w-10 h-10 md:w-12 md:h-12 rounded-xl bg-gradient-to-br from-purple-400 to-purple-600 flex items-center justify-center shrink-0">
-                  <Package className="w-5 h-5 md:w-6 md:h-6 text-white" />
-                </div>
-                <div className="min-w-0">
-                  <p className="text-[10px] md:text-xs text-slate-500 font-medium">Sotilgan</p>
-                  <p className="text-sm md:text-lg font-bold text-slate-800">{stats.totalItemsSold} dona</p>
-                </div>
+              <div className="bg-gradient-to-br from-purple-500 to-purple-600 rounded-xl p-2.5 md:p-4 shadow-sm text-white text-center">
+                <Package className="w-5 h-5 md:w-6 md:h-6 mx-auto mb-1 opacity-80" />
+                <p className="text-[9px] md:text-xs opacity-80 font-medium">Sotildi</p>
+                <p className="text-xs md:text-lg font-bold">{stats.totalItemsSold}</p>
               </div>
-              <div className="bg-white rounded-xl p-3 md:p-4 shadow-sm border border-slate-100 flex items-center gap-3">
-                <div className="w-10 h-10 md:w-12 md:h-12 rounded-xl bg-gradient-to-br from-orange-400 to-orange-600 flex items-center justify-center shrink-0">
-                  <TrendingUp className="w-5 h-5 md:w-6 md:h-6 text-white" />
-                </div>
-                <div className="min-w-0">
-                  <p className="text-[10px] md:text-xs text-slate-500 font-medium">Oylik</p>
-                  <p className="text-sm md:text-lg font-bold text-slate-800 truncate">{stats.monthTotal.toLocaleString()}</p>
-                </div>
+              <div className="bg-gradient-to-br from-orange-500 to-orange-600 rounded-xl p-2.5 md:p-4 shadow-sm text-white text-center">
+                <TrendingUp className="w-5 h-5 md:w-6 md:h-6 mx-auto mb-1 opacity-80" />
+                <p className="text-[9px] md:text-xs opacity-80 font-medium">Oylik</p>
+                <p className="text-xs md:text-lg font-bold">{(stats.monthTotal / 1000).toFixed(0)}k</p>
               </div>
             </div>
 

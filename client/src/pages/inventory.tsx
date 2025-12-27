@@ -198,39 +198,50 @@ export default function Inventory() {
     }
   };
 
-  const handleAddProduct = (e: React.FormEvent) => {
+  const handleAddProduct = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (editingId) {
-      updateProduct(editingId, {
-        name: newProduct.name,
-        author: newProduct.author,
-        price: Number(newProduct.price),
-        stock: Number(newProduct.stock),
-        category: newProduct.category || "Jahon adabiyoti",
-        barcode: newProduct.barcode.trim(),
-        image: newProduct.image
-      });
+    try {
+      if (editingId) {
+        await updateProduct(editingId, {
+          name: newProduct.name,
+          author: newProduct.author,
+          price: Number(newProduct.price),
+          stock: Number(newProduct.stock),
+          category: newProduct.category || "Jahon adabiyoti",
+          barcode: newProduct.barcode.trim(),
+          image: newProduct.image
+        });
+        toast({
+          title: "O'zgartirildi",
+          description: `${newProduct.name} ma'lumotlari yangilandi`,
+          className: "bg-green-500 text-white border-none",
+        });
+      } else {
+        await addProduct({
+          name: newProduct.name,
+          author: newProduct.author,
+          price: Number(newProduct.price),
+          stock: Number(newProduct.stock),
+          category: newProduct.category || "Jahon adabiyoti",
+          barcode: newProduct.barcode.trim() || Math.random().toString().slice(2, 14),
+          image: newProduct.image || "https://images.unsplash.com/photo-1543002588-bfa74002ed7e?auto=format&fit=crop&q=80&w=300&h=400"
+        });
+        toast({
+          title: "Muvaffaqiyatli qo'shildi",
+          description: `${newProduct.name} bazaga kiritildi`,
+          className: "bg-green-500 text-white border-none",
+        });
+      }
+      setIsAddDialogOpen(false);
+    } catch (error) {
+      console.error("Error saving product:", error);
       toast({
-        title: "O'zgartirildi",
-        description: `${newProduct.name} ma'lumotlari yangilandi`,
-      });
-    } else {
-      addProduct({
-        name: newProduct.name,
-        author: newProduct.author,
-        price: Number(newProduct.price),
-        stock: Number(newProduct.stock),
-        category: newProduct.category || "Jahon adabiyoti",
-        barcode: newProduct.barcode.trim() || Math.random().toString().slice(2, 14),
-        image: newProduct.image || "https://images.unsplash.com/photo-1543002588-bfa74002ed7e?auto=format&fit=crop&q=80&w=300&h=400"
-      });
-      toast({
-        title: "Muvaffaqiyatli qo'shildi",
-        description: `${newProduct.name} bazaga kiritildi`,
+        title: "Xatolik yuz berdi",
+        description: "Ma'lumotni saqlashda xatolik. Qaytadan urinib ko'ring.",
+        variant: "destructive",
       });
     }
-    setIsAddDialogOpen(false);
   };
 
   const handleRestock = (e: React.FormEvent) => {
@@ -259,7 +270,7 @@ export default function Inventory() {
   );
 
   return (
-    <div className="flex flex-col md:flex-row h-screen bg-background overflow-hidden font-sans">
+    <div className="flex flex-col md:flex-row min-h-screen font-sans" style={{backgroundColor: '#f1f5f9'}}>
       <SidebarNav />
       
       <div className="flex-1 flex flex-col min-w-0 bg-gray-50/50 pb-16 md:pb-0">

@@ -5,11 +5,12 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Search, ShoppingCart, Menu, ArrowRight, Star, TrendingUp, BookOpen, Truck, ShieldCheck, Phone } from "lucide-react";
-import { CATEGORIES } from "@/data/mock-products";
 import { motion } from "framer-motion";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { useCart } from "@/lib/cart-context";
 import { cn } from "@/lib/utils";
+import { useQuery } from "@tanstack/react-query";
+import type { Category } from "@shared/schema";
 
 export default function StoreHome() {
   const [, setLocation] = useLocation();
@@ -17,6 +18,17 @@ export default function StoreHome() {
   const { addItem, itemCount } = useCart();
   const [searchQuery, setSearchQuery] = useState("");
   const [activeCategory, setActiveCategory] = useState("Barchasi");
+  
+  const { data: categories = [], isLoading: categoriesLoading } = useQuery<Category[]>({
+    queryKey: ["/api/categories"],
+    queryFn: async () => {
+      const res = await fetch("/api/categories");
+      if (!res.ok) throw new Error("Failed to fetch categories");
+      return res.json();
+    },
+    staleTime: 60000,
+    retry: 2,
+  });
   
   const filteredProducts = products.filter(p => 
     (activeCategory === "Barchasi" || p.category === activeCategory) &&
@@ -145,16 +157,24 @@ export default function StoreHome() {
             >
               Barchasi
             </Button>
-            {CATEGORIES.filter(c => c !== "Barchasi").map(category => (
-              <Button
-                key={category}
-                onClick={() => setActiveCategory(category)}
-                variant={activeCategory === category ? "default" : "outline"}
-                className={cn("rounded-full whitespace-nowrap", activeCategory === category ? "bg-indigo-600 hover:bg-indigo-700" : "bg-white border-slate-200")}
-              >
-                {category}
-              </Button>
-            ))}
+            {categoriesLoading ? (
+              <div className="flex gap-3">
+                {[1, 2, 3].map(i => (
+                  <div key={i} className="h-9 w-24 bg-slate-200 rounded-full animate-pulse" />
+                ))}
+              </div>
+            ) : (
+              categories.map(category => (
+                <Button
+                  key={category.id}
+                  onClick={() => setActiveCategory(category.name)}
+                  variant={activeCategory === category.name ? "default" : "outline"}
+                  className={cn("rounded-full whitespace-nowrap", activeCategory === category.name ? "bg-indigo-600 hover:bg-indigo-700" : "bg-white border-slate-200")}
+                >
+                  {category.name}
+                </Button>
+              ))
+            )}
           </div>
 
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6 mt-8">

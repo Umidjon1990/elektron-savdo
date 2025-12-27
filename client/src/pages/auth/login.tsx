@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useAuth } from "@/lib/auth-context";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -6,6 +6,16 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Lock } from "lucide-react";
 import { useLocation } from "wouter";
+
+function preloadAdminPages() {
+  import("@/pages/dashboard");
+  import("@/pages/inventory");
+  import("@/pages/history");
+  import("@/pages/orders");
+  import("@/pages/customers");
+  import("@/pages/settings");
+  import("@/pages/categories");
+}
 
 export default function LoginPage() {
   const { login, isAuthenticated } = useAuth();
@@ -15,6 +25,11 @@ export default function LoginPage() {
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
 
+  // Preload admin pages when on login page
+  useEffect(() => {
+    preloadAdminPages();
+  }, []);
+  
   // Redirect if already logged in
   if (isAuthenticated) {
     setLocation("/admin");
@@ -28,7 +43,9 @@ export default function LoginPage() {
 
     try {
       const success = await login(username, password);
-      if (!success) {
+      if (success) {
+        preloadAdminPages();
+      } else {
         setError("Login yoki parol noto'g'ri");
       }
     } finally {

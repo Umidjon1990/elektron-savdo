@@ -9,31 +9,59 @@ import { TransactionProvider } from "@/lib/transaction-context";
 import { CartProvider } from "@/lib/cart-context";
 import { OrderProvider } from "@/lib/order-context";
 import { AuthProvider, useAuth } from "@/lib/auth-context";
-import { lazy, Suspense } from "react";
+import { lazy, Suspense, useEffect } from "react";
 
-const NotFound = lazy(() => import("@/pages/not-found"));
-const Dashboard = lazy(() => import("@/pages/dashboard"));
-const Inventory = lazy(() => import("@/pages/inventory"));
-const History = lazy(() => import("@/pages/history"));
-const OrdersPage = lazy(() => import("@/pages/orders"));
-const CustomersPage = lazy(() => import("@/pages/customers"));
-const StoreHome = lazy(() => import("@/pages/store/home"));
-const CartPage = lazy(() => import("@/pages/store/cart"));
-const LoginPage = lazy(() => import("@/pages/auth/login"));
-const SettingsPage = lazy(() => import("@/pages/settings"));
-const CategoriesPage = lazy(() => import("@/pages/categories"));
+const importDashboard = () => import("@/pages/dashboard");
+const importInventory = () => import("@/pages/inventory");
+const importHistory = () => import("@/pages/history");
+const importOrders = () => import("@/pages/orders");
+const importCustomers = () => import("@/pages/customers");
+const importStoreHome = () => import("@/pages/store/home");
+const importCart = () => import("@/pages/store/cart");
+const importLogin = () => import("@/pages/auth/login");
+const importSettings = () => import("@/pages/settings");
+const importCategories = () => import("@/pages/categories");
+const importNotFound = () => import("@/pages/not-found");
+
+const NotFound = lazy(importNotFound);
+const Dashboard = lazy(importDashboard);
+const Inventory = lazy(importInventory);
+const History = lazy(importHistory);
+const OrdersPage = lazy(importOrders);
+const CustomersPage = lazy(importCustomers);
+const StoreHome = lazy(importStoreHome);
+const CartPage = lazy(importCart);
+const LoginPage = lazy(importLogin);
+const SettingsPage = lazy(importSettings);
+const CategoriesPage = lazy(importCategories);
+
+function preloadAdminPages() {
+  importDashboard();
+  importInventory();
+  importHistory();
+  importOrders();
+  importCustomers();
+  importSettings();
+  importCategories();
+}
 
 function PageLoader() {
   return (
-    <div className="flex items-center justify-center h-screen bg-slate-50">
-      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+    <div className="flex items-center justify-center h-32">
+      <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-indigo-600"></div>
     </div>
   );
 }
 
 function ProtectedRoute({ component: Component }: { component: React.ComponentType }) {
   const { isAuthenticated } = useAuth();
-  // Using a component wrapper to handle the redirect logic cleanly
+  
+  useEffect(() => {
+    if (isAuthenticated) {
+      preloadAdminPages();
+    }
+  }, [isAuthenticated]);
+  
   if (!isAuthenticated) {
     return <Redirect to="/login" />;
   }

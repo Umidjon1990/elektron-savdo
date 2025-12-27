@@ -5,6 +5,7 @@ interface ProductContextType {
   products: Product[];
   addProduct: (product: Omit<Product, "id">) => void;
   updateStock: (id: string, delta: number) => void;
+  updateProduct: (id: string, updates: Partial<Product>) => void;
 }
 
 const ProductContext = createContext<ProductContextType | undefined>(undefined);
@@ -40,8 +41,15 @@ export function ProductProvider({ children }: { children: ReactNode }) {
     saveProducts(updated);
   };
 
+  const updateProduct = (id: string, updates: Partial<Product>) => {
+    const updated = products.map((p) =>
+      p.id === id ? { ...p, ...updates } : p
+    );
+    saveProducts(updated);
+  };
+
   return (
-    <ProductContext.Provider value={{ products, addProduct, updateStock }}>
+    <ProductContext.Provider value={{ products, addProduct, updateStock, updateProduct }}>
       {children}
     </ProductContext.Provider>
   );

@@ -44,7 +44,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 
 export default function Inventory() {
-  const { products, addProduct, updateStock } = useProducts();
+  const { products, addProduct, updateStock, updateProduct } = useProducts();
   const [searchQuery, setSearchQuery] = useState("");
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   
@@ -58,6 +58,8 @@ export default function Inventory() {
 
   const [restockProduct, setRestockProduct] = useState<Product | null>(null);
   const [restockAmount, setRestockAmount] = useState<string>("10");
+  
+  const [editingId, setEditingId] = useState<string | null>(null);
 
   const [newProduct, setNewProduct] = useState({
     name: "",
@@ -75,9 +77,25 @@ export default function Inventory() {
   useEffect(() => {
     if (!isAddDialogOpen) {
       setStep(1);
+      setEditingId(null);
       setNewProduct({ name: "", author: "", price: "", stock: "", category: "", barcode: "", image: "" });
     }
   }, [isAddDialogOpen]);
+  
+  const handleEditProduct = (product: Product) => {
+    setEditingId(product.id);
+    setNewProduct({
+      name: product.name,
+      author: product.author,
+      price: product.price.toString(),
+      stock: product.stock.toString(),
+      category: product.category,
+      barcode: product.barcode,
+      image: product.image
+    });
+    setStep(2); // Go directly to details step
+    setIsAddDialogOpen(true);
+  };
 
   const openScanner = (mode: "barcode" | "text", field: "barcode" | "name" | "author") => {
     setScannerMode(mode);
@@ -181,20 +199,37 @@ export default function Inventory() {
 
   const handleAddProduct = (e: React.FormEvent) => {
     e.preventDefault();
-    addProduct({
-      name: newProduct.name,
-      author: newProduct.author,
-      price: Number(newProduct.price),
-      stock: Number(newProduct.stock),
-      category: newProduct.category || "Jahon adabiyoti",
-      barcode: newProduct.barcode || Math.random().toString().slice(2, 14),
-      image: newProduct.image || "https://images.unsplash.com/photo-1543002588-bfa74002ed7e?auto=format&fit=crop&q=80&w=300&h=400"
-    });
+    
+    if (editingId) {
+      updateProduct(editingId, {
+        name: newProduct.name,
+        author: newProduct.author,
+        price: Number(newProduct.price),
+        stock: Number(newProduct.stock),
+        category: newProduct.category || "Jahon adabiyoti",
+        barcode: newProduct.barcode,
+        image: newProduct.image
+      });
+      toast({
+        title: "O'zgartirildi",
+        description: `${newProduct.name} ma'lumotlari yangilandi`,
+      });
+    } else {
+      addProduct({
+        name: newProduct.name,
+        author: newProduct.author,
+        price: Number(newProduct.price),
+        stock: Number(newProduct.stock),
+        category: newProduct.category || "Jahon adabiyoti",
+        barcode: newProduct.barcode || Math.random().toString().slice(2, 14),
+        image: newProduct.image || "https://images.unsplash.com/photo-1543002588-bfa74002ed7e?auto=format&fit=crop&q=80&w=300&h=400"
+      });
+      toast({
+        title: "Muvaffaqiyatli qo'shildi",
+        description: `${newProduct.name} bazaga kiritildi`,
+      });
+    }
     setIsAddDialogOpen(false);
-    toast({
-      title: "Muvaffaqiyatli qo'shildi",
-      description: `${newProduct.name} bazaga kiritildi`,
-    });
   };
 
   const handleRestock = (e: React.FormEvent) => {
@@ -505,7 +540,7 @@ export default function Inventory() {
                               <PackagePlus className="mr-2 h-4 w-4" />
                               Kirim qilish
                             </DropdownMenuItem>
-                            <DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => handleEditProduct(product)}>
                               <RotateCcw className="mr-2 h-4 w-4" />
                               Tahrirlash
                             </DropdownMenuItem>
@@ -547,7 +582,7 @@ export default function Inventory() {
                               <PackagePlus className="mr-2 h-4 w-4" />
                               Kirim qilish
                             </DropdownMenuItem>
-                            <DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => handleEditProduct(product)}>
                               <RotateCcw className="mr-2 h-4 w-4" />
                               Tahrirlash
                             </DropdownMenuItem>

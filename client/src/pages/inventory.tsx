@@ -3,7 +3,7 @@ import { SidebarNav } from "@/components/layout/sidebar-nav";
 import { useProducts } from "@/lib/product-context";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Search, Plus, Filter, MoreHorizontal, ScanBarcode, ArrowRight, Check, X, RotateCcw, PackagePlus, ScanText } from "lucide-react";
+import { Search, Plus, Filter, MoreHorizontal, ScanBarcode, ArrowRight, Check, X, RotateCcw, PackagePlus, ScanText, Upload, Image as ImageIcon } from "lucide-react";
 import { ScannerOverlay } from "@/components/pos/scanner-overlay";
 import { KNOWN_BOOKS_DB } from "@/data/mock-external-books";
 import {
@@ -68,6 +68,8 @@ export default function Inventory() {
     barcode: "",
     image: ""
   });
+  
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Reset state when dialog closes
   useEffect(() => {
@@ -150,6 +152,31 @@ export default function Inventory() {
       return;
     }
     checkIsbnAndProceed(newProduct.barcode);
+  };
+
+  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      if (file.size > 5 * 1024 * 1024) { // 5MB limit check
+        toast({
+           title: "Rasm hajmi juda katta",
+           description: "Iltimos 5MB dan kichik rasm yuklang (Browser xotirasi uchun)",
+           variant: "destructive"
+        });
+        return;
+      }
+
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        const base64String = reader.result as string;
+        setNewProduct(prev => ({ ...prev, image: base64String }));
+        toast({
+          title: "Rasm yuklandi",
+          description: "Rasm browser xotirasiga saqlandi",
+        });
+      };
+      reader.readAsDataURL(file);
+    }
   };
 
   const handleAddProduct = (e: React.FormEvent) => {
@@ -289,6 +316,35 @@ export default function Inventory() {
                             <RotateCcw className="h-3 w-3 mr-1" />
                             O'zgartirish
                           </Button>
+                        </div>
+
+                        {/* Image Upload Section */}
+                        <div className="flex justify-center mb-2">
+                           <div className="relative group cursor-pointer" onClick={() => fileInputRef.current?.click()}>
+                             <div className="w-24 h-36 bg-gray-100 rounded-lg border-2 border-dashed border-gray-300 flex items-center justify-center overflow-hidden hover:bg-gray-50 transition-colors">
+                                {newProduct.image && !newProduct.image.includes("unsplash") ? (
+                                  <img src={newProduct.image} alt="Preview" className="w-full h-full object-cover" />
+                                ) : (newProduct.image && newProduct.image.includes("unsplash")) ? (
+                                    <img src={newProduct.image} alt="Preview" className="w-full h-full object-cover opacity-80" />
+                                ) : (
+                                  <div className="flex flex-col items-center text-gray-400">
+                                    <ImageIcon className="h-8 w-8 mb-1" />
+                                    <span className="text-[10px]">Rasm yuklash</span>
+                                  </div>
+                                )}
+                                
+                                <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                                   <Upload className="h-6 w-6 text-white" />
+                                </div>
+                             </div>
+                             <input 
+                               type="file" 
+                               ref={fileInputRef}
+                               className="hidden" 
+                               accept="image/*"
+                               onChange={handleImageUpload}
+                             />
+                           </div>
                         </div>
 
                         <div className="grid grid-cols-2 gap-4">
@@ -535,55 +591,27 @@ export default function Inventory() {
       <Dialog open={!!restockProduct} onOpenChange={(open) => !open && setRestockProduct(null)}>
         <DialogContent className="sm:max-w-[425px]">
           <DialogHeader>
-            <DialogTitle>Kirim qilish</DialogTitle>
+            <DialogTitle>Omborga kirim qilish</DialogTitle>
           </DialogHeader>
-          <form onSubmit={handleRestock}>
-            <div className="grid gap-4 py-4">
-              <div className="flex items-center gap-4">
-                <div className="h-16 w-12 bg-gray-100 rounded overflow-hidden flex-shrink-0">
-                  {restockProduct?.image && (
-                    <img src={restockProduct.image} alt="" className="h-full w-full object-cover" />
-                  )}
-                </div>
-                <div>
-                  <h3 className="font-medium">{restockProduct?.name}</h3>
-                  <p className="text-sm text-muted-foreground">Hozirgi qoldiq: {restockProduct?.stock} dona</p>
-                </div>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="restock-amount">Qo'shiladigan miqdor</Label>
-                <div className="flex gap-2">
-                  <Input
-                    id="restock-amount"
-                    type="number"
-                    value={restockAmount}
-                    onChange={(e) => setRestockAmount(e.target.value)}
-                    className="text-lg font-bold"
-                    autoFocus
-                    min="1"
-                  />
-                </div>
-                <div className="flex gap-2 mt-2">
-                  {[5, 10, 20, 50, 100].map(val => (
-                    <Button 
-                      key={val} 
-                      type="button" 
-                      variant="outline" 
-                      size="sm" 
-                      className="flex-1 text-xs"
-                      onClick={() => setRestockAmount(val.toString())}
-                    >
-                      +{val}
-                    </Button>
-                  ))}
-                </div>
-              </div>
+          <div className="grid gap-4 py-4">
+            <div className="space-y-2">
+              <Label>Kitob</Label>
+              <div className="font-medium">{restockProduct?.name}</div>
             </div>
-            <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => setRestockProduct(null)}>Bekor qilish</Button>
-              <Button type="submit">Tasdiqlash</Button>
-            </DialogFooter>
-          </form>
+            <div className="space-y-2">
+              <Label htmlFor="amount">Soni (dona)</Label>
+              <Input
+                id="amount"
+                type="number"
+                value={restockAmount}
+                onChange={(e) => setRestockAmount(e.target.value)}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setRestockProduct(null)}>Bekor qilish</Button>
+            <Button onClick={handleRestock}>Saqlash</Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

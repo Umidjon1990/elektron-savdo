@@ -483,7 +483,17 @@ export default function Inventory() {
                       </div>
                       <DialogFooter className="gap-2">
                         <Button type="button" variant="outline" onClick={() => setIsAddDialogOpen(false)}>Bekor qilish</Button>
-                        <Button type="submit" className="gap-2">
+                        <Button 
+                          type="submit" 
+                          className="gap-2"
+                          onClick={(e) => {
+                            if (e.currentTarget.form) {
+                              e.preventDefault();
+                              handleAddProduct(e as any);
+                            }
+                          }}
+                          style={{backgroundColor: '#3b82f6', color: '#ffffff'}}
+                        >
                           <Check className="h-4 w-4" />
                           Saqlash
                         </Button>

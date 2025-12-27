@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState } from "react";
+import { createContext, useContext, useState, type ReactNode } from "react";
 import { MOCK_PRODUCTS, type Product } from "@/data/mock-products";
 
 interface ProductContextType {
@@ -9,7 +9,7 @@ interface ProductContextType {
 
 const ProductContext = createContext<ProductContextType | undefined>(undefined);
 
-export function ProductProvider({ children }: { children: React.ReactNode }) {
+export function ProductProvider({ children }: { children: ReactNode }) {
   const [products, setProducts] = useState<Product[]>(MOCK_PRODUCTS);
 
   const addProduct = (newProduct: Omit<Product, "id">) => {

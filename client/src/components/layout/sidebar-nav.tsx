@@ -21,16 +21,14 @@ export function SidebarNav() {
 
       <nav className="flex-1 flex flex-col gap-4 w-full px-2">
         {navItems.map((item) => (
-          <Link key={item.href} href={item.href}>
-            <a className={cn(
-              "flex flex-col items-center justify-center p-3 rounded-xl transition-all gap-1 group",
-              location === item.href 
-                ? "bg-white/10 text-white" 
-                : "text-slate-400 hover:text-white hover:bg-white/5"
-            )}>
-              <item.icon className={cn("h-6 w-6", location === item.href && "text-primary")} />
-              <span className="text-[10px] font-medium">{item.label}</span>
-            </a>
+          <Link key={item.href} href={item.href} className={cn(
+            "flex flex-col items-center justify-center p-3 rounded-xl transition-all gap-1 group cursor-pointer",
+            location === item.href 
+              ? "bg-white/10 text-white" 
+              : "text-slate-400 hover:text-white hover:bg-white/5"
+          )}>
+            <item.icon className={cn("h-6 w-6", location === item.href && "text-primary")} />
+            <span className="text-[10px] font-medium">{item.label}</span>
           </Link>
         ))}
       </nav>

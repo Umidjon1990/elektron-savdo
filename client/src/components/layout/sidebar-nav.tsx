@@ -7,6 +7,7 @@ const navItems = [
   { href: "/", icon: LayoutDashboard, label: "Kassa" },
   { href: "/inventory", icon: Package, label: "Ombor" },
   { href: "/history", icon: History, label: "Tarix" },
+  { href: "/store", icon: Store, label: "Do'kon" },
   { href: "/settings", icon: Settings, label: "Sozlamalar" },
 ];
 

@@ -10,22 +10,34 @@ interface ProductContextType {
 const ProductContext = createContext<ProductContextType | undefined>(undefined);
 
 export function ProductProvider({ children }: { children: ReactNode }) {
-  const [products, setProducts] = useState<Product[]>(MOCK_PRODUCTS);
+  const [products, setProducts] = useState<Product[]>(() => {
+    try {
+      const saved = localStorage.getItem("pos_products");
+      return saved ? JSON.parse(saved) : MOCK_PRODUCTS;
+    } catch (e) {
+      return MOCK_PRODUCTS;
+    }
+  });
+
+  // Save to localStorage whenever products change
+  const saveProducts = (newProducts: Product[]) => {
+    setProducts(newProducts);
+    localStorage.setItem("pos_products", JSON.stringify(newProducts));
+  };
 
   const addProduct = (newProduct: Omit<Product, "id">) => {
     const product = {
       ...newProduct,
       id: Math.random().toString(36).substr(2, 9),
     };
-    setProducts((prev) => [product, ...prev]);
+    saveProducts([product, ...products]);
   };
 
   const updateStock = (id: string, delta: number) => {
-    setProducts((prev) =>
-      prev.map((p) =>
-        p.id === id ? { ...p, stock: Math.max(0, p.stock + delta) } : p
-      )
+    const updated = products.map((p) =>
+      p.id === id ? { ...p, stock: Math.max(0, p.stock + delta) } : p
     );
+    saveProducts(updated);
   };
 
   return (

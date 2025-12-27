@@ -1,5 +1,6 @@
 import type { Express, Request, Response } from "express";
-import { isR2Configured, getPresignedUploadUrl, getPresignedDownloadUrl, generateObjectKey, getPublicUrl } from "./r2";
+import { isR2Configured, getPresignedUploadUrl, getPresignedDownloadUrl, generateObjectKey, getPublicUrl, s3Client, R2_BUCKET_NAME } from "./r2";
+import { GetObjectCommand } from "@aws-sdk/client-s3";
 
 async function handleUploadRequest(req: Request, res: Response) {
   try {
@@ -43,8 +44,28 @@ export function registerR2Routes(app: Express): void {
       }
 
       const key = req.params.key;
-      const downloadUrl = await getPresignedDownloadUrl(key);
-      res.redirect(302, downloadUrl);
+      
+      const command = new GetObjectCommand({
+        Bucket: R2_BUCKET_NAME,
+        Key: key,
+      });
+
+      const response = await s3Client.send(command);
+      
+      if (response.ContentType) {
+        res.setHeader("Content-Type", response.ContentType);
+      }
+      if (response.ContentLength) {
+        res.setHeader("Content-Length", response.ContentLength);
+      }
+      res.setHeader("Cache-Control", "public, max-age=31536000");
+      
+      if (response.Body) {
+        const stream = response.Body as NodeJS.ReadableStream;
+        stream.pipe(res);
+      } else {
+        res.status(404).json({ error: "Object not found" });
+      }
     } catch (error) {
       console.error("Error getting object:", error);
       res.status(404).json({ error: "Object not found" });

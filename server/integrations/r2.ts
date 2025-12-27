@@ -42,9 +42,6 @@ export async function getPresignedDownloadUrl(key: string): Promise<string> {
 }
 
 export function getPublicUrl(key: string): string {
-  if (R2_PUBLIC_URL) {
-    return `${R2_PUBLIC_URL}/${key}`;
-  }
   return `/r2/${key}`;
 }
 

@@ -27,30 +27,47 @@ interface OrderContextType {
 const OrderContext = createContext<OrderContextType | undefined>(undefined);
 
 export function OrderProvider({ children }: { children: ReactNode }) {
-  const [orders, setOrders] = useState<Order[]>([
-    {
-      id: "ORD-001",
-      customerName: "Azizbek T.",
-      customerPhone: "+998 90 123 45 67",
-      items: [],
-      totalAmount: 150000,
-      status: "new",
-      paymentMethod: "click",
-      date: new Date().toISOString(),
-      deliveryType: "delivery"
-    },
-    {
-      id: "ORD-002",
-      customerName: "Malika K.",
-      customerPhone: "+998 93 987 65 43",
-      items: [],
-      totalAmount: 85000,
-      status: "paid",
-      paymentMethod: "cash",
-      date: new Date(Date.now() - 86400000).toISOString(),
-      deliveryType: "pickup"
+  // Initialize from localStorage or default to mock data
+  const [orders, setOrders] = useState<Order[]>(() => {
+    const saved = localStorage.getItem("orders");
+    if (saved) {
+      try {
+        return JSON.parse(saved);
+      } catch (e) {
+        console.error("Failed to parse orders from localStorage", e);
+      }
     }
-  ]);
+    return [
+      {
+        id: "ORD-001",
+        customerName: "Azizbek T.",
+        customerPhone: "+998 90 123 45 67",
+        items: [],
+        totalAmount: 150000,
+        status: "new",
+        paymentMethod: "click",
+        date: new Date().toISOString(),
+        deliveryType: "delivery"
+      },
+      {
+        id: "ORD-002",
+        customerName: "Malika K.",
+        customerPhone: "+998 93 987 65 43",
+        items: [],
+        totalAmount: 85000,
+        status: "paid",
+        paymentMethod: "cash",
+        date: new Date(Date.now() - 86400000).toISOString(),
+        deliveryType: "pickup"
+      }
+    ];
+  });
+
+  // Save to localStorage whenever orders change
+  const saveOrders = (newOrders: Order[]) => {
+    setOrders(newOrders);
+    localStorage.setItem("orders", JSON.stringify(newOrders));
+  };
 
   const addOrder = (orderData: Omit<Order, "id" | "date" | "status">) => {
     const newOrder: Order = {
@@ -59,11 +76,12 @@ export function OrderProvider({ children }: { children: ReactNode }) {
       date: new Date().toISOString(),
       status: "new"
     };
-    setOrders(prev => [newOrder, ...prev]);
+    saveOrders([newOrder, ...orders]);
   };
 
   const updateOrderStatus = (id: string, status: Order["status"]) => {
-    setOrders(prev => prev.map(o => o.id === id ? { ...o, status } : o));
+    const newOrders = orders.map(o => o.id === id ? { ...o, status } : o);
+    saveOrders(newOrders);
   };
 
   const stats = {

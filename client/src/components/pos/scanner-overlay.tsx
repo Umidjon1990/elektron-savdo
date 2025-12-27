@@ -288,7 +288,7 @@ export function ScannerOverlay({ isOpen, onClose, onScan, mode = "barcode" }: Sc
                         <div className="absolute inset-0 pointer-events-none flex items-center justify-center z-10">
                             {mode === "barcode" ? (
                                 // Barcode Box
-                                <div className="w-64 h-64 border-2 border-primary/50 rounded-xl relative">
+                                <div className="w-72 h-24 border-2 border-primary/50 rounded-xl relative">
                                   <div className="absolute top-0 left-0 w-8 h-8 border-t-4 border-l-4 border-primary -mt-1 -ml-1" />
                                   <div className="absolute top-0 right-0 w-8 h-8 border-t-4 border-r-4 border-primary -mt-1 -mr-1" />
                                   <div className="absolute bottom-0 left-0 w-8 h-8 border-b-4 border-l-4 border-primary -mb-1 -ml-1" />

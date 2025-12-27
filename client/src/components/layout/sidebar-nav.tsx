@@ -1,7 +1,8 @@
 import { Link, useLocation } from "wouter";
 import { cn } from "@/lib/utils";
-import { LayoutDashboard, Package, History, Settings, LogOut, Store, ShoppingCart, Users } from "lucide-react";
+import { LayoutDashboard, Package, History, Settings, LogOut, Store, ShoppingCart, Users, Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { useState, useEffect } from "react";
 
 const navItems = [
   { href: "/admin", icon: LayoutDashboard, label: "Kassa" },
@@ -15,6 +16,32 @@ const navItems = [
 
 export function SidebarNav() {
   const [location] = useLocation();
+  const [installPrompt, setInstallPrompt] = useState<any>(null);
+  const [isInstalled, setIsInstalled] = useState(false);
+
+  useEffect(() => {
+    const handler = (e: any) => {
+      e.preventDefault();
+      setInstallPrompt(e);
+    };
+    window.addEventListener('beforeinstallprompt', handler);
+    
+    if (window.matchMedia('(display-mode: standalone)').matches) {
+      setIsInstalled(true);
+    }
+    
+    return () => window.removeEventListener('beforeinstallprompt', handler);
+  }, []);
+
+  const handleInstall = async () => {
+    if (!installPrompt) return;
+    installPrompt.prompt();
+    const result = await installPrompt.userChoice;
+    if (result.outcome === 'accepted') {
+      setIsInstalled(true);
+    }
+    setInstallPrompt(null);
+  };
 
   return (
     <>
@@ -38,7 +65,17 @@ export function SidebarNav() {
           ))}
         </nav>
 
-        <div className="px-2 w-full">
+        <div className="px-2 w-full space-y-2">
+          {!isInstalled && installPrompt && (
+            <Button 
+              variant="ghost" 
+              onClick={handleInstall}
+              className="w-full h-12 rounded-xl text-green-400 hover:text-green-300 hover:bg-green-400/10 flex flex-col items-center justify-center gap-1"
+            >
+              <Download className="h-5 w-5" />
+              <span className="text-[9px]">O'rnatish</span>
+            </Button>
+          )}
           <Button variant="ghost" size="icon" className="w-full h-12 rounded-xl text-slate-400 hover:text-red-400 hover:bg-red-400/10">
             <LogOut className="h-5 w-5" />
           </Button>

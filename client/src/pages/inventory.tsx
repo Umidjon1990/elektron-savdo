@@ -313,7 +313,7 @@ export default function Inventory() {
                 Filter
               </Button>
               
-              <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
+              <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen} modal={true}>
                 <DialogTrigger asChild>
                   <Button className="gap-2 flex-1 md:flex-none justify-center">
                     <Plus className="h-4 w-4" />
@@ -321,7 +321,7 @@ export default function Inventory() {
                     <span className="sm:hidden">Qo'shish</span>
                   </Button>
                 </DialogTrigger>
-                <DialogContent className="sm:max-w-[500px] max-h-[90vh] overflow-y-auto">
+                <DialogContent className="sm:max-w-[500px] max-h-[90vh] overflow-y-auto" onPointerDownOutside={(e) => e.preventDefault()} onInteractOutside={(e) => e.preventDefault()}>
                   <DialogHeader>
                     <DialogTitle>
                       {step === 1 ? "1-qadam: Shtrix kodni aniqlash" : "2-qadam: Ma'lumotlarni to'ldirish"}

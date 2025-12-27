@@ -1,0 +1,72 @@
+. Umumiy tuzilma
+•	Admin panel – hozirgi “kassa” bo‘limi shu rolni bajaradi
+•	Umumiy dashboard (mijoz tomoni) – foydalanuvchilar kirib:
+o	sotuvdagi qo‘llanmalarni ko‘radi
+o	filtrlaydi/qidiradi
+o	buyurtma beradi
+________________________________________
+2. Admin panel (kassa bo‘limi) funksiyalari
+2.1. Buyurtmalar boshqaruvi
+•	Yangi buyurtmalar ro‘yxati (status: yangi, to‘landi, bekor qilindi, yuborildi)
+•	Buyurtma tafsiloti:
+o	mijoz F.I.Sh / telefon / email
+o	tanlangan qo‘llanmalar
+o	umumiy summa
+o	to‘lov usuli (naqd, karta, onlayn, boshqalar)
+•	Statusni o‘zgartirish (masalan, “to‘landi” deb belgilash)
+•	Chek / hisob-faktura chiqarish (agar kerak bo‘lsa)
+2.2. Mijozlar bo‘limi
+•	Ro‘yxatdan o‘tgan mijozlar ro‘yxati
+•	Har bir mijozning:
+o	buyurtmalar tarixi
+o	to‘lovlar tarixi
+•	Mijozni bloklash / faollashtirish (kerak bo‘lsa)
+2.4. Hisobot va statistika
+•	Kunlik / oylik savdo summasi
+•	Eng ko‘p sotilgan qo‘llanmalar
+•	Faol mijozlar (eng ko‘p xarid qilganlar)
+•	Grafikli ko‘rinish (sotuv dinamikasi)
+________________________________________
+3. Umumiy dashboard (mijoz tomoni)
+3.1. Asosiy sahifa
+•	Banner yoki qisqa tushuntirish: “Bu yerda siz qo‘llanmalarni ko‘rib, onlayn buyurtma bera olasiz”
+•	Kategoriyalar bo‘yicha bloklar (masalan, “IT qo‘llanmalar”, “Biznes”, “Til o‘rganish”)
+3.2. Qo‘llanmalar katalogi
+•	Ro‘yxat ko‘rinishida:
+o	rasm
+o	nomi
+o	qisqa tavsif
+o	narxi
+o	“Batafsil” tugmasi
+•	Qidiruv (nomi bo‘yicha)
+•	Filtr:
+o	kategoriya bo‘yicha
+o	narx intervali bo‘yicha
+o	yangi qo‘shilganlar
+3.3. Qo‘llanma tafsilot sahifasi
+•	To‘liq tavsif
+•	 “Savatchaga qo‘shish” yoki “Darhol sotib olish” tugmasi
+3.4. Savatcha va buyurtma berish
+•	Savatcha:
+o	tanlangan qo‘llanmalar ro‘yxati
+o	soni (agar ko‘payadigan mahsulot bo‘lsa)
+o	umumiy summa
+o	mahsulotni savatchadan o‘chirish
+•	Buyurtma berish formasi:
+o	ism / familiya
+o	telefon raqami
+o	yetkazib berish turi (agar jismoniy mahsulot bo‘lsa)
+o	to‘lov turi (naqd/karta/online)
+BU ma’luymotlarni te’elgramda ham yuborish, link orqali 
+
+
+
+4. Rollar va ruxsatlar
+•	Admin (kassa xodimi)
+o	qo‘llanmalarni to‘liq boshqaradi
+o	buyurtmalarni ko‘radi, statusini o‘zgartiradi
+o	hisobotlarni ko‘radi
+•	Mijoz
+o	faqat umumiy dashboard’ni ko‘radi
+o	qo‘llanmalarni ko‘rish, savatchaga qo‘shish, buyurtma berish
+

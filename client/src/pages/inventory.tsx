@@ -3,7 +3,7 @@ import { SidebarNav } from "@/components/layout/sidebar-nav";
 import { useProducts } from "@/lib/product-context";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Search, Plus, Filter, MoreHorizontal, ScanBarcode, ArrowRight, Check, X, RotateCcw } from "lucide-react";
+import { Search, Plus, Filter, MoreHorizontal, ScanBarcode, ArrowRight, Check, X, RotateCcw, PackagePlus } from "lucide-react";
 import { ScannerOverlay } from "@/components/pos/scanner-overlay";
 import { KNOWN_BOOKS_DB } from "@/data/mock-external-books";
 import {
@@ -22,6 +22,14 @@ import {
   DialogTrigger,
   DialogFooter,
 } from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Label } from "@/components/ui/label";
 import {
   Select,
@@ -30,18 +38,21 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { CATEGORIES } from "@/data/mock-products";
+import { CATEGORIES, type Product } from "@/data/mock-products";
 import { useToast } from "@/hooks/use-toast";
 import { Card, CardContent } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 
 export default function Inventory() {
-  const { products, addProduct } = useProducts();
+  const { products, addProduct, updateStock } = useProducts();
   const [searchQuery, setSearchQuery] = useState("");
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [isScannerOpen, setIsScannerOpen] = useState(false);
   const [step, setStep] = useState<1 | 2>(1); // 1: Scan/Enter ISBN, 2: Details
   const { toast } = useToast();
+
+  const [restockProduct, setRestockProduct] = useState<Product | null>(null);
+  const [restockAmount, setRestockAmount] = useState<string>("10");
 
   const [newProduct, setNewProduct] = useState({
     name: "",
@@ -72,11 +83,11 @@ export default function Inventory() {
     
     if (existing) {
       toast({
-        title: "Bu kitob allaqachon mavjud!",
-        description: `"${existing.name}" omborda bor. Qoldig'ini o'zgartirishingiz mumkin.`,
-        variant: "destructive"
+        title: "Kitob mavjud!",
+        description: `"${existing.name}" allaqachon bazada bor.`,
       });
-      // Optionally could switch to "Edit" mode here, but for now just warn
+      // Automatically open restock dialog for existing item
+      setRestockProduct(existing);
       return;
     }
 
@@ -132,6 +143,25 @@ export default function Inventory() {
       title: "Muvaffaqiyatli qo'shildi",
       description: `${newProduct.name} bazaga kiritildi`,
     });
+  };
+
+  const handleRestock = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (restockProduct && restockAmount) {
+      const amount = parseInt(restockAmount);
+      if (amount > 0) {
+        updateStock(restockProduct.id, amount);
+        toast({
+          title: "Kirim qilindi",
+          description: `${restockProduct.name} +${amount} dona qo'shildi`,
+          className: "bg-green-500 text-white border-none",
+        });
+        setRestockProduct(null);
+        setRestockAmount("10");
+        // Also close main dialog if it was open (e.g. came from scan)
+        setIsAddDialogOpen(false);
+      }
+    }
   };
 
   const filteredProducts = products.filter(product =>
@@ -359,9 +389,25 @@ export default function Inventory() {
                         </span>
                       </TableCell>
                       <TableCell>
-                        <Button variant="ghost" size="icon" className="h-8 w-8">
-                          <MoreHorizontal className="h-4 w-4" />
-                        </Button>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="icon" className="h-8 w-8">
+                              <MoreHorizontal className="h-4 w-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuLabel>Amallar</DropdownMenuLabel>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem onClick={() => setRestockProduct(product)}>
+                              <PackagePlus className="mr-2 h-4 w-4" />
+                              Kirim qilish
+                            </DropdownMenuItem>
+                            <DropdownMenuItem>
+                              <RotateCcw className="mr-2 h-4 w-4" />
+                              Tahrirlash
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
                       </TableCell>
                     </TableRow>
                   ))}
@@ -385,9 +431,25 @@ export default function Inventory() {
                           <h3 className="font-medium text-sm truncate pr-2">{product.name}</h3>
                           <p className="text-xs text-muted-foreground">{product.author}</p>
                         </div>
-                        <Button variant="ghost" size="icon" className="h-6 w-6 -mt-1 -mr-1">
-                          <MoreHorizontal className="h-4 w-4" />
-                        </Button>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="icon" className="h-6 w-6 -mt-1 -mr-1">
+                              <MoreHorizontal className="h-4 w-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuLabel>Amallar</DropdownMenuLabel>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem onClick={() => setRestockProduct(product)}>
+                              <PackagePlus className="mr-2 h-4 w-4" />
+                              Kirim qilish
+                            </DropdownMenuItem>
+                            <DropdownMenuItem>
+                              <RotateCcw className="mr-2 h-4 w-4" />
+                              Tahrirlash
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
                       </div>
                       
                       <div className="mt-2 flex flex-wrap gap-2">
@@ -421,6 +483,61 @@ export default function Inventory() {
         onClose={() => setIsScannerOpen(false)} 
         onScan={handleScan}
       />
+
+      <Dialog open={!!restockProduct} onOpenChange={(open) => !open && setRestockProduct(null)}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>Kirim qilish</DialogTitle>
+          </DialogHeader>
+          <form onSubmit={handleRestock}>
+            <div className="grid gap-4 py-4">
+              <div className="flex items-center gap-4">
+                <div className="h-16 w-12 bg-gray-100 rounded overflow-hidden flex-shrink-0">
+                  {restockProduct?.image && (
+                    <img src={restockProduct.image} alt="" className="h-full w-full object-cover" />
+                  )}
+                </div>
+                <div>
+                  <h3 className="font-medium">{restockProduct?.name}</h3>
+                  <p className="text-sm text-muted-foreground">Hozirgi qoldiq: {restockProduct?.stock} dona</p>
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="restock-amount">Qo'shiladigan miqdor</Label>
+                <div className="flex gap-2">
+                  <Input
+                    id="restock-amount"
+                    type="number"
+                    value={restockAmount}
+                    onChange={(e) => setRestockAmount(e.target.value)}
+                    className="text-lg font-bold"
+                    autoFocus
+                    min="1"
+                  />
+                </div>
+                <div className="flex gap-2 mt-2">
+                  {[5, 10, 20, 50, 100].map(val => (
+                    <Button 
+                      key={val} 
+                      type="button" 
+                      variant="outline" 
+                      size="sm" 
+                      className="flex-1 text-xs"
+                      onClick={() => setRestockAmount(val.toString())}
+                    >
+                      +{val}
+                    </Button>
+                  ))}
+                </div>
+              </div>
+            </div>
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setRestockProduct(null)}>Bekor qilish</Button>
+              <Button type="submit">Tasdiqlash</Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

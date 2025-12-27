@@ -36,16 +36,16 @@ export default function CustomersPage() {
         phone: order.customerPhone,
         totalOrders: 0,
         totalSpent: 0,
-        lastOrderDate: order.date,
+        lastOrderDate: order.createdAt,
         history: []
       });
     }
     
-    const customer = customersMap.get(order.customerPhone);
+    const customer = customersMap.get(order.customerPhone)!;
     customer.totalOrders += 1;
     customer.totalSpent += order.totalAmount;
-    if (new Date(order.date) > new Date(customer.lastOrderDate)) {
-      customer.lastOrderDate = order.date;
+    if (new Date(order.createdAt) > new Date(customer.lastOrderDate)) {
+      customer.lastOrderDate = order.createdAt;
     }
     customer.history.push(order);
   });

@@ -112,7 +112,7 @@ export default function OrdersPage() {
                         <div className="font-medium">{order.customerName}</div>
                         <div className="text-xs text-slate-500">{order.customerPhone}</div>
                       </TableCell>
-                      <TableCell>{format(new Date(order.date), "dd MMM, HH:mm")}</TableCell>
+                      <TableCell>{format(new Date(order.createdAt), "dd MMM, HH:mm")}</TableCell>
                       <TableCell className="capitalize">{order.paymentMethod}</TableCell>
                       <TableCell>
                         {order.deliveryType === 'delivery' ? 'Kuryer' : 'Olib ketish'}

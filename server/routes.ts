@@ -1,7 +1,7 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { insertProductSchema, insertOrderSchema, insertCategorySchema } from "@shared/schema";
+import { insertProductSchema, insertOrderSchema, insertCategorySchema, insertTransactionSchema } from "@shared/schema";
 import { registerR2Routes } from "./integrations/r2-routes";
 
 export async function registerRoutes(
@@ -179,6 +179,31 @@ export async function registerRoutes(
     } catch (error) {
       console.error("Error deleting category:", error);
       res.status(500).json({ error: "Failed to delete category" });
+    }
+  });
+
+  // Transactions API (for offline sync)
+  app.get("/api/transactions", async (req, res) => {
+    try {
+      const transactions = await storage.getAllTransactions();
+      res.json(transactions);
+    } catch (error) {
+      console.error("Error fetching transactions:", error);
+      res.status(500).json({ error: "Failed to fetch transactions" });
+    }
+  });
+
+  app.post("/api/transactions", async (req, res) => {
+    try {
+      const data = {
+        ...req.body,
+        date: new Date(req.body.date)
+      };
+      const transaction = await storage.createTransaction(data);
+      res.status(201).json(transaction);
+    } catch (error) {
+      console.error("Error creating transaction:", error);
+      res.status(400).json({ error: "Invalid transaction data" });
     }
   });
 

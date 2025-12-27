@@ -1,6 +1,6 @@
 import { db } from "@db";
-import { users, products, orders, categories } from "@shared/schema";
-import type { User, InsertUser, Product, InsertProduct, Order, InsertOrder, Category, InsertCategory } from "@shared/schema";
+import { users, products, orders, categories, transactions } from "@shared/schema";
+import type { User, InsertUser, Product, InsertProduct, Order, InsertOrder, Category, InsertCategory, Transaction, InsertTransaction } from "@shared/schema";
 import { eq, desc, sql } from "drizzle-orm";
 
 export interface IStorage {
@@ -29,6 +29,11 @@ export interface IStorage {
   createCategory(category: InsertCategory): Promise<Category>;
   updateCategory(id: string, category: Partial<InsertCategory>): Promise<Category | undefined>;
   deleteCategory(id: string): Promise<boolean>;
+  
+  // Transactions
+  getAllTransactions(): Promise<Transaction[]>;
+  getTransaction(id: string): Promise<Transaction | undefined>;
+  createTransaction(transaction: InsertTransaction): Promise<Transaction>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -136,6 +141,25 @@ export class DatabaseStorage implements IStorage {
   async deleteCategory(id: string): Promise<boolean> {
     const result = await db.delete(categories).where(eq(categories.id, id));
     return true;
+  }
+
+  // Transactions
+  async getAllTransactions(): Promise<Transaction[]> {
+    return await db.select().from(transactions).orderBy(desc(transactions.date));
+  }
+
+  async getTransaction(id: string): Promise<Transaction | undefined> {
+    const [txn] = await db.select().from(transactions).where(eq(transactions.id, id));
+    return txn;
+  }
+
+  async createTransaction(transaction: InsertTransaction): Promise<Transaction> {
+    const existing = await this.getTransaction(transaction.id);
+    if (existing) {
+      return existing;
+    }
+    const [newTxn] = await db.insert(transactions).values(transaction).returning();
+    return newTxn;
   }
 }
 

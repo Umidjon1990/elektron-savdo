@@ -39,6 +39,14 @@ export const categories = pgTable("categories", {
   color: text("color").notNull().default("#3b82f6"),
 });
 
+export const transactions = pgTable("transactions", {
+  id: varchar("id").primaryKey(),
+  date: timestamp("date").notNull(),
+  items: json("items").notNull(),
+  totalAmount: integer("total_amount").notNull(),
+  paymentMethod: text("payment_method").notNull(),
+});
+
 // Insert schemas
 export const insertUserSchema = createInsertSchema(users).pick({
   username: true,
@@ -58,6 +66,8 @@ export const insertCategorySchema = createInsertSchema(categories).omit({
   id: true,
 });
 
+export const insertTransactionSchema = createInsertSchema(transactions);
+
 // Types
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type User = typeof users.$inferSelect;
@@ -70,3 +80,6 @@ export type Order = typeof orders.$inferSelect;
 
 export type InsertCategory = z.infer<typeof insertCategorySchema>;
 export type Category = typeof categories.$inferSelect;
+
+export type InsertTransaction = z.infer<typeof insertTransactionSchema>;
+export type Transaction = typeof transactions.$inferSelect;

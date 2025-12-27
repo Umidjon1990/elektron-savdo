@@ -79,15 +79,15 @@ export default function Inventory() {
     onSuccess: (response) => {
       setNewProduct(prev => ({ ...prev, image: response.objectPath }));
       toast({
-        title: "Rasm yuklandi",
-        description: "Rasm cloud xotirasiga saqlandi",
+        title: "Rasm saqlandi ✓",
+        duration: 2000,
         className: "bg-green-500 text-white border-none",
       });
     },
     onError: (error) => {
       toast({
-        title: "Xatolik",
-        description: "Rasm yuklashda xatolik yuz berdi",
+        title: "Rasm yuklanmadi",
+        duration: 3000,
         variant: "destructive",
       });
     }

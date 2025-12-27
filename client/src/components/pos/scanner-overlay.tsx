@@ -1,5 +1,5 @@
 import { motion, AnimatePresence } from "framer-motion";
-import { X, Keyboard, Camera, CameraOff, ScanText, Loader2 } from "lucide-react";
+import { X, Keyboard, Camera, CameraOff, ScanText, Loader2, RotateCcw } from "lucide-react";
 import { useEffect, useState, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -19,6 +19,7 @@ export function ScannerOverlay({ isOpen, onClose, onScan, mode = "barcode" }: Sc
   const [cameraError, setCameraError] = useState(false);
   const [ocrLoading, setOcrLoading] = useState(false);
   const [recognizedText, setRecognizedText] = useState("");
+  const [errorMessage, setErrorMessage] = useState("");
   
   const scannerRef = useRef<Html5Qrcode | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -28,22 +29,29 @@ export function ScannerOverlay({ isOpen, onClose, onScan, mode = "barcode" }: Sc
 
   // Initialize Barcode Scanner
   useEffect(() => {
+    let isMounted = true;
+
     if (isOpen && mode === "barcode" && !cameraError) {
       setScanning(true);
       const scannerId = "reader";
       
+      // Clear any previous instance first
+      if (scannerRef.current) {
+         scannerRef.current.clear().catch(console.error);
+         scannerRef.current = null;
+      }
+
       setTimeout(() => {
-        if (!document.getElementById(scannerId)) return;
+        if (!isMounted || !document.getElementById(scannerId)) return;
 
         const html5QrCode = new Html5Qrcode(scannerId);
         scannerRef.current = html5QrCode;
 
         const config = { 
-          fps: 30, // Balanced FPS
-          qrbox: { width: 300, height: 150 },
+          fps: 30, // Reduced to 30 for stability across devices
+          qrbox: { width: 250, height: 250 }, // Standard square box
           aspectRatio: 1.0,
           disableFlip: false,
-          experimentalFeatures: { useBarCodeDetectorIfSupported: true },
           formatsToSupport: [ 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15 ] 
         };
         
@@ -54,59 +62,87 @@ export function ScannerOverlay({ isOpen, onClose, onScan, mode = "barcode" }: Sc
             if (scannerRef.current) scannerRef.current.pause();
             if (navigator.vibrate) navigator.vibrate(50);
             onScan(decodedText);
+            
+            // Graceful cleanup
             setTimeout(() => {
-               if (scannerRef.current) scannerRef.current.stop().catch(console.error);
+               if (scannerRef.current) {
+                 scannerRef.current.stop()
+                   .then(() => scannerRef.current?.clear())
+                   .catch(console.error);
+               }
                onClose();
             }, 50);
           },
-          () => {}
+          () => {} // Ignore per-frame errors
         ).catch((err) => {
           console.error("Error starting barcode scanner", err);
-          setCameraError(true);
+          if (isMounted) {
+            setCameraError(true);
+            setErrorMessage("Kamerani ishga tushirib bo'lmadi. Qayta urinib ko'ring.");
+          }
         });
-      }, 100);
+      }, 300); // Increased delay for DOM readiness
     }
     
     return () => {
-      if (scannerRef.current && scannerRef.current.isScanning) {
-        scannerRef.current.stop().catch(console.error);
+      isMounted = false;
+      if (scannerRef.current) {
+        if (scannerRef.current.isScanning) {
+           scannerRef.current.stop().catch(console.error);
+        }
+        scannerRef.current.clear().catch(console.error);
+        scannerRef.current = null;
       }
     };
   }, [isOpen, mode, cameraError]);
 
   // Initialize Text Scanner (OCR)
   useEffect(() => {
+    let isMounted = true;
+
     if (isOpen && mode === "text") {
       setOcrLoading(true);
       setRecognizedText("");
       
-      // Initialize Worker
       (async () => {
         try {
           const worker = await createWorker('eng');
+          if (!isMounted) {
+             await worker.terminate();
+             return;
+          }
           workerRef.current = worker;
           setOcrLoading(false);
           
-          // Start Camera
           const stream = await navigator.mediaDevices.getUserMedia({ 
             video: { facingMode: "environment" } 
           });
+          
+          if (!isMounted) {
+             stream.getTracks().forEach(track => track.stop());
+             return;
+          }
+          
           streamRef.current = stream;
           if (videoRef.current) {
             videoRef.current.srcObject = stream;
-            videoRef.current.play();
+            videoRef.current.play().catch(e => console.error("Play error", e));
           }
           
           setScanning(true);
         } catch (err) {
           console.error("Error initializing OCR", err);
-          setCameraError(true);
-          setOcrLoading(false);
+          if (isMounted) {
+            setCameraError(true);
+            setErrorMessage("Matn skanerini ishga tushirib bo'lmadi.");
+            setOcrLoading(false);
+          }
         }
       })();
     }
 
     return () => {
+      isMounted = false;
       if (workerRef.current) {
         workerRef.current.terminate();
         workerRef.current = null;
@@ -129,24 +165,22 @@ export function ScannerOverlay({ isOpen, onClose, onScan, mode = "barcode" }: Sc
         const video = videoRef.current;
         const canvas = canvasRef.current;
         const ctx = canvas.getContext('2d');
-        if (!ctx) return;
+        if (!ctx || video.videoWidth === 0) return;
 
-        // Draw video frame to canvas
         canvas.width = video.videoWidth;
         canvas.height = video.videoHeight;
         ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
         
-        // Recognize text
         try {
            const { data: { text } } = await workerRef.current.recognize(canvas);
            const cleanText = text.replace(/\n/g, " ").trim();
-           if (cleanText.length > 3) {
+           if (cleanText.length > 2) {
              setRecognizedText(cleanText);
            }
         } catch (e) {
           console.error(e);
         }
-      }, 2000); // Scan every 2 seconds to avoid freezing
+      }, 1000); // 1s interval for better responsiveness
     }
 
     return () => clearInterval(interval);
@@ -166,6 +200,11 @@ export function ScannerOverlay({ isOpen, onClose, onScan, mode = "barcode" }: Sc
         onScan(recognizedText);
         onClose();
     }
+  };
+
+  const retryCamera = () => {
+    setCameraError(false);
+    setErrorMessage("");
   };
 
   return (
@@ -191,8 +230,12 @@ export function ScannerOverlay({ isOpen, onClose, onScan, mode = "barcode" }: Sc
                {cameraError ? (
                  <div className="flex flex-col items-center justify-center text-white/50 p-8 text-center">
                    <CameraOff className="h-12 w-12 mb-4 opacity-50" />
-                   <p className="mb-2">Kamerani ishlatib bo'lmadi</p>
-                   <p className="text-xs max-w-[200px]">Ruxsat berilmagan yoki qurilmada kamera yo'q.</p>
+                   <p className="mb-2 font-medium text-white">{errorMessage || "Kamerani ishlatib bo'lmadi"}</p>
+                   <p className="text-xs max-w-[200px] mb-4">Ruxsat berilmagan yoki qurilmada muammo bor.</p>
+                   <Button variant="outline" size="sm" onClick={retryCamera} className="gap-2">
+                     <RotateCcw className="h-4 w-4" />
+                     Qayta urinish
+                   </Button>
                  </div>
                ) : (
                  mode === "text" ? (

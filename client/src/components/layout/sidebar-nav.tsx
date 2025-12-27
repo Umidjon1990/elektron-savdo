@@ -4,13 +4,13 @@ import { LayoutDashboard, Package, History, Settings, LogOut, Store, ShoppingCar
 import { Button } from "@/components/ui/button";
 
 const navItems = [
-  { href: "/", icon: LayoutDashboard, label: "Kassa" },
-  { href: "/orders", icon: ShoppingCart, label: "Buyurtmalar" },
-  { href: "/inventory", icon: Package, label: "Ombor" },
-  { href: "/customers", icon: Users, label: "Mijozlar" },
-  { href: "/history", icon: History, label: "Tarix" },
-  { href: "/store", icon: Store, label: "Do'kon" },
-  { href: "/settings", icon: Settings, label: "Sozlamalar" },
+  { href: "/admin", icon: LayoutDashboard, label: "Kassa" },
+  { href: "/admin/orders", icon: ShoppingCart, label: "Buyurtmalar" },
+  { href: "/admin/inventory", icon: Package, label: "Ombor" },
+  { href: "/admin/customers", icon: Users, label: "Mijozlar" },
+  { href: "/admin/history", icon: History, label: "Tarix" },
+  { href: "/", icon: Store, label: "Do'kon" },
+  { href: "/admin/settings", icon: Settings, label: "Sozlamalar" },
 ];
 
 export function SidebarNav() {

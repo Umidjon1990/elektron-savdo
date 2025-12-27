@@ -30,7 +30,7 @@ export default function StoreHome() {
       {/* Navigation */}
       <nav className="sticky top-0 z-50 bg-white/80 backdrop-blur-md border-b border-slate-200">
         <div className="container mx-auto px-4 h-16 flex items-center justify-between">
-          <div className="flex items-center gap-2 cursor-pointer" onClick={() => setLocation("/store")}>
+          <div className="flex items-center gap-2 cursor-pointer" onClick={() => setLocation("/")}>
             <div className="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center text-white shadow-lg shadow-indigo-200">
               <BookOpen className="h-6 w-6" />
             </div>
@@ -50,7 +50,7 @@ export default function StoreHome() {
           </div>
 
           <div className="flex items-center gap-4">
-            <Button variant="ghost" size="icon" className="relative hover:bg-slate-100 rounded-full" onClick={() => setLocation("/store/cart")}>
+            <Button variant="ghost" size="icon" className="relative hover:bg-slate-100 rounded-full" onClick={() => setLocation("/cart")}>
               <ShoppingCart className="h-6 w-6 text-slate-700" />
               {itemCount > 0 && (
                 <span className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white text-xs font-bold flex items-center justify-center rounded-full border-2 border-white">
@@ -58,7 +58,7 @@ export default function StoreHome() {
                 </span>
               )}
             </Button>
-            <Button className="hidden sm:flex bg-indigo-600 hover:bg-indigo-700 text-white rounded-full px-6 shadow-lg shadow-indigo-200">
+            <Button className="hidden sm:flex bg-indigo-600 hover:bg-indigo-700 text-white rounded-full px-6 shadow-lg shadow-indigo-200" onClick={() => setLocation("/admin")}>
               Kirish
             </Button>
             <Sheet>

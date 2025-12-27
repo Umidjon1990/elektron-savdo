@@ -70,7 +70,7 @@ ${items.map(i => `- ${i.product.name} (${i.quantity}x)`).join('\n')}
 
     clearCart();
     setIsCheckoutOpen(false);
-    setLocation("/store");
+    setLocation("/");
   };
 
   if (items.length === 0) {
@@ -83,7 +83,7 @@ ${items.map(i => `- ${i.product.name} (${i.quantity}x)`).join('\n')}
         <p className="text-slate-500 mb-8 max-w-sm">
           Siz hali hech qanday kitob tanlamadingiz. Katalogga qaytib, o'zingizga yoqqan kitoblarni tanlang.
         </p>
-        <Button onClick={() => setLocation("/store")} className="bg-indigo-600 hover:bg-indigo-700">
+        <Button onClick={() => setLocation("/")} className="bg-indigo-600 hover:bg-indigo-700">
           <ArrowLeft className="mr-2 h-4 w-4" /> Katalogga qaytish
         </Button>
       </div>
@@ -94,7 +94,7 @@ ${items.map(i => `- ${i.product.name} (${i.quantity}x)`).join('\n')}
     <div className="min-h-screen bg-slate-50 font-sans pb-20">
       <div className="bg-white border-b border-slate-200 sticky top-0 z-10">
         <div className="container mx-auto px-4 h-16 flex items-center gap-4">
-          <Button variant="ghost" size="icon" onClick={() => setLocation("/store")}>
+          <Button variant="ghost" size="icon" onClick={() => setLocation("/")}>
             <ArrowLeft className="h-5 w-5" />
           </Button>
           <h1 className="text-xl font-bold">Savatcha</h1>

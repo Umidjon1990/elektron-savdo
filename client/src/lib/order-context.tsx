@@ -8,7 +8,7 @@ export interface Order {
   items: CartItem[];
   totalAmount: number;
   status: "new" | "paid" | "shipped" | "cancelled";
-  paymentMethod: "cash" | "card" | "online";
+  paymentMethod: "cash" | "card" | "online" | "click" | "payme";
   date: string;
   deliveryType: "pickup" | "delivery";
 }

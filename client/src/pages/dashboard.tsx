@@ -33,8 +33,8 @@ const popSound = typeof window !== 'undefined' ? new Audio("https://codeskulptor
 const beepSound = typeof window !== 'undefined' ? new Audio("https://codeskulptor-demos.commondatastorage.googleapis.com/assets/sounddogs/soundtrack.mp3") : null;
 
 export default function Dashboard() {
-  const { products, updateStock } = useProducts();
-  const { addTransaction, getStats } = useTransactions();
+  const { products, updateStock, isOffline, refreshProducts } = useProducts();
+  const { addTransaction, getStats, pendingCount, syncTransactions } = useTransactions();
   const stats = getStats();
   
   const { data: categories = [] } = useQuery<Category[]>({
@@ -52,7 +52,6 @@ export default function Dashboard() {
   const [scannedProduct, setScannedProduct] = useState<Product | null>(null);
   const [lastTransaction, setLastTransaction] = useState<any>(null);
   const [isReceiptOpen, setIsReceiptOpen] = useState(false);
-  const [isOffline, setIsOffline] = useState(false);
   const [isMobileCartOpen, setIsMobileCartOpen] = useState(false);
   const { toast } = useToast();
 
@@ -245,9 +244,20 @@ export default function Dashboard() {
             </Sheet>
 
             <div className="hidden md:flex items-center gap-2">
-               <Button variant="ghost" size="icon" onClick={() => setIsOffline(!isOffline)} title="Rejimni o'zgartirish">
+               <Button 
+                 variant="ghost" 
+                 size="icon" 
+                 onClick={() => { refreshProducts(); syncTransactions(); }} 
+                 title="Ma'lumotlarni yangilash"
+                 disabled={isOffline}
+               >
                  <RefreshCw className="h-4 w-4" />
                </Button>
+               {pendingCount > 0 && (
+                 <span className="text-xs bg-yellow-100 text-yellow-700 px-2 py-1 rounded-full">
+                   {pendingCount} kutilmoqda
+                 </span>
+               )}
                <div className="h-8 w-px bg-gray-200" />
                <div className="flex items-center gap-2 text-sm text-muted-foreground">
                  <Bluetooth className="h-4 w-4 text-blue-500" />

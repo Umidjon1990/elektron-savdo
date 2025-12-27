@@ -1,5 +1,7 @@
-import { createContext, useContext, type ReactNode } from "react";
+import { createContext, useContext, useState, useEffect, type ReactNode } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { db, type CachedProduct } from "./db";
+import { getOnlineStatus, syncProductsFromServer, getProductsFromCache, addProductToCache, updateProductInCache } from "./db/sync";
 
 interface Product {
   id: string;
@@ -15,42 +17,100 @@ interface Product {
 interface ProductContextType {
   products: Product[];
   isLoading: boolean;
+  isOffline: boolean;
   addProduct: (product: Omit<Product, "id">) => Promise<void>;
   updateStock: (id: string, delta: number) => Promise<void>;
   updateProduct: (id: string, updates: Partial<Omit<Product, "id">>) => Promise<void>;
+  refreshProducts: () => Promise<void>;
 }
 
 const ProductContext = createContext<ProductContextType | undefined>(undefined);
 
 export function ProductProvider({ children }: { children: ReactNode }) {
   const queryClient = useQueryClient();
+  const [isOffline, setIsOffline] = useState(!getOnlineStatus());
+  const [cachedProducts, setCachedProducts] = useState<Product[]>([]);
+  const [cacheLoaded, setCacheLoaded] = useState(false);
 
-  const { data: products = [], isLoading } = useQuery({
+  useEffect(() => {
+    const loadCache = async () => {
+      const cached = await getProductsFromCache();
+      if (cached.length > 0) {
+        setCachedProducts(cached);
+      }
+      setCacheLoaded(true);
+    };
+    loadCache();
+
+    const handleOnline = () => setIsOffline(false);
+    const handleOffline = () => setIsOffline(true);
+    
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+    
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
+
+  const { data: serverProducts = [], isLoading: serverLoading } = useQuery({
     queryKey: ["products"],
     queryFn: async () => {
       const res = await fetch("/api/products");
       if (!res.ok) throw new Error("Failed to fetch products");
-      return res.json() as Promise<Product[]>;
+      const products: Product[] = await res.json();
+      
+      await db.products.clear();
+      await db.products.bulkPut(products);
+      setCachedProducts(products);
+      
+      return products;
     },
+    enabled: !isOffline && cacheLoaded,
+    staleTime: 5 * 60 * 1000,
+    retry: 2,
   });
+
+  const products = serverProducts.length > 0 ? serverProducts : cachedProducts;
+  const isLoading = !cacheLoaded || (serverLoading && cachedProducts.length === 0);
 
   const addProductMutation = useMutation({
     mutationFn: async (product: Omit<Product, "id">) => {
+      if (isOffline) {
+        const tempId = 'temp_' + Math.random().toString(36).substr(2, 9);
+        const newProduct = { ...product, id: tempId } as Product;
+        await addProductToCache(newProduct);
+        setCachedProducts(prev => [...prev, newProduct]);
+        return newProduct;
+      }
+      
       const res = await fetch("/api/products", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(product),
       });
       if (!res.ok) throw new Error("Failed to add product");
-      return res.json();
+      const newProduct = await res.json();
+      await addProductToCache(newProduct);
+      return newProduct;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["products"] });
+      if (!isOffline) {
+        queryClient.invalidateQueries({ queryKey: ["products"] });
+      }
     },
   });
 
   const updateProductMutation = useMutation({
     mutationFn: async ({ id, data }: { id: string; data: Partial<Omit<Product, "id">> }) => {
+      await updateProductInCache(id, data);
+      setCachedProducts(prev => prev.map(p => p.id === id ? { ...p, ...data } : p));
+      
+      if (isOffline) {
+        return { id, ...data };
+      }
+      
       const res = await fetch(`/api/products/${id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
@@ -60,7 +120,9 @@ export function ProductProvider({ children }: { children: ReactNode }) {
       return res.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["products"] });
+      if (!isOffline) {
+        queryClient.invalidateQueries({ queryKey: ["products"] });
+      }
     },
   });
 
@@ -81,9 +143,16 @@ export function ProductProvider({ children }: { children: ReactNode }) {
     await updateProductMutation.mutateAsync({ id, data: updates });
   };
 
+  const refreshProducts = async () => {
+    if (!isOffline) {
+      await syncProductsFromServer();
+      queryClient.invalidateQueries({ queryKey: ["products"] });
+    }
+  };
+
   return (
     <ProductContext.Provider
-      value={{ products, isLoading, addProduct, updateStock, updateProduct }}
+      value={{ products, isLoading, isOffline, addProduct, updateStock, updateProduct, refreshProducts }}
     >
       {children}
     </ProductContext.Provider>

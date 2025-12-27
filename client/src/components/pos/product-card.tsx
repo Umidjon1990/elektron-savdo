@@ -51,21 +51,21 @@ export function ProductCard({ product, onClick }: ProductCardProps) {
           </div>
         )}
       </div>
-      <CardContent className="p-2">
-        <div className="space-y-0.5 mb-1">
-          <div className="font-medium text-xs line-clamp-2 leading-tight min-h-[2em]" style={{color: '#1e293b'}}>
+      <CardContent className="p-2" style={{backgroundColor: '#ffffff'}}>
+        <div style={{marginBottom: '4px'}}>
+          <p style={{color: '#1e293b', fontSize: '12px', fontWeight: 500, lineHeight: '1.2', margin: 0, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' as any}}>
             {product.name}
-          </div>
-          <div className="text-[10px] truncate" style={{color: '#64748b'}}>
+          </p>
+          <p style={{color: '#64748b', fontSize: '10px', margin: '2px 0 0 0', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap'}}>
             {product.author}
-          </div>
+          </p>
         </div>
         
-        <div className="flex items-center justify-between">
-          <div className="font-mono text-xs font-bold whitespace-nowrap" style={{color: '#3b82f6'}}>
+        <div style={{display: 'flex', alignItems: 'center', justifyContent: 'space-between'}}>
+          <span style={{color: '#3b82f6', fontSize: '12px', fontWeight: 700, fontFamily: 'monospace'}}>
             {product.price.toLocaleString()}
-          </div>
-          <span className="text-[10px]" style={{color: product.stock < 10 ? '#ef4444' : '#64748b'}}>
+          </span>
+          <span style={{color: product.stock < 10 ? '#ef4444' : '#64748b', fontSize: '10px'}}>
             {product.stock}
           </span>
         </div>

@@ -9,6 +9,11 @@ export async function registerRoutes(
   app: Express
 ): Promise<Server> {
   
+  // Health check endpoint for Railway
+  app.get("/api/health", (req, res) => {
+    res.json({ status: "ok", timestamp: new Date().toISOString() });
+  });
+  
   // Register Cloudflare R2 routes for file uploads
   registerR2Routes(app);
   

@@ -130,54 +130,55 @@ export function ReceiptDialog({ transaction, isOpen, onClose }: ReceiptDialogPro
     
     if (isOpen && transaction) {
       printContainer.innerHTML = `
-        <div style="text-align:center;margin-bottom:10px;">
-          <img src="/assets/image_1768471627048.png" alt="Logo" style="width:50px;height:50px;margin:0 auto 4px;">
-          <h2 style="font-size:16px;font-weight:900;margin:0;color:#000;">IXLOS BOOKS</h2>
-          <p style="font-size:11px;color:#000;margin:2px 0;font-weight:600;">Namangan, Uychi</p>
-          <p style="font-size:11px;color:#000;margin:0;font-weight:600;">+998 93 678 55 52</p>
+        <div style="text-align:center;margin-bottom:8px;">
+          <img src="/assets/image_1768471627048.png" alt="Logo" style="width:45px;height:45px;display:block;margin:0 auto 4px;">
+          <h2 style="font-size:14px;font-weight:900;margin:0;color:#000;">IXLOS BOOKS</h2>
+          <p style="font-size:10px;color:#000;margin:2px 0;font-weight:600;">Namangan, Uychi</p>
+          <p style="font-size:10px;color:#000;margin:0;font-weight:600;">+998 93 678 55 52</p>
         </div>
-        <div style="border-top:2px dashed #000;margin:8px 0;"></div>
-        <div style="display:flex;justify-content:space-between;font-size:10px;color:#000;margin-bottom:8px;font-weight:600;">
-          <div>
-            <p style="margin:0;">Chek: ${transaction.id.slice(0, 8)}</p>
-            <p style="margin:0;">Sana: ${new Date(transaction.date).toLocaleDateString()}</p>
-          </div>
-          <div style="text-align:right;">
-            <p style="margin:0;">Kassir: Sotuvchi</p>
-            <p style="margin:0;">Vaqt: ${new Date(transaction.date).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</p>
-          </div>
-        </div>
-        <div style="margin-bottom:8px;">
+        <div style="border-top:1px dashed #000;margin:6px 0;"></div>
+        <table style="width:100%;font-size:9px;color:#000;margin-bottom:6px;font-weight:600;">
+          <tr>
+            <td style="text-align:left;">Chek: ${transaction.id.slice(0, 8)}</td>
+            <td style="text-align:right;">Kassir: Admin</td>
+          </tr>
+          <tr>
+            <td style="text-align:left;">Sana: ${new Date(transaction.date).toLocaleDateString()}</td>
+            <td style="text-align:right;">Vaqt: ${new Date(transaction.date).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</td>
+          </tr>
+        </table>
+        <div style="border-top:1px dashed #000;margin:6px 0;"></div>
+        <div style="margin-bottom:6px;">
           ${transaction.items.map(item => `
-            <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px;color:#000;">
-              <div>
-                <p style="margin:0;font-weight:700;">${item.product.name}</p>
-                <p style="margin:0;font-size:10px;font-weight:600;">${item.quantity} x ${item.product.price.toLocaleString()}</p>
-              </div>
-              <div style="font-family:monospace;font-weight:700;">
-                ${(item.quantity * item.product.price).toLocaleString()}
+            <div style="margin-bottom:4px;color:#000;">
+              <div style="font-size:11px;font-weight:700;">${item.product.name}</div>
+              <div style="display:flex;justify-content:space-between;font-size:10px;">
+                <span style="font-weight:600;">${item.quantity} x ${item.product.price.toLocaleString()}</span>
+                <span style="font-weight:700;font-family:monospace;">${(item.quantity * item.product.price).toLocaleString()}</span>
               </div>
             </div>
           `).join('')}
         </div>
-        <div style="border-top:2px dashed #000;margin:8px 0;"></div>
-        <div style="margin-bottom:10px;">
-          <div style="display:flex;justify-content:space-between;font-size:12px;color:#000;font-weight:600;">
-            <span>Jami:</span>
-            <span style="font-family:monospace;">${transaction.totalAmount.toLocaleString()} so'm</span>
-          </div>
-          <div style="display:flex;justify-content:space-between;font-size:14px;font-weight:900;margin-top:4px;color:#000;">
-            <span>TO'LANDI:</span>
-            <span style="font-family:monospace;">${transaction.totalAmount.toLocaleString()} so'm</span>
-          </div>
-          <p style="font-size:10px;text-align:right;color:#000;margin:4px 0 0;font-weight:600;">To'lov: ${transaction.paymentMethod === 'card' ? 'Karta' : 'Naqd'}</p>
-        </div>
-        <div style="text-align:center;margin:12px 0;">
-          <img src="https://api.qrserver.com/v1/create-qr-code/?size=100x100&data=https://t.me/ixlosbooksuz&color=000000" alt="QR" style="width:70px;height:70px;">
+        <div style="border-top:1px dashed #000;margin:6px 0;"></div>
+        <table style="width:100%;font-size:11px;color:#000;margin-bottom:6px;">
+          <tr>
+            <td style="font-weight:600;">Jami:</td>
+            <td style="text-align:right;font-family:monospace;font-weight:600;">${transaction.totalAmount.toLocaleString()} so'm</td>
+          </tr>
+          <tr>
+            <td style="font-size:13px;font-weight:900;">TO'LANDI:</td>
+            <td style="text-align:right;font-family:monospace;font-size:13px;font-weight:900;">${transaction.totalAmount.toLocaleString()} so'm</td>
+          </tr>
+          <tr>
+            <td colspan="2" style="text-align:right;font-size:9px;font-weight:600;">To'lov: ${transaction.paymentMethod === 'card' ? 'Karta' : 'Naqd'}</td>
+          </tr>
+        </table>
+        <div style="text-align:center;margin:10px 0;">
+          <img src="https://api.qrserver.com/v1/create-qr-code/?size=100x100&data=https://t.me/ixlosbooksuz&color=000000" alt="QR" style="width:60px;height:60px;display:block;margin:0 auto;">
         </div>
         <div style="text-align:center;">
-          <p style="font-size:11px;color:#000;margin:0;font-weight:700;">Xaridingiz uchun rahmat!</p>
-          <p style="font-size:10px;color:#000;margin:2px 0 0;font-weight:600;">Telegram: @ixlosbooksuz</p>
+          <p style="font-size:10px;color:#000;margin:0;font-weight:700;">Xaridingiz uchun rahmat!</p>
+          <p style="font-size:9px;color:#000;margin:2px 0 0;font-weight:600;">Telegram: @ixlosbooksuz</p>
         </div>
       `;
     }

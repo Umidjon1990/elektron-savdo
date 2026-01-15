@@ -10,6 +10,7 @@ export interface Transaction {
   totalAmount: number;
   paymentMethod: "cash" | "card";
   synced?: boolean;
+  status: "completed" | "voided" | "refunded";
 }
 
 interface TransactionContextType {
@@ -17,6 +18,7 @@ interface TransactionContextType {
   pendingCount: number;
   isOffline: boolean;
   addTransaction: (items: CartItem[], total: number, method: "cash" | "card") => Promise<Transaction>;
+  voidTransaction: (id: string) => Promise<void>;
   getStats: () => {
     todayTotal: number;
     todayCount: number;
@@ -43,7 +45,8 @@ export function TransactionProvider({ children }: { children: ReactNode }) {
         items: t.items,
         totalAmount: t.totalAmount,
         paymentMethod: t.paymentMethod,
-        synced: t.synced
+        synced: t.synced,
+        status: t.status || "completed"
       }));
       setTransactions(mapped);
       setPendingCount(cached.filter(t => !t.synced).length);
@@ -84,7 +87,8 @@ export function TransactionProvider({ children }: { children: ReactNode }) {
       })),
       totalAmount: total,
       paymentMethod: method,
-      synced: false
+      synced: false,
+      status: "completed"
     };
     
     await saveTransactionLocally(newTransaction);
@@ -106,23 +110,61 @@ export function TransactionProvider({ children }: { children: ReactNode }) {
       items: items,
       totalAmount: total,
       paymentMethod: method,
-      synced: newTransaction.synced
+      synced: newTransaction.synced,
+      status: "completed" as const
     };
   };
 
+  const voidTransaction = async (id: string): Promise<void> => {
+    const transaction = await db.transactions.get(id);
+    if (!transaction) {
+      throw new Error("Transaction not found");
+    }
+    
+    if (transaction.status === "voided") {
+      throw new Error("Transaction already voided");
+    }
+    
+    for (const item of transaction.items) {
+      const product = await db.products.get(item.product.id);
+      if (product) {
+        await db.products.update(item.product.id, { 
+          stock: product.stock + item.quantity 
+        });
+      }
+    }
+    
+    await db.transactions.update(id, { 
+      status: "voided",
+      synced: false
+    });
+    
+    if (getOnlineStatus()) {
+      try {
+        await fetch(`/api/transactions/${id}/void`, { method: "POST" });
+      } catch (error) {
+        console.error("Failed to sync voided transaction:", error);
+      }
+    }
+    
+    await loadTransactions();
+  };
+
   const getStats = () => {
+    const activeTransactions = transactions.filter(t => t.status !== "voided");
+    
     const today = new Date().toISOString().split('T')[0];
-    const todayTransactions = transactions.filter(t => t.date.startsWith(today));
+    const todayTransactions = activeTransactions.filter(t => t.date.startsWith(today));
     
     const now = new Date();
     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
-    const monthTransactions = transactions.filter(t => t.date >= startOfMonth);
+    const monthTransactions = activeTransactions.filter(t => t.date >= startOfMonth);
     
     return {
       todayTotal: todayTransactions.reduce((acc, t) => acc + t.totalAmount, 0),
       todayCount: todayTransactions.length,
       monthTotal: monthTransactions.reduce((acc, t) => acc + t.totalAmount, 0),
-      totalItemsSold: transactions.reduce((acc, t) => acc + t.items.reduce((sum, item) => sum + item.quantity, 0), 0)
+      totalItemsSold: activeTransactions.reduce((acc, t) => acc + t.items.reduce((sum, item) => sum + item.quantity, 0), 0)
     };
   };
 
@@ -139,6 +181,7 @@ export function TransactionProvider({ children }: { children: ReactNode }) {
       pendingCount, 
       isOffline, 
       addTransaction, 
+      voidTransaction,
       getStats, 
       syncTransactions 
     }}>

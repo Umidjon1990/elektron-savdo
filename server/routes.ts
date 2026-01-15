@@ -212,5 +212,21 @@ export async function registerRoutes(
     }
   });
 
+  app.post("/api/transactions/:id/void", async (req, res) => {
+    try {
+      const result = await storage.voidTransaction(req.params.id);
+      if (!result) {
+        return res.status(404).json({ error: "Transaction not found" });
+      }
+      if (result.alreadyVoided) {
+        return res.status(409).json({ error: "Transaction already voided", transaction: result.transaction });
+      }
+      res.json(result.transaction);
+    } catch (error) {
+      console.error("Error voiding transaction:", error);
+      res.status(500).json({ error: "Failed to void transaction" });
+    }
+  });
+
   return httpServer;
 }

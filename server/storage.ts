@@ -34,6 +34,7 @@ export interface IStorage {
   getAllTransactions(): Promise<Transaction[]>;
   getTransaction(id: string): Promise<Transaction | undefined>;
   createTransaction(transaction: InsertTransaction): Promise<Transaction>;
+  voidTransaction(id: string): Promise<{transaction: Transaction, alreadyVoided: boolean} | undefined>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -160,6 +161,34 @@ export class DatabaseStorage implements IStorage {
     }
     const [newTxn] = await db.insert(transactions).values(transaction).returning();
     return newTxn;
+  }
+
+  async voidTransaction(id: string): Promise<{transaction: Transaction, alreadyVoided: boolean} | undefined> {
+    const existing = await this.getTransaction(id);
+    if (!existing) {
+      return undefined;
+    }
+    
+    if (existing.status === "voided") {
+      return { transaction: existing, alreadyVoided: true };
+    }
+    
+    const items = existing.items as Array<{product: {id: string; stock: number}, quantity: number}>;
+    for (const item of items) {
+      const product = await this.getProduct(item.product.id);
+      if (product) {
+        await this.updateProduct(item.product.id, { 
+          stock: product.stock + item.quantity 
+        });
+      }
+    }
+    
+    const [updated] = await db
+      .update(transactions)
+      .set({ status: "voided" })
+      .where(eq(transactions.id, id))
+      .returning();
+    return { transaction: updated, alreadyVoided: false };
   }
 }
 

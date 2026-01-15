@@ -28,6 +28,7 @@ export interface CachedTransaction {
   totalAmount: number;
   paymentMethod: 'cash' | 'card';
   synced: boolean;
+  status: 'completed' | 'voided' | 'refunded';
 }
 
 export interface SyncMeta {

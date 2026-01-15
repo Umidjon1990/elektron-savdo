@@ -48,8 +48,17 @@ export async function runMigrations() {
         date TIMESTAMP NOT NULL,
         items JSON NOT NULL,
         total_amount INTEGER NOT NULL,
-        payment_method TEXT NOT NULL
+        payment_method TEXT NOT NULL,
+        status TEXT NOT NULL DEFAULT 'completed'
       );
+      
+      -- Add status column if it doesn't exist (for existing databases)
+      DO $$ 
+      BEGIN 
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='transactions' AND column_name='status') THEN
+          ALTER TABLE transactions ADD COLUMN status TEXT NOT NULL DEFAULT 'completed';
+        END IF;
+      END $$;
     `);
     
     console.log("Database migrations completed successfully!");

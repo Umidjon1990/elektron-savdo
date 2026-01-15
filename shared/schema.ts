@@ -45,6 +45,7 @@ export const transactions = pgTable("transactions", {
   items: json("items").notNull(),
   totalAmount: integer("total_amount").notNull(),
   paymentMethod: text("payment_method").notNull(),
+  status: text("status").notNull().default("completed"),
 });
 
 // Insert schemas

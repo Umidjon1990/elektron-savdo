@@ -3,7 +3,7 @@ import { SidebarNav } from "@/components/layout/sidebar-nav";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useTransactions } from "@/lib/transaction-context";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, AreaChart, Area, PieChart, Pie, Cell, LineChart, Line } from "recharts";
-import { TrendingUp, TrendingDown, ShoppingBag, CreditCard, DollarSign, Calendar, ArrowUp, ArrowDown, Wallet, Receipt, Clock, Filter, ChevronDown, Banknote, Users } from "lucide-react";
+import { TrendingUp, TrendingDown, ShoppingBag, CreditCard, DollarSign, Calendar, ArrowUp, ArrowDown, Wallet, Receipt, Clock, Filter, ChevronDown, Banknote, Users, XCircle, RotateCcw } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
@@ -13,13 +13,42 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
+import { toast } from "sonner";
 
 const COLORS = ['#3b82f6', '#8b5cf6', '#10b981', '#f59e0b', '#ef4444', '#06b6d4'];
 
 export default function History() {
-  const { transactions, getStats } = useTransactions();
+  const { transactions, getStats, voidTransaction } = useTransactions();
   const stats = getStats();
   const [period, setPeriod] = useState<"today" | "week" | "month">("week");
+  const [voidingId, setVoidingId] = useState<string | null>(null);
+
+  const handleVoidTransaction = async (id: string) => {
+    try {
+      setVoidingId(id);
+      await voidTransaction(id);
+      toast.success("Chek bekor qilindi", {
+        description: "Kitoblar zaxiraga qaytarildi"
+      });
+    } catch (error) {
+      toast.error("Xatolik yuz berdi", {
+        description: error instanceof Error ? error.message : "Chekni bekor qilib bo'lmadi"
+      });
+    } finally {
+      setVoidingId(null);
+    }
+  };
 
   const weekDays = ['Dush', 'Sesh', 'Chor', 'Pay', 'Jum', 'Shan', 'Yak'];
   const chartData = weekDays.map((name, i) => ({
@@ -381,27 +410,68 @@ export default function History() {
                       </div>
                     ) : (
                       transactions.slice(0, 10).map((t) => (
-                        <div key={t.id} className="flex items-center justify-between p-3 bg-slate-50 rounded-xl hover:bg-slate-100 transition-colors">
+                        <div key={t.id} className={`flex items-center justify-between p-3 rounded-xl transition-colors ${t.status === 'voided' ? 'bg-red-50 opacity-60' : 'bg-slate-50 hover:bg-slate-100'}`}>
                           <div className="flex items-center gap-3">
-                            <div className={`w-10 h-10 rounded-full flex items-center justify-center ${t.paymentMethod === 'card' ? 'bg-blue-100' : 'bg-green-100'}`}>
-                              {t.paymentMethod === 'card' ? (
+                            <div className={`w-10 h-10 rounded-full flex items-center justify-center ${t.status === 'voided' ? 'bg-red-100' : t.paymentMethod === 'card' ? 'bg-blue-100' : 'bg-green-100'}`}>
+                              {t.status === 'voided' ? (
+                                <XCircle className="w-4 h-4 text-red-600" />
+                              ) : t.paymentMethod === 'card' ? (
                                 <CreditCard className="w-4 h-4 text-blue-600" />
                               ) : (
                                 <Banknote className="w-4 h-4 text-green-600" />
                               )}
                             </div>
                             <div>
-                              <p className="text-sm font-medium text-slate-800">
+                              <p className={`text-sm font-medium ${t.status === 'voided' ? 'text-red-600 line-through' : 'text-slate-800'}`}>
                                 {t.items.length} x Mahsulot
                               </p>
                               <p className="text-xs text-slate-500">
                                 {new Date(t.date).toLocaleTimeString('uz-UZ', { hour: '2-digit', minute: '2-digit' })}
+                                {t.status === 'voided' && <span className="text-red-500 ml-1">• Bekor qilingan</span>}
                               </p>
                             </div>
                           </div>
-                          <span className="font-bold text-green-600 text-sm">
-                            +{t.totalAmount.toLocaleString()}
-                          </span>
+                          <div className="flex items-center gap-2">
+                            <span className={`font-bold text-sm ${t.status === 'voided' ? 'text-red-500 line-through' : 'text-green-600'}`}>
+                              {t.status === 'voided' ? '' : '+'}{t.totalAmount.toLocaleString()}
+                            </span>
+                            {t.status !== 'voided' && (
+                              <AlertDialog>
+                                <AlertDialogTrigger asChild>
+                                  <Button 
+                                    variant="ghost" 
+                                    size="icon" 
+                                    className="h-7 w-7 text-red-500 hover:text-red-600 hover:bg-red-50"
+                                    data-testid={`void-transaction-${t.id}`}
+                                    disabled={voidingId === t.id}
+                                  >
+                                    {voidingId === t.id ? (
+                                      <RotateCcw className="h-4 w-4 animate-spin" />
+                                    ) : (
+                                      <XCircle className="h-4 w-4" />
+                                    )}
+                                  </Button>
+                                </AlertDialogTrigger>
+                                <AlertDialogContent>
+                                  <AlertDialogHeader>
+                                    <AlertDialogTitle>Chekni bekor qilish</AlertDialogTitle>
+                                    <AlertDialogDescription>
+                                      Bu chekni bekor qilmoqchimisiz? Kitoblar zaxiraga qaytariladi. Bu amalni ortga qaytarib bo'lmaydi.
+                                    </AlertDialogDescription>
+                                  </AlertDialogHeader>
+                                  <AlertDialogFooter>
+                                    <AlertDialogCancel>Yo'q</AlertDialogCancel>
+                                    <AlertDialogAction 
+                                      onClick={() => handleVoidTransaction(t.id)}
+                                      className="bg-red-500 hover:bg-red-600"
+                                    >
+                                      Ha, bekor qilish
+                                    </AlertDialogAction>
+                                  </AlertDialogFooter>
+                                </AlertDialogContent>
+                              </AlertDialog>
+                            )}
+                          </div>
                         </div>
                       ))
                     )}

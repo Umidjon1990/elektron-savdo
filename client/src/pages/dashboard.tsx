@@ -100,27 +100,36 @@ export default function Dashboard() {
 
   const clearCart = () => setCart([]);
 
-  const handleCheckout = () => {
+  const handleCheckout = async () => {
     const total = cart.reduce((acc, item) => acc + item.product.price * item.quantity, 0);
     
-    // Process transaction
-    const transaction = addTransaction(cart, total, "cash"); // Default to cash for now
-    
-    // Update stock
-    cart.forEach(item => {
-      updateStock(item.product.id, -item.quantity);
-    });
+    try {
+      // Process transaction (async)
+      const transaction = await addTransaction(cart, total, "cash");
+      
+      // Update stock
+      cart.forEach(item => {
+        updateStock(item.product.id, -item.quantity);
+      });
 
-    setLastTransaction(transaction);
-    setIsReceiptOpen(true);
-    setIsMobileCartOpen(false);
+      setLastTransaction(transaction);
+      setIsReceiptOpen(true);
+      setIsMobileCartOpen(false);
 
-    toast({
-      title: "To'lov qabul qilindi!",
-      description: `Jami summa: ${total.toLocaleString()} so'm`,
-      className: "bg-green-500 text-white border-none",
-    });
-    setCart([]);
+      toast({
+        title: "To'lov qabul qilindi!",
+        description: `Jami summa: ${total.toLocaleString()} so'm`,
+        className: "bg-green-500 text-white border-none",
+      });
+      setCart([]);
+    } catch (error) {
+      console.error("Checkout error:", error);
+      toast({
+        title: "Xatolik!",
+        description: "To'lovni qayta ishlashda xatolik yuz berdi",
+        variant: "destructive",
+      });
+    }
   };
 
   const handleScan = (code: string) => {

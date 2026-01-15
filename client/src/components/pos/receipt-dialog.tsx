@@ -23,12 +23,14 @@ export function ReceiptDialog({ transaction, isOpen, onClose }: ReceiptDialogPro
         <div className="p-6 flex flex-col items-center text-center bg-white print:shadow-none" id="receipt-area">
           {/* Header */}
           <div className="mb-6 space-y-2">
-            <div className="w-16 h-16 bg-primary rounded-full flex items-center justify-center mx-auto mb-3">
-              <span className="text-white font-bold text-2xl">SB</span>
-            </div>
-            <h2 className="text-xl font-bold uppercase tracking-wide">SmartBook</h2>
-            <p className="text-xs text-muted-foreground">Toshkent sh. Navoiy ko'chasi, 12-uy</p>
-            <p className="text-xs text-muted-foreground">+998 90 123-45-67</p>
+            <img 
+              src="/assets/image_1768471627048.png" 
+              alt="Ixlos Books" 
+              className="w-20 h-20 object-contain mx-auto mb-2"
+            />
+            <h2 className="text-xl font-bold uppercase tracking-wide">Ixlos Books</h2>
+            <p className="text-xs text-muted-foreground">Namangan, Uychi</p>
+            <p className="text-xs text-muted-foreground">+998 93 678 55 52</p>
           </div>
 
           <Separator className="mb-4" />
@@ -40,7 +42,7 @@ export function ReceiptDialog({ transaction, isOpen, onClose }: ReceiptDialogPro
               <p>Sana: {new Date(transaction.date).toLocaleDateString()}</p>
             </div>
             <div className="text-right">
-              <p>Kassir: Admin</p>
+              <p>Kassir: Sotuvchi</p>
               <p>Vaqt: {new Date(transaction.date).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</p>
             </div>
           </div>
@@ -84,13 +86,13 @@ export function ReceiptDialog({ transaction, isOpen, onClose }: ReceiptDialogPro
           {/* Footer & QR */}
           <div className="flex flex-col items-center space-y-3">
             <img 
-              src={`https://api.qrserver.com/v1/create-qr-code/?size=100x100&data=https://t.me/smartbook_bot&color=000000`} 
+              src={`https://api.qrserver.com/v1/create-qr-code/?size=100x100&data=https://t.me/ixlosbooksuz&color=000000`} 
               alt="Telegram QR" 
               className="w-24 h-24 mix-blend-multiply"
             />
             <p className="text-[10px] text-muted-foreground text-center max-w-[200px]">
               Xaridingiz uchun rahmat! <br/>
-              Telegram kanalimizga a'zo bo'ling
+              Telegram: @ixlosbooksuz
             </p>
           </div>
         </div>

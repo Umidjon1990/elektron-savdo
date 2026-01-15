@@ -27,15 +27,9 @@ function ReceiptContent({ transaction }: { transaction: Transaction }) {
 
       <div className="border-t-2 border-dashed border-black my-3" />
 
-      <div className="flex justify-between text-xs text-black font-semibold mb-3">
-        <div className="text-left">
-          <p>Chek №: {transaction.id.slice(0, 8)}</p>
-          <p>Sana: {new Date(transaction.date).toLocaleDateString()}</p>
-        </div>
-        <div className="text-right">
-          <p>Kassir: Sotuvchi</p>
-          <p>Vaqt: {new Date(transaction.date).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</p>
-        </div>
+      <div className="text-xs text-black font-semibold mb-3 text-center">
+        <p>Chek №: {transaction.id.slice(0, 8)}</p>
+        <p>Sana: {new Date(transaction.date).toLocaleDateString()}</p>
       </div>
 
       <div className="space-y-2 mb-3">
@@ -137,16 +131,10 @@ export function ReceiptDialog({ transaction, isOpen, onClose }: ReceiptDialogPro
           <p style="font-size:10px;color:#000;margin:0;font-weight:600;">+998 93 678 55 52</p>
         </div>
         <div style="border-top:1px dashed #000;margin:6px 0;"></div>
-        <table style="width:100%;font-size:9px;color:#000;margin-bottom:6px;font-weight:600;">
-          <tr>
-            <td style="text-align:left;">Chek: ${transaction.id.slice(0, 8)}</td>
-            <td style="text-align:right;">Kassir: Admin</td>
-          </tr>
-          <tr>
-            <td style="text-align:left;">Sana: ${new Date(transaction.date).toLocaleDateString()}</td>
-            <td style="text-align:right;">Vaqt: ${new Date(transaction.date).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</td>
-          </tr>
-        </table>
+        <div style="font-size:10px;color:#000;margin-bottom:6px;font-weight:600;text-align:center;">
+          <p style="margin:0;">Chek: ${transaction.id.slice(0, 8)}</p>
+          <p style="margin:2px 0 0;">Sana: ${new Date(transaction.date).toLocaleDateString()}</p>
+        </div>
         <div style="border-top:1px dashed #000;margin:6px 0;"></div>
         <div style="margin-bottom:6px;">
           ${transaction.items.map(item => `

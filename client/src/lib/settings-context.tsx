@@ -7,6 +7,8 @@ interface Settings {
   storeName: string;
   storePhone: string;
   storeAddress: string;
+  telegramUsername: string;
+  receiptFooter: string;
 }
 
 interface SettingsContextType {
@@ -20,7 +22,9 @@ const defaultSettings: Settings = {
   notifications: true,
   storeName: "Ixlos Books",
   storePhone: "+998 93 678 55 52",
-  storeAddress: "Namangan, Uychi"
+  storeAddress: "Namangan, Uychi",
+  telegramUsername: "ixlosbooksuz",
+  receiptFooter: "Xaridingiz uchun rahmat!"
 };
 
 const SettingsContext = createContext<SettingsContextType | undefined>(undefined);

@@ -2,8 +2,8 @@ import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { type Transaction } from "@/lib/transaction-context";
 import { Printer } from "lucide-react";
-import { Separator } from "@/components/ui/separator";
 import { useEffect } from "react";
+import { useSettings } from "@/lib/settings-context";
 
 interface ReceiptDialogProps {
   transaction: Transaction | null;
@@ -11,18 +11,18 @@ interface ReceiptDialogProps {
   onClose: () => void;
 }
 
-function ReceiptContent({ transaction }: { transaction: Transaction }) {
+function ReceiptContent({ transaction, settings }: { transaction: Transaction; settings: { storeName: string; storeAddress: string; storePhone: string; telegramUsername: string; receiptFooter: string } }) {
   return (
     <>
       <div className="mb-4 space-y-1 text-center">
         <img 
           src="/assets/image_1768471627048.png" 
-          alt="Ixlos Books" 
+          alt={settings.storeName} 
           className="w-14 h-14 object-contain mx-auto mb-2"
         />
-        <h2 className="text-lg font-black uppercase tracking-wide text-black">IXLOS BOOKS</h2>
-        <p className="text-xs text-black font-semibold">Namangan, Uychi</p>
-        <p className="text-xs text-black font-semibold">+998 93 678 55 52</p>
+        <h2 className="text-lg font-black uppercase tracking-wide text-black">{settings.storeName}</h2>
+        <p className="text-xs text-black font-semibold">{settings.storeAddress}</p>
+        <p className="text-xs text-black font-semibold">{settings.storePhone}</p>
       </div>
 
       <div className="border-t-2 border-dashed border-black my-3" />
@@ -66,21 +66,23 @@ function ReceiptContent({ transaction }: { transaction: Transaction }) {
 
       <div className="flex flex-col items-center my-4">
         <img 
-          src={`https://api.qrserver.com/v1/create-qr-code/?size=100x100&data=https://t.me/ixlosbooksuz&color=000000`} 
+          src={`https://api.qrserver.com/v1/create-qr-code/?size=100x100&data=https://t.me/${settings.telegramUsername}&color=000000`} 
           alt="Telegram QR" 
           className="w-20 h-20"
         />
       </div>
       
       <div className="text-center">
-        <p className="text-xs text-black font-bold">Xaridingiz uchun rahmat!</p>
-        <p className="text-xs text-black font-semibold">Telegram: @ixlosbooksuz</p>
+        <p className="text-xs text-black font-bold">{settings.receiptFooter}</p>
+        <p className="text-xs text-black font-semibold">Telegram: @{settings.telegramUsername}</p>
       </div>
     </>
   );
 }
 
 export function ReceiptDialog({ transaction, isOpen, onClose }: ReceiptDialogProps) {
+  const { settings } = useSettings();
+  
   if (!transaction) return null;
 
   const handlePrint = async () => {
@@ -110,8 +112,8 @@ export function ReceiptDialog({ transaction, isOpen, onClose }: ReceiptDialogPro
     logoImg.src = '/assets/image_1768471627048.png';
     
     const qrImg = new Image();
-    qrImg.src = 'https://api.qrserver.com/v1/create-qr-code/?size=100x100&data=https://t.me/ixlosbooksuz&color=000000';
-  }, []);
+    qrImg.src = `https://api.qrserver.com/v1/create-qr-code/?size=100x100&data=https://t.me/${settings.telegramUsername}&color=000000`;
+  }, [settings.telegramUsername]);
 
   useEffect(() => {
     let printContainer = document.getElementById('receipt-print-container');
@@ -126,9 +128,9 @@ export function ReceiptDialog({ transaction, isOpen, onClose }: ReceiptDialogPro
       printContainer.innerHTML = `
         <div style="text-align:center;margin-bottom:8px;">
           <img src="/assets/image_1768471627048.png" alt="Logo" style="width:45px;height:45px;display:block;margin:0 auto 4px;">
-          <h2 style="font-size:14px;font-weight:900;margin:0;color:#000;">IXLOS BOOKS</h2>
-          <p style="font-size:10px;color:#000;margin:2px 0;font-weight:600;">Namangan, Uychi</p>
-          <p style="font-size:10px;color:#000;margin:0;font-weight:600;">+998 93 678 55 52</p>
+          <h2 style="font-size:14px;font-weight:900;margin:0;color:#000;">${settings.storeName.toUpperCase()}</h2>
+          <p style="font-size:10px;color:#000;margin:2px 0;font-weight:600;">${settings.storeAddress}</p>
+          <p style="font-size:10px;color:#000;margin:0;font-weight:600;">${settings.storePhone}</p>
         </div>
         <div style="border-top:1px dashed #000;margin:6px 0;"></div>
         <div style="font-size:10px;color:#000;margin-bottom:6px;font-weight:600;text-align:center;">
@@ -162,21 +164,21 @@ export function ReceiptDialog({ transaction, isOpen, onClose }: ReceiptDialogPro
           </tr>
         </table>
         <div style="text-align:center;margin:10px 0;">
-          <img src="https://api.qrserver.com/v1/create-qr-code/?size=100x100&data=https://t.me/ixlosbooksuz&color=000000" alt="QR" style="width:60px;height:60px;display:block;margin:0 auto;">
+          <img src="https://api.qrserver.com/v1/create-qr-code/?size=100x100&data=https://t.me/${settings.telegramUsername}&color=000000" alt="QR" style="width:60px;height:60px;display:block;margin:0 auto;">
         </div>
         <div style="text-align:center;">
-          <p style="font-size:10px;color:#000;margin:0;font-weight:700;">Xaridingiz uchun rahmat!</p>
-          <p style="font-size:9px;color:#000;margin:2px 0 0;font-weight:600;">Telegram: @ixlosbooksuz</p>
+          <p style="font-size:10px;color:#000;margin:0;font-weight:700;">${settings.receiptFooter}</p>
+          <p style="font-size:9px;color:#000;margin:2px 0 0;font-weight:600;">Telegram: @${settings.telegramUsername}</p>
         </div>
       `;
     }
-  }, [isOpen, transaction]);
+  }, [isOpen, transaction, settings]);
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="sm:max-w-[380px] p-0 overflow-hidden bg-white gap-0 no-print">
         <div className="p-6 flex flex-col items-center text-center bg-white" id="receipt-area">
-          <ReceiptContent transaction={transaction} />
+          <ReceiptContent transaction={transaction} settings={settings} />
         </div>
 
         <div className="p-4 bg-gray-50 border-t flex gap-2 no-print">

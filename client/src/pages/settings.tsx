@@ -8,7 +8,7 @@ import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
 import { useSettings } from "@/lib/settings-context";
-import { Store, Bell, Printer, Database, Shield, Palette } from "lucide-react";
+import { Store, Bell, Printer, Database, Shield, Palette, Receipt } from "lucide-react";
 
 export default function SettingsPage() {
   const { toast } = useToast();
@@ -129,6 +129,69 @@ export default function SettingsPage() {
                     onCheckedChange={(checked) => updateSettings({ autoPrint: checked })}
                     data-testid="switch-auto-print"
                   />
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Receipt className="h-5 w-5" />
+                  Chek ma'lumotlari
+                </CardTitle>
+                <CardDescription>Chekda ko'rinadigan ma'lumotlar</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid gap-4 md:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label htmlFor="receiptStoreName">Do'kon nomi</Label>
+                    <Input 
+                      id="receiptStoreName" 
+                      value={settings.storeName} 
+                      onChange={(e) => updateSettings({ storeName: e.target.value })}
+                      data-testid="input-receipt-store-name"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="receiptPhone">Telefon</Label>
+                    <Input 
+                      id="receiptPhone" 
+                      value={settings.storePhone} 
+                      onChange={(e) => updateSettings({ storePhone: e.target.value })}
+                      data-testid="input-receipt-phone"
+                    />
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="receiptAddress">Manzil</Label>
+                  <Input 
+                    id="receiptAddress" 
+                    value={settings.storeAddress} 
+                    onChange={(e) => updateSettings({ storeAddress: e.target.value })}
+                    data-testid="input-receipt-address"
+                  />
+                </div>
+                <div className="grid gap-4 md:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label htmlFor="telegramUsername">Telegram username</Label>
+                    <Input 
+                      id="telegramUsername" 
+                      value={settings.telegramUsername} 
+                      onChange={(e) => updateSettings({ telegramUsername: e.target.value })}
+                      placeholder="ixlosbooksuz"
+                      data-testid="input-telegram-username"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="receiptFooter">Chek pastki yozuvi</Label>
+                    <Input 
+                      id="receiptFooter" 
+                      value={settings.receiptFooter} 
+                      onChange={(e) => updateSettings({ receiptFooter: e.target.value })}
+                      placeholder="Xaridingiz uchun rahmat!"
+                      data-testid="input-receipt-footer"
+                    />
+                  </div>
                 </div>
               </CardContent>
             </Card>

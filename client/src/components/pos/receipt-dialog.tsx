@@ -89,9 +89,35 @@ function ReceiptContent({ transaction }: { transaction: Transaction }) {
 export function ReceiptDialog({ transaction, isOpen, onClose }: ReceiptDialogProps) {
   if (!transaction) return null;
 
-  const handlePrint = () => {
+  const handlePrint = async () => {
+    const printContainer = document.getElementById('receipt-print-container');
+    if (!printContainer) {
+      window.print();
+      return;
+    }
+    
+    const images = printContainer.querySelectorAll('img');
+    const imagePromises = Array.from(images).map(img => {
+      if (img.complete) return Promise.resolve();
+      return new Promise<void>((resolve) => {
+        img.onload = () => resolve();
+        img.onerror = () => resolve();
+        setTimeout(resolve, 2000);
+      });
+    });
+    
+    await Promise.all(imagePromises);
+    await new Promise(resolve => setTimeout(resolve, 300));
     window.print();
   };
+
+  useEffect(() => {
+    const logoImg = new Image();
+    logoImg.src = '/assets/image_1768471627048.png';
+    
+    const qrImg = new Image();
+    qrImg.src = 'https://api.qrserver.com/v1/create-qr-code/?size=100x100&data=https://t.me/ixlosbooksuz&color=000000';
+  }, []);
 
   useEffect(() => {
     let printContainer = document.getElementById('receipt-print-container');

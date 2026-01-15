@@ -1,0 +1,111 @@
+d=PutObject","objectKey":"products/1768468594245_vvz3wa_IMG_6620.jpg","publicUrl":"/r2/products/1768468594245_vvz3wa_IMG_6620.jpg"}
+    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+    at async /app/dist/index.cjs:70:31398
+Error creating product: error: relation "products" does not exist
+    at /app/dist/index.cjs:64:13326
+    at async rf.createProduct (/app/dist/index.cjs:70:100942)
+    at async /app/dist/index.cjs:70:105236 {
+  length: 107,
+  severity: 'ERROR',
+  code: '42P01',
+  detail: undefined,
+  hint: undefined,
+  position: '13',
+  internalPosition: undefined,
+  internalQuery: undefined,
+  where: undefined,
+  schema: undefined,
+  table: undefined,
+  column: undefined,
+  dataType: undefined,
+  constraint: undefined,
+  file: 'parse_relation.c',
+  line: '1449',
+  routine: 'parserOpenTable'
+}
+9:16:40 AM [express] POST /api/products 400 in 32ms :: {"error":"Invalid product data"}
+Error fetching categories: error: relation "categories" does not exist
+    at /app/dist/index.cjs:64:13326
+    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+    at async /app/dist/index.cjs:70:31398
+    at async rf.getAllCategories (/app/dist/index.cjs:70:101476)
+    at async /app/dist/index.cjs:70:106729 {
+  length: 109,
+  severity: 'ERROR',
+  code: '42P01',
+  internalQuery: undefined,
+  detail: undefined,
+  hint: undefined,
+  position: '43',
+  where: undefined,
+  internalPosition: undefined,
+  schema: undefined,
+  table: undefined,
+  column: undefined,
+  dataType: undefined,
+  constraint: undefined,
+  file: 'parse_relation.c',
+  line: '1449',
+  routine: 'parserOpenTable'
+}
+9:17:10 AM [express] GET /api/categories 500 in 29ms :: {"error":"Failed to fetch categories"}
+    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+    at async /app/dist/index.cjs:70:31398
+    at async rf.createProduct (/app/dist/index.cjs:70:100942)
+    at async /app/dist/index.cjs:70:105236 {
+  length: 107,
+  severity: 'ERROR',
+  code: '42P01',
+Error creating product: error: relation "products" does not exist
+    at /app/dist/index.cjs:64:13326
+  detail: undefined,
+  hint: undefined,
+  position: '13',
+  internalPosition: undefined,
+  internalQuery: undefined,
+  where: undefined,
+  schema: undefined,
+  table: undefined,
+  column: undefined,
+  dataType: undefined,
+  constraint: undefined,
+  file: 'parse_relation.c',
+  line: '1449',
+  routine: 'parserOpenTable'
+}
+9:18:37 AM [express] POST /api/products 400 in 32ms :: {"error":"Invalid product data"}
+  constraint: undefined,
+  file: 'parse_relation.c',
+  line: '1449',
+  routine: 'parserOpenTable'
+Error creating product: error: relation "products" does not exist
+}
+    at /app/dist/index.cjs:64:13326
+9:19:30 AM [express] POST /api/products 400 in 32ms :: {"error":"Invalid product data"}
+    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+    at async /app/dist/index.cjs:70:31398
+    at async rf.createProduct (/app/dist/index.cjs:70:100942)
+    at async /app/dist/index.cjs:70:105236 {
+  length: 107,
+  severity: 'ERROR',
+  code: '42P01',
+  detail: undefined,
+  hint: undefined,
+  position: '13',
+  internalPosition: undefined,
+  internalQuery: undefined,
+  where: undefined,
+  schema: undefined,
+  table: undefined,
+  column: undefined,
+  dataType: undefined,
+  table: undefined,
+  column: undefined,
+  dataType: undefined,
+  constraint: undefined,
+  file: 'parse_relation.c',
+  line: '1449',
+  routine: 'parserOpenTable'
+}
+Error creating product: error: relation "products" does not exist
+9:21:47 AM [express] POST /api/products 400 in 33ms :: {"error":"Invalid product data"}

@@ -5,6 +5,7 @@ import { ProductCard } from "@/components/pos/product-card";
 import { CartSidebar } from "@/components/pos/cart-sidebar";
 import { useProducts } from "@/lib/product-context";
 import { useTransactions } from "@/lib/transaction-context";
+import { useSettings } from "@/lib/settings-context";
 import type { Product } from "@/data/mock-products";
 import type { Category } from "@shared/schema";
 import { Input } from "@/components/ui/input";
@@ -35,6 +36,7 @@ const beepSound = typeof window !== 'undefined' ? new Audio("https://codeskulpto
 export default function Dashboard() {
   const { products, updateStock, isOffline, refreshProducts } = useProducts();
   const { addTransaction, getStats, pendingCount, syncTransactions } = useTransactions();
+  const { settings } = useSettings();
   const stats = getStats();
   
   const { data: categories = [] } = useQuery<Category[]>({
@@ -115,6 +117,12 @@ export default function Dashboard() {
       setLastTransaction(transaction);
       setIsReceiptOpen(true);
       setIsMobileCartOpen(false);
+      
+      if (settings.autoPrint) {
+        setTimeout(() => {
+          window.print();
+        }, 500);
+      }
 
       toast({
         title: "To'lov qabul qilindi!",

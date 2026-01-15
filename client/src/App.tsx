@@ -9,6 +9,7 @@ import { TransactionProvider } from "@/lib/transaction-context";
 import { CartProvider } from "@/lib/cart-context";
 import { OrderProvider } from "@/lib/order-context";
 import { AuthProvider, useAuth } from "@/lib/auth-context";
+import { SettingsProvider } from "@/lib/settings-context";
 import { lazy, Suspense, useEffect } from "react";
 
 const importDashboard = () => import("@/pages/dashboard");
@@ -109,21 +110,23 @@ function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
-        <ProductProvider>
-          <TransactionProvider>
-            <OrderProvider>
-              <CartProvider>
-                <TooltipProvider>
-                  <Suspense fallback={<PageLoader />}>
-                    <Router />
-                  </Suspense>
-                  <Toaster />
-                  <SonnerToaster position="top-center" richColors />
-                </TooltipProvider>
-              </CartProvider>
-            </OrderProvider>
-          </TransactionProvider>
-        </ProductProvider>
+        <SettingsProvider>
+          <ProductProvider>
+            <TransactionProvider>
+              <OrderProvider>
+                <CartProvider>
+                  <TooltipProvider>
+                    <Suspense fallback={<PageLoader />}>
+                      <Router />
+                    </Suspense>
+                    <Toaster />
+                    <SonnerToaster position="top-center" richColors />
+                  </TooltipProvider>
+                </CartProvider>
+              </OrderProvider>
+            </TransactionProvider>
+          </ProductProvider>
+        </SettingsProvider>
       </AuthProvider>
     </QueryClientProvider>
   );

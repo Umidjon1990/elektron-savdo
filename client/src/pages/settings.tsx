@@ -7,16 +7,12 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
+import { useSettings } from "@/lib/settings-context";
 import { Store, Bell, Printer, Database, Shield, Palette } from "lucide-react";
 
 export default function SettingsPage() {
   const { toast } = useToast();
-  const [storeName, setStoreName] = useState("Kitoblar Olami");
-  const [storePhone, setStorePhone] = useState("+998 90 123 45 67");
-  const [storeAddress, setStoreAddress] = useState("Toshkent sh., Chilonzor tumani");
-  const [notifications, setNotifications] = useState(true);
-  const [soundEnabled, setSoundEnabled] = useState(true);
-  const [autoPrint, setAutoPrint] = useState(false);
+  const { settings, updateSettings } = useSettings();
   const [darkMode, setDarkMode] = useState(false);
 
   const handleSave = () => {
@@ -52,8 +48,8 @@ export default function SettingsPage() {
                     <Label htmlFor="storeName">Do'kon nomi</Label>
                     <Input 
                       id="storeName" 
-                      value={storeName} 
-                      onChange={(e) => setStoreName(e.target.value)}
+                      value={settings.storeName} 
+                      onChange={(e) => updateSettings({ storeName: e.target.value })}
                       data-testid="input-store-name"
                     />
                   </div>
@@ -61,8 +57,8 @@ export default function SettingsPage() {
                     <Label htmlFor="storePhone">Telefon raqam</Label>
                     <Input 
                       id="storePhone" 
-                      value={storePhone} 
-                      onChange={(e) => setStorePhone(e.target.value)}
+                      value={settings.storePhone} 
+                      onChange={(e) => updateSettings({ storePhone: e.target.value })}
                       data-testid="input-store-phone"
                     />
                   </div>
@@ -71,8 +67,8 @@ export default function SettingsPage() {
                   <Label htmlFor="storeAddress">Manzil</Label>
                   <Input 
                     id="storeAddress" 
-                    value={storeAddress} 
-                    onChange={(e) => setStoreAddress(e.target.value)}
+                    value={settings.storeAddress} 
+                    onChange={(e) => updateSettings({ storeAddress: e.target.value })}
                     data-testid="input-store-address"
                   />
                 </div>
@@ -94,8 +90,8 @@ export default function SettingsPage() {
                     <p className="text-sm text-slate-500">Yangi buyurtmalar haqida xabar olish</p>
                   </div>
                   <Switch 
-                    checked={notifications} 
-                    onCheckedChange={setNotifications}
+                    checked={settings.notifications} 
+                    onCheckedChange={(checked) => updateSettings({ notifications: checked })}
                     data-testid="switch-notifications"
                   />
                 </div>
@@ -106,8 +102,8 @@ export default function SettingsPage() {
                     <p className="text-sm text-slate-500">Yangi sotuv uchun ovozli signal</p>
                   </div>
                   <Switch 
-                    checked={soundEnabled} 
-                    onCheckedChange={setSoundEnabled}
+                    checked={settings.soundEnabled} 
+                    onCheckedChange={(checked) => updateSettings({ soundEnabled: checked })}
                     data-testid="switch-sound"
                   />
                 </div>
@@ -129,8 +125,8 @@ export default function SettingsPage() {
                     <p className="text-sm text-slate-500">Har bir sotuvdan keyin chekni avtomatik chop etish</p>
                   </div>
                   <Switch 
-                    checked={autoPrint} 
-                    onCheckedChange={setAutoPrint}
+                    checked={settings.autoPrint} 
+                    onCheckedChange={(checked) => updateSettings({ autoPrint: checked })}
                     data-testid="switch-auto-print"
                   />
                 </div>

@@ -59,6 +59,22 @@ export async function runMigrations() {
           ALTER TABLE transactions ADD COLUMN status TEXT NOT NULL DEFAULT 'completed';
         END IF;
       END $$;
+      
+      -- Add cost_price column to products if it doesn't exist
+      DO $$ 
+      BEGIN 
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='products' AND column_name='cost_price') THEN
+          ALTER TABLE products ADD COLUMN cost_price INTEGER NOT NULL DEFAULT 0;
+        END IF;
+      END $$;
+      
+      -- Add total_profit column to transactions if it doesn't exist
+      DO $$ 
+      BEGIN 
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='transactions' AND column_name='total_profit') THEN
+          ALTER TABLE transactions ADD COLUMN total_profit INTEGER NOT NULL DEFAULT 0;
+        END IF;
+      END $$;
     `);
     
     console.log("Database migrations completed successfully!");

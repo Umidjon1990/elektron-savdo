@@ -93,7 +93,10 @@ export function ProductProvider({ children }: { children: ReactNode }) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(productWithDefaults),
       });
-      if (!res.ok) throw new Error("Failed to add product");
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData.error || "Failed to add product");
+      }
       const newProduct = await res.json();
       await addProductToCache({ ...newProduct, costPrice: newProduct.costPrice ?? 0 });
       return newProduct;

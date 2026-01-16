@@ -67,9 +67,15 @@ export async function registerRoutes(
       const validatedData = insertProductSchema.parse(req.body);
       const product = await storage.createProduct(validatedData);
       res.status(201).json(product);
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error creating product:", error);
-      res.status(400).json({ error: "Invalid product data" });
+      if (error?.code === '23505') {
+        return res.status(400).json({ error: "Bu shtrix kod allaqachon mavjud" });
+      }
+      if (error?.name === 'ZodError') {
+        return res.status(400).json({ error: "Ma'lumotlar to'liq emas", details: error.errors });
+      }
+      res.status(500).json({ error: "Xatolik yuz berdi" });
     }
   });
 

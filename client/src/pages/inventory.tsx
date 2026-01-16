@@ -261,11 +261,11 @@ export default function Inventory() {
         });
       }
       setIsAddDialogOpen(false);
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error saving product:", error);
       toast({
         title: "Xatolik yuz berdi",
-        description: "Ma'lumotni saqlashda xatolik. Qaytadan urinib ko'ring.",
+        description: error?.message || "Ma'lumotni saqlashda xatolik. Qaytadan urinib ko'ring.",
         variant: "destructive",
       });
     }

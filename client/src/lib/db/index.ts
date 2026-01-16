@@ -5,6 +5,7 @@ export interface CachedProduct {
   name: string;
   author: string;
   price: number;
+  costPrice: number;
   stock: number;
   category: string;
   barcode: string;
@@ -24,8 +25,10 @@ export interface CachedTransaction {
   items: Array<{
     product: CachedProduct;
     quantity: number;
+    discount?: number;
   }>;
   totalAmount: number;
+  totalProfit: number;
   paymentMethod: 'cash' | 'card';
   synced: boolean;
   status: 'completed' | 'voided' | 'refunded';

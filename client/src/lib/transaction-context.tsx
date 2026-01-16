@@ -8,6 +8,7 @@ export interface Transaction {
   date: string;
   items: CartItem[];
   totalAmount: number;
+  totalProfit: number;
   paymentMethod: "cash" | "card";
   synced?: boolean;
   status: "completed" | "voided" | "refunded";
@@ -24,6 +25,8 @@ interface TransactionContextType {
     todayCount: number;
     monthTotal: number;
     totalItemsSold: number;
+    todayProfit: number;
+    monthProfit: number;
   };
   syncTransactions: () => Promise<void>;
 }
@@ -44,6 +47,7 @@ export function TransactionProvider({ children }: { children: ReactNode }) {
         date: t.date,
         items: t.items,
         totalAmount: t.totalAmount,
+        totalProfit: t.totalProfit || 0,
         paymentMethod: t.paymentMethod,
         synced: t.synced,
         status: t.status || "completed"
@@ -78,14 +82,23 @@ export function TransactionProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const addTransaction = async (items: CartItem[], total: number, method: "cash" | "card"): Promise<Transaction> => {
+    const profit = items.reduce((acc, item) => {
+      const costPrice = item.product.costPrice || 0;
+      const discount = item.discount || 0;
+      const itemProfit = ((item.product.price * item.quantity) - discount) - (costPrice * item.quantity);
+      return acc + itemProfit;
+    }, 0);
+    
     const newTransaction: CachedTransaction = {
       id: crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).substr(2, 9),
       date: new Date().toISOString(),
       items: items.map(item => ({
         product: item.product,
-        quantity: item.quantity
+        quantity: item.quantity,
+        discount: item.discount
       })),
       totalAmount: total,
+      totalProfit: profit,
       paymentMethod: method,
       synced: false,
       status: "completed"
@@ -109,6 +122,7 @@ export function TransactionProvider({ children }: { children: ReactNode }) {
       date: newTransaction.date,
       items: items,
       totalAmount: total,
+      totalProfit: profit,
       paymentMethod: method,
       synced: newTransaction.synced,
       status: "completed" as const
@@ -164,7 +178,9 @@ export function TransactionProvider({ children }: { children: ReactNode }) {
       todayTotal: todayTransactions.reduce((acc, t) => acc + t.totalAmount, 0),
       todayCount: todayTransactions.length,
       monthTotal: monthTransactions.reduce((acc, t) => acc + t.totalAmount, 0),
-      totalItemsSold: activeTransactions.reduce((acc, t) => acc + t.items.reduce((sum, item) => sum + item.quantity, 0), 0)
+      totalItemsSold: todayTransactions.reduce((acc, t) => acc + t.items.reduce((sum, item) => sum + item.quantity, 0), 0),
+      todayProfit: todayTransactions.reduce((acc, t) => acc + (t.totalProfit || 0), 0),
+      monthProfit: monthTransactions.reduce((acc, t) => acc + (t.totalProfit || 0), 0)
     };
   };
 

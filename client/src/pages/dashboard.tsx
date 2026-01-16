@@ -348,11 +348,16 @@ export default function Dashboard() {
         <div className="flex-1 flex min-h-0 bg-gray-50/50">
           <div className="flex-1 flex flex-col p-4 md:p-6 min-w-0">
             {/* KPI Stats Row */}
-            <div className="grid grid-cols-4 gap-2 md:gap-3 mb-4">
+            <div className="grid grid-cols-5 gap-2 md:gap-3 mb-4">
               <div className="bg-gradient-to-br from-green-500 to-emerald-600 rounded-xl p-2.5 md:p-4 shadow-sm text-white text-center">
                 <DollarSign className="w-5 h-5 md:w-6 md:h-6 mx-auto mb-1 opacity-80" />
                 <p className="text-[9px] md:text-xs opacity-80 font-medium">Bugun</p>
                 <p className="text-xs md:text-lg font-bold">{(stats.todayTotal / 1000).toFixed(0)}k</p>
+              </div>
+              <div className="bg-gradient-to-br from-emerald-600 to-teal-600 rounded-xl p-2.5 md:p-4 shadow-sm text-white text-center">
+                <TrendingUp className="w-5 h-5 md:w-6 md:h-6 mx-auto mb-1 opacity-80" />
+                <p className="text-[9px] md:text-xs opacity-80 font-medium">Daromad</p>
+                <p className="text-xs md:text-lg font-bold">{(stats.todayProfit / 1000).toFixed(0)}k</p>
               </div>
               <div 
                 className="bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl p-2.5 md:p-4 shadow-sm text-white text-center cursor-pointer hover:opacity-90 transition-opacity"

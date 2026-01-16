@@ -10,6 +10,7 @@ export interface Product {
   name: string;
   author: string;
   price: number;
+  costPrice: number;
   stock: number;
   category: string;
   barcode: string;
@@ -22,6 +23,7 @@ export const MOCK_PRODUCTS: Product[] = [
     name: "Atomic Habits",
     author: "James Clear",
     price: 185000,
+    costPrice: 120000,
     stock: 45,
     category: "Biznes va Rivojlanish",
     barcode: "9781847941831",
@@ -32,6 +34,7 @@ export const MOCK_PRODUCTS: Product[] = [
     name: "Garri Potter va Falsafa toshi",
     author: "J.K. Rowling",
     price: 120000,
+    costPrice: 75000,
     stock: 24,
     category: "Bolalar adabiyoti",
     barcode: "9780747532743",
@@ -42,6 +45,7 @@ export const MOCK_PRODUCTS: Product[] = [
     name: "Zero to One",
     author: "Peter Thiel",
     price: 150000,
+    costPrice: 95000,
     stock: 30,
     category: "Biznes va Rivojlanish",
     barcode: "9780804139298",
@@ -52,6 +56,7 @@ export const MOCK_PRODUCTS: Product[] = [
     name: "O'tkan kunlar",
     author: "Abdulla Qodiriy",
     price: 65000,
+    costPrice: 35000,
     stock: 120,
     category: "O'zbek adabiyoti",
     barcode: "9789943234567",
@@ -62,6 +67,7 @@ export const MOCK_PRODUCTS: Product[] = [
     name: "1984",
     author: "George Orwell",
     price: 95000,
+    costPrice: 55000,
     stock: 15,
     category: "Jahon adabiyoti",
     barcode: "9780451524935",
@@ -72,6 +78,7 @@ export const MOCK_PRODUCTS: Product[] = [
     name: "Rich Dad Poor Dad",
     author: "Robert Kiyosaki",
     price: 140000,
+    costPrice: 85000,
     stock: 50,
     category: "Biznes va Rivojlanish",
     barcode: "9781612680194",
@@ -82,6 +89,7 @@ export const MOCK_PRODUCTS: Product[] = [
     name: "Sariq devni minib",
     author: "Xudoyberdi To'xtaboyev",
     price: 45000,
+    costPrice: 25000,
     stock: 40,
     category: "Bolalar adabiyoti",
     barcode: "9789943555555",
@@ -92,6 +100,7 @@ export const MOCK_PRODUCTS: Product[] = [
     name: "Alximik",
     author: "Paulo Coelho",
     price: 85000,
+    costPrice: 50000,
     stock: 60,
     category: "Jahon adabiyoti",
     barcode: "9780062315007",
@@ -102,6 +111,7 @@ export const MOCK_PRODUCTS: Product[] = [
     name: "Steve Jobs",
     author: "Walter Isaacson",
     price: 210000,
+    costPrice: 140000,
     stock: 10,
     category: "Biografiya",
     barcode: "9781451648539",
@@ -112,6 +122,7 @@ export const MOCK_PRODUCTS: Product[] = [
     name: "Boburnoma",
     author: "Zahiriddin Muhammad Bobur",
     price: 180000,
+    costPrice: 100000,
     stock: 5,
     category: "O'zbek adabiyoti",
     barcode: "9789943999999",
@@ -122,6 +133,7 @@ export const MOCK_PRODUCTS: Product[] = [
     name: "Bosqichli arab tili B1",
     author: "Abdulloh ibn Muhammad",
     price: 75000,
+    costPrice: 45000,
     stock: 100,
     category: "Til o'rganish",
     barcode: "9789943112233",

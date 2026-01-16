@@ -66,6 +66,7 @@ export default function Inventory() {
     name: "",
     author: "",
     price: "",
+    costPrice: "",
     stock: "",
     category: "",
     barcode: "",
@@ -98,7 +99,7 @@ export default function Inventory() {
     if (!isAddDialogOpen) {
       setStep(1);
       setEditingId(null);
-      setNewProduct({ name: "", author: "", price: "", stock: "", category: "", barcode: "", image: "" });
+      setNewProduct({ name: "", author: "", price: "", costPrice: "", stock: "", category: "", barcode: "", image: "" });
     }
   }, [isAddDialogOpen]);
   
@@ -108,6 +109,7 @@ export default function Inventory() {
       name: product.name,
       author: product.author,
       price: product.price.toString(),
+      costPrice: (product.costPrice || 0).toString(),
       stock: product.stock.toString(),
       category: product.category,
       barcode: product.barcode,
@@ -219,6 +221,7 @@ export default function Inventory() {
           name: newProduct.name,
           author: newProduct.author,
           price: Number(newProduct.price),
+          costPrice: Number(newProduct.costPrice) || 0,
           stock: Number(newProduct.stock),
           category: newProduct.category || "Jahon adabiyoti",
           barcode: newProduct.barcode.trim(),
@@ -234,6 +237,7 @@ export default function Inventory() {
           name: newProduct.name,
           author: newProduct.author,
           price: Number(newProduct.price),
+          costPrice: Number(newProduct.costPrice) || 0,
           stock: Number(newProduct.stock),
           category: newProduct.category || "Jahon adabiyoti",
           barcode: newProduct.barcode.trim() || Math.random().toString().slice(2, 14),
@@ -474,9 +478,21 @@ export default function Inventory() {
                           </div>
                         </div>
 
-                        <div className="grid grid-cols-2 gap-4 bg-gray-50 p-4 rounded-lg">
+                        <div className="grid grid-cols-3 gap-4 bg-gray-50 p-4 rounded-lg">
                           <div className="space-y-2">
-                             <Label htmlFor="price">Narxi (so'm)</Label>
+                             <Label htmlFor="costPrice">Tan narxi (so'm)</Label>
+                            <Input 
+                              id="costPrice" 
+                              type="number" 
+                              required
+                              placeholder="Kelish narxi"
+                              value={newProduct.costPrice}
+                              onChange={(e) => setNewProduct({...newProduct, costPrice: e.target.value})}
+                              className="bg-white"
+                            />
+                          </div>
+                          <div className="space-y-2">
+                             <Label htmlFor="price">Sotish narxi (so'm)</Label>
                             <Input 
                               id="price" 
                               type="number" 

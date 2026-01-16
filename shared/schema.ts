@@ -14,6 +14,7 @@ export const products = pgTable("products", {
   name: text("name").notNull(),
   author: text("author").notNull(),
   price: integer("price").notNull(),
+  costPrice: integer("cost_price").notNull().default(0),
   stock: integer("stock").notNull(),
   category: text("category").notNull(),
   barcode: text("barcode").notNull().unique(),
@@ -44,6 +45,7 @@ export const transactions = pgTable("transactions", {
   date: timestamp("date").notNull(),
   items: json("items").notNull(),
   totalAmount: integer("total_amount").notNull(),
+  totalProfit: integer("total_profit").notNull().default(0),
   paymentMethod: text("payment_method").notNull(),
   status: text("status").notNull().default("completed"),
 });

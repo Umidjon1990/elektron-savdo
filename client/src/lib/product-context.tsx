@@ -8,6 +8,7 @@ interface Product {
   name: string;
   author: string;
   price: number;
+  costPrice: number;
   stock: number;
   category: string;
   barcode: string;
@@ -59,7 +60,8 @@ export function ProductProvider({ children }: { children: ReactNode }) {
     queryFn: async () => {
       const res = await fetch("/api/products");
       if (!res.ok) throw new Error("Failed to fetch products");
-      const products: Product[] = await res.json();
+      const rawProducts = await res.json();
+      const products: Product[] = rawProducts.map((p: any) => ({ ...p, costPrice: p.costPrice ?? 0 }));
       
       await db.products.clear();
       await db.products.bulkPut(products);
@@ -77,9 +79,10 @@ export function ProductProvider({ children }: { children: ReactNode }) {
 
   const addProductMutation = useMutation({
     mutationFn: async (product: Omit<Product, "id">) => {
+      const productWithDefaults = { ...product, costPrice: product.costPrice ?? 0 };
       if (isOffline) {
         const tempId = 'temp_' + Math.random().toString(36).substr(2, 9);
-        const newProduct = { ...product, id: tempId } as Product;
+        const newProduct = { ...productWithDefaults, id: tempId } as Product;
         await addProductToCache(newProduct);
         setCachedProducts(prev => [...prev, newProduct]);
         return newProduct;
@@ -88,11 +91,11 @@ export function ProductProvider({ children }: { children: ReactNode }) {
       const res = await fetch("/api/products", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(product),
+        body: JSON.stringify(productWithDefaults),
       });
       if (!res.ok) throw new Error("Failed to add product");
       const newProduct = await res.json();
-      await addProductToCache(newProduct);
+      await addProductToCache({ ...newProduct, costPrice: newProduct.costPrice ?? 0 });
       return newProduct;
     },
     onSuccess: () => {

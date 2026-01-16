@@ -9,13 +9,16 @@ import type { CartItem as CartItemType } from "@/pages/dashboard";
 interface CartSidebarProps {
   items: CartItemType[];
   onUpdateQuantity: (id: string, delta: number) => void;
+  onUpdateDiscount: (id: string, discount: number) => void;
   onRemove: (id: string) => void;
   onClear: () => void;
   onCheckout: () => void;
 }
 
-export function CartSidebar({ items, onUpdateQuantity, onRemove, onClear, onCheckout }: CartSidebarProps) {
-  const total = items.reduce((acc, item) => acc + (item.product.price * item.quantity), 0);
+export function CartSidebar({ items, onUpdateQuantity, onUpdateDiscount, onRemove, onClear, onCheckout }: CartSidebarProps) {
+  const subtotal = items.reduce((acc, item) => acc + (item.product.price * item.quantity), 0);
+  const totalDiscount = items.reduce((acc, item) => acc + (item.discount || 0), 0);
+  const total = subtotal - totalDiscount;
   const itemCount = items.reduce((acc, item) => acc + item.quantity, 0);
 
   return (
@@ -61,6 +64,7 @@ export function CartSidebar({ items, onUpdateQuantity, onRemove, onClear, onChec
                 key={item.product.id} 
                 item={item} 
                 onUpdateQuantity={onUpdateQuantity}
+                onUpdateDiscount={onUpdateDiscount}
                 onRemove={onRemove}
               />
             ))}
@@ -74,10 +78,12 @@ export function CartSidebar({ items, onUpdateQuantity, onRemove, onClear, onChec
             <span className="text-muted-foreground">Jami mahsulot:</span>
             <span className="font-medium">{itemCount} dona</span>
           </div>
-          <div className="flex justify-between text-sm">
-            <span className="text-muted-foreground">QQS (12%):</span>
-            <span className="font-medium font-mono">{(total * 0.12).toLocaleString()} so'm</span>
-          </div>
+          {totalDiscount > 0 && (
+            <div className="flex justify-between text-sm">
+              <span className="text-muted-foreground">Skidka:</span>
+              <span className="font-medium font-mono text-red-500">-{totalDiscount.toLocaleString()} so'm</span>
+            </div>
+          )}
           <Separator className="my-2" />
           <div className="flex justify-between items-baseline">
             <span className="font-semibold text-lg">Jami summa:</span>

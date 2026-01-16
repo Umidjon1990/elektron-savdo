@@ -30,6 +30,7 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/co
 export interface CartItem {
   product: Product;
   quantity: number;
+  discount?: number;
 }
 
 const popSound = typeof window !== 'undefined' ? new Audio("https://codeskulptor-demos.commondatastorage.googleapis.com/pang/pop.mp3") : null;
@@ -84,10 +85,11 @@ export default function Dashboard() {
   const handleScannedProductAdd = (product: Product) => {
     addToCart(product);
     setScannedProduct(null);
+    setIsMobileCartOpen(true);
     toast({
       title: "Savatchaga qo'shildi",
       description: `${product.name} - ${product.price.toLocaleString()} so'm`,
-      duration: 1500, // Disappear faster (1.5s)
+      duration: 1500,
     });
   };
 
@@ -100,6 +102,15 @@ export default function Dashboard() {
     }));
   };
 
+  const updateDiscount = (id: string, discount: number) => {
+    setCart(prev => prev.map(item => {
+      if (item.product.id === id) {
+        return { ...item, discount: Math.max(0, discount) };
+      }
+      return item;
+    }));
+  };
+
   const removeFromCart = (id: string) => {
     setCart(prev => prev.filter(item => item.product.id !== id));
   };
@@ -107,7 +118,11 @@ export default function Dashboard() {
   const clearCart = () => setCart([]);
 
   const handleCheckout = async () => {
-    const total = cart.reduce((acc, item) => acc + item.product.price * item.quantity, 0);
+    const total = cart.reduce((acc, item) => {
+      const itemTotal = item.product.price * item.quantity;
+      const discount = item.discount || 0;
+      return acc + (itemTotal - discount);
+    }, 0);
     
     try {
       // Process transaction (async)
@@ -164,12 +179,18 @@ export default function Dashboard() {
     
     if (product) {
       setIsScannerOpen(false);
-      setScannedProduct(product);
+      addToCart(product);
+      setIsMobileCartOpen(true);
       if (beepSound) {
         beepSound.currentTime = 0;
         beepSound.volume = 0.5;
         beepSound.play().catch(() => {});
       }
+      toast({
+        title: "Savatchaga qo'shildi",
+        description: `${product.name} - ${product.price.toLocaleString()} so'm`,
+        duration: 1500,
+      });
     } else {
       toast({
         title: "Xatolik",
@@ -257,6 +278,7 @@ export default function Dashboard() {
                 <CartSidebar 
                   items={cart} 
                   onUpdateQuantity={updateQuantity}
+                  onUpdateDiscount={updateDiscount}
                   onRemove={removeFromCart}
                   onClear={clearCart}
                   onCheckout={handleCheckout}
@@ -384,6 +406,7 @@ export default function Dashboard() {
             <CartSidebar 
               items={cart} 
               onUpdateQuantity={updateQuantity}
+              onUpdateDiscount={updateDiscount}
               onRemove={removeFromCart}
               onClear={clearCart}
               onCheckout={handleCheckout}

@@ -20,6 +20,8 @@ import {
 import { ScannerOverlay } from "@/components/pos/scanner-overlay";
 import { ProductInfoDialog } from "@/components/pos/product-info-dialog";
 import { ReceiptDialog } from "@/components/pos/receipt-dialog";
+import { ReceiptsListDialog } from "@/components/pos/receipts-list-dialog";
+import { SoldItemsDialog } from "@/components/pos/sold-items-dialog";
 import { useToast } from "@/hooks/use-toast";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
@@ -55,6 +57,8 @@ export default function Dashboard() {
   const [lastTransaction, setLastTransaction] = useState<any>(null);
   const [isReceiptOpen, setIsReceiptOpen] = useState(false);
   const [isMobileCartOpen, setIsMobileCartOpen] = useState(false);
+  const [isReceiptsListOpen, setIsReceiptsListOpen] = useState(false);
+  const [isSoldItemsOpen, setIsSoldItemsOpen] = useState(false);
   const { toast } = useToast();
 
   const addToCart = (product: Product) => {
@@ -294,12 +298,20 @@ export default function Dashboard() {
                 <p className="text-[9px] md:text-xs opacity-80 font-medium">Bugun</p>
                 <p className="text-xs md:text-lg font-bold">{(stats.todayTotal / 1000).toFixed(0)}k</p>
               </div>
-              <div className="bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl p-2.5 md:p-4 shadow-sm text-white text-center">
+              <div 
+                className="bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl p-2.5 md:p-4 shadow-sm text-white text-center cursor-pointer hover:opacity-90 transition-opacity"
+                onClick={() => setIsReceiptsListOpen(true)}
+                data-testid="button-receipts-list"
+              >
                 <CreditCard className="w-5 h-5 md:w-6 md:h-6 mx-auto mb-1 opacity-80" />
                 <p className="text-[9px] md:text-xs opacity-80 font-medium">Cheklar</p>
                 <p className="text-xs md:text-lg font-bold">{stats.todayCount}</p>
               </div>
-              <div className="bg-gradient-to-br from-purple-500 to-purple-600 rounded-xl p-2.5 md:p-4 shadow-sm text-white text-center">
+              <div 
+                className="bg-gradient-to-br from-purple-500 to-purple-600 rounded-xl p-2.5 md:p-4 shadow-sm text-white text-center cursor-pointer hover:opacity-90 transition-opacity"
+                onClick={() => setIsSoldItemsOpen(true)}
+                data-testid="button-sold-items"
+              >
                 <Package className="w-5 h-5 md:w-6 md:h-6 mx-auto mb-1 opacity-80" />
                 <p className="text-[9px] md:text-xs opacity-80 font-medium">Sotildi</p>
                 <p className="text-xs md:text-lg font-bold">{stats.totalItemsSold}</p>
@@ -397,6 +409,16 @@ export default function Dashboard() {
         transaction={lastTransaction}
         isOpen={isReceiptOpen}
         onClose={() => setIsReceiptOpen(false)}
+      />
+
+      <ReceiptsListDialog
+        isOpen={isReceiptsListOpen}
+        onClose={() => setIsReceiptsListOpen(false)}
+      />
+
+      <SoldItemsDialog
+        isOpen={isSoldItemsOpen}
+        onClose={() => setIsSoldItemsOpen(false)}
       />
     </div>
   );

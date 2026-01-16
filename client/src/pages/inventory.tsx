@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { SidebarNav } from "@/components/layout/sidebar-nav";
 import { useProducts } from "@/lib/product-context";
 import { Input } from "@/components/ui/input";
@@ -7,6 +8,7 @@ import { Search, Plus, Filter, MoreHorizontal, ScanBarcode, ArrowRight, Check, X
 import { ScannerOverlay } from "@/components/pos/scanner-overlay";
 import { KNOWN_BOOKS_DB } from "@/data/mock-external-books";
 import { useUpload } from "@/hooks/use-upload";
+import type { Category } from "@shared/schema";
 import {
   Table,
   TableBody,
@@ -39,7 +41,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { CATEGORIES, type Product } from "@/data/mock-products";
+import type { Product } from "@/data/mock-products";
 import { useToast } from "@/hooks/use-toast";
 import { Card, CardContent } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
@@ -47,6 +49,15 @@ import { cn } from "@/lib/utils";
 export default function Inventory() {
   const { products, addProduct, updateStock, updateProduct } = useProducts();
   const [searchQuery, setSearchQuery] = useState("");
+  
+  const { data: categories = [] } = useQuery<Category[]>({
+    queryKey: ["/api/categories"],
+    queryFn: async () => {
+      const res = await fetch("/api/categories");
+      if (!res.ok) throw new Error("Failed to fetch categories");
+      return res.json();
+    },
+  });
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   
   // Scanner States
@@ -223,7 +234,7 @@ export default function Inventory() {
           price: Number(newProduct.price),
           costPrice: Number(newProduct.costPrice) || 0,
           stock: Number(newProduct.stock),
-          category: newProduct.category || "Jahon adabiyoti",
+          category: newProduct.category || categories[0]?.name || "Boshqa",
           barcode: newProduct.barcode.trim(),
           image: newProduct.image
         });
@@ -239,7 +250,7 @@ export default function Inventory() {
           price: Number(newProduct.price),
           costPrice: Number(newProduct.costPrice) || 0,
           stock: Number(newProduct.stock),
-          category: newProduct.category || "Jahon adabiyoti",
+          category: newProduct.category || categories[0]?.name || "Boshqa",
           barcode: newProduct.barcode.trim() || Math.random().toString().slice(2, 14),
           image: newProduct.image || "https://images.unsplash.com/photo-1543002588-bfa74002ed7e?auto=format&fit=crop&q=80&w=300&h=400"
         });
@@ -470,8 +481,8 @@ export default function Inventory() {
                                 <SelectValue placeholder="Tanlang" />
                               </SelectTrigger>
                               <SelectContent>
-                                {CATEGORIES.filter(c => c !== "Barchasi").map(c => (
-                                  <SelectItem key={c} value={c}>{c}</SelectItem>
+                                {categories.map(c => (
+                                  <SelectItem key={c.id} value={c.name}>{c.name}</SelectItem>
                                 ))}
                               </SelectContent>
                             </Select>

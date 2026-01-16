@@ -208,6 +208,40 @@ export default function Dashboard() {
     }
   };
 
+  useEffect(() => {
+    if (!searchQuery || searchQuery.length < 8) return;
+    
+    const normalize = (s: string) => s.replace(/[^0-9]/g, "");
+    const cleanCode = normalize(searchQuery);
+    
+    if (!cleanCode || cleanCode.length < 8) return;
+    
+    const product = products.find(p => {
+      const pBarcode = normalize(p.barcode);
+      return (
+        pBarcode === cleanCode || 
+        pBarcode === "0" + cleanCode || 
+        "0" + pBarcode === cleanCode
+      );
+    });
+    
+    if (product) {
+      addToCart(product);
+      setSearchQuery("");
+      setIsMobileCartOpen(true);
+      if (beepSound) {
+        beepSound.currentTime = 0;
+        beepSound.volume = 0.5;
+        beepSound.play().catch(() => {});
+      }
+      toast({
+        title: "Savatchaga qo'shildi",
+        description: `${product.name} - ${product.price.toLocaleString()} so'm`,
+        duration: 1500,
+      });
+    }
+  }, [searchQuery, products]);
+
   const filteredProducts = products.filter(product => {
     const searchLower = searchQuery.toLowerCase();
     const matchesSearch = product.name.toLowerCase().includes(searchLower) || 

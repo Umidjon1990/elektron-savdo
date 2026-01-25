@@ -60,14 +60,14 @@ export function ProductCard({ product, onClick, size = "default" }: ProductCardP
 
         {product.videoUrl && product.videoUrl.trim() !== "" && (
           <div 
-            className="absolute bottom-2 left-2 z-10"
+            className="absolute bottom-12 left-2 z-50"
             onClick={(e) => e.stopPropagation()}
           >
             <VideoPopup 
               videoUrl={product.videoUrl} 
               productName={product.name}
               trigger={
-                <div className="bg-red-600 hover:bg-red-700 text-white text-[10px] font-bold px-2.5 py-1.5 rounded-full flex items-center gap-1.5 cursor-pointer shadow-lg transition-colors">
+                <div className="bg-red-600 hover:bg-red-700 text-white text-[10px] font-bold px-2.5 py-1.5 rounded-full flex items-center gap-1.5 cursor-pointer shadow-lg transition-colors animate-pulse">
                   <Play className="w-3 h-3 fill-white" />
                   Batafsil video
                 </div>

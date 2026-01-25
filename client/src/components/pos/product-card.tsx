@@ -58,29 +58,6 @@ export function ProductCard({ product, onClick, size = "default" }: ProductCardP
           </div>
         )}
 
-        {/* Debug: show videoUrl status */}
-        <div className="absolute top-10 left-2 bg-black/80 text-white text-[8px] px-1 py-0.5 rounded z-[100]">
-          {product.videoUrl ? `V:✓ ${product.videoUrl.slice(0,15)}` : "V:✗"}
-        </div>
-        
-        {product.videoUrl && product.videoUrl.trim() !== "" && (
-          <div 
-            className="absolute bottom-12 left-2 z-50"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <VideoPopup 
-              videoUrl={product.videoUrl} 
-              productName={product.name}
-              trigger={
-                <div className="bg-red-600 hover:bg-red-700 text-white text-[10px] font-bold px-2.5 py-1.5 rounded-full flex items-center gap-1.5 cursor-pointer shadow-lg transition-colors animate-pulse">
-                  <Play className="w-3 h-3 fill-white" />
-                  Batafsil video
-                </div>
-              }
-            />
-          </div>
-        )}
-
         <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/60 to-transparent p-3 pt-8 opacity-0 group-hover:opacity-100 transition-opacity">
           <div className="flex items-center justify-center">
             <div className="bg-white text-blue-600 rounded-full px-4 py-2 flex items-center gap-2 font-semibold text-sm shadow-lg transform translate-y-2 group-hover:translate-y-0 transition-transform">
@@ -126,6 +103,24 @@ export function ProductCard({ product, onClick, size = "default" }: ProductCardP
             <Plus className={isLarge ? "w-5 h-5" : "w-4 h-4"} />
           </div>
         </div>
+        
+        {product.videoUrl && product.videoUrl.trim() !== "" && (
+          <div 
+            className="mt-2"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <VideoPopup 
+              videoUrl={product.videoUrl} 
+              productName={product.name}
+              trigger={
+                <div className="bg-red-600 hover:bg-red-700 text-white text-[11px] font-bold px-3 py-2 rounded-lg flex items-center justify-center gap-2 cursor-pointer shadow-lg transition-colors w-full">
+                  <Play className="w-4 h-4 fill-white" />
+                  Batafsil video
+                </div>
+              }
+            />
+          </div>
+        )}
       </div>
     </Card>
   );

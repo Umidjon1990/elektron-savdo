@@ -4,7 +4,8 @@ import { useProducts } from "@/lib/product-context";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Search, ShoppingCart, Menu, ArrowRight, Star, TrendingUp, BookOpen, Truck, ShieldCheck, Phone } from "lucide-react";
+import { Search, ShoppingCart, Menu, ArrowRight, Star, TrendingUp, BookOpen, Truck, ShieldCheck, Phone, Play } from "lucide-react";
+import { VideoPopup } from "@/components/ui/video-popup";
 import { motion, AnimatePresence } from "framer-motion";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { useCart } from "@/lib/cart-context";
@@ -251,6 +252,21 @@ export default function StoreHome() {
                       <ShoppingCart className="h-4 w-4" />
                     </Button>
                   </div>
+                  
+                  {product.videoUrl && product.videoUrl.trim() !== "" && (
+                    <div className="mt-3">
+                      <VideoPopup 
+                        videoUrl={product.videoUrl} 
+                        productName={product.name}
+                        trigger={
+                          <div className="bg-red-600 hover:bg-red-700 text-white text-[11px] font-bold px-3 py-2 rounded-lg flex items-center justify-center gap-2 cursor-pointer shadow-lg transition-colors w-full">
+                            <Play className="w-4 h-4 fill-white" />
+                            Batafsil video
+                          </div>
+                        }
+                      />
+                    </div>
+                  )}
                 </div>
               </motion.div>
             ))}

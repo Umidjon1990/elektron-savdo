@@ -73,7 +73,8 @@ export function ProductProvider({ children }: { children: ReactNode }) {
       return products;
     },
     enabled: !isOffline && cacheLoaded,
-    staleTime: 5 * 60 * 1000,
+    staleTime: 10 * 1000,
+    refetchOnWindowFocus: true,
     retry: 2,
   });
 

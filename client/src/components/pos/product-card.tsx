@@ -59,8 +59,8 @@ export function ProductCard({ product, onClick, size = "default" }: ProductCardP
         )}
 
         {/* Debug: show videoUrl status */}
-        <div className="absolute top-2 right-2 bg-black/80 text-white text-[8px] px-1 py-0.5 rounded z-50">
-          {product.videoUrl ? "V:✓" : "V:✗"}
+        <div className="absolute top-10 left-2 bg-black/80 text-white text-[8px] px-1 py-0.5 rounded z-[100]">
+          {product.videoUrl ? `V:✓ ${product.videoUrl.slice(0,15)}` : "V:✗"}
         </div>
         
         {product.videoUrl && product.videoUrl.trim() !== "" && (

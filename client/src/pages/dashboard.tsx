@@ -345,8 +345,8 @@ export default function Dashboard() {
         </header>
 
         {/* Content */}
-        <div className="flex-1 flex min-h-0 bg-gray-50/50">
-          <div className="flex-1 flex flex-col p-4 md:p-6 min-w-0">
+        <div className="flex-1 flex min-h-0 bg-gray-50/50 overflow-hidden">
+          <div className="flex-1 flex flex-col p-4 md:p-6 min-w-0 overflow-y-auto md:pr-[460px] lg:pr-[500px]">
             {/* KPI Stats Row */}
             <div className="grid grid-cols-5 gap-2 md:gap-3 mb-4">
               <div className="bg-gradient-to-br from-green-500 to-emerald-600 rounded-xl p-2.5 md:p-4 shadow-sm text-white text-center">
@@ -440,8 +440,8 @@ export default function Dashboard() {
             </div>
           </div>
 
-          {/* Desktop Cart Sidebar - Sticky */}
-          <div className="hidden md:block sticky top-0 h-screen shrink-0">
+          {/* Desktop Cart Sidebar - Fixed */}
+          <div className="hidden md:block fixed right-0 top-0 h-screen z-40">
             <CartSidebar 
               items={cart} 
               onUpdateQuantity={updateQuantity}

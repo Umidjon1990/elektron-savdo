@@ -169,19 +169,38 @@ export default function StoreHome() {
         <div className="container mx-auto px-4">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
             {[
-              { icon: Truck, title: "Tezkor yetkazib berish", desc: "O'zbekiston bo'ylab 24 soat ichida" },
-              { icon: ShieldCheck, title: "100% Kafolat", desc: "Sifatli va original mahsulotlar" },
-              { icon: Phone, title: "24/7 Qo'llab-quvvatlash", desc: "Har qanday savolga javob beramiz" }
+              { icon: Truck, title: "Tezkor yetkazib berish", desc: "O'zbekiston bo'ylab 24 soat ichida", link: null },
+              { icon: ShieldCheck, title: "100% Kafolat", desc: "Sifatli va original mahsulotlar", link: null },
+              { icon: Phone, title: "24/7 Qo'llab-quvvatlash", desc: "Har qanday savolga javob beramiz", link: "https://t.me/Al_Aziz_admin" }
             ].map((feature, i) => (
-              <div key={i} className="flex items-center gap-4 p-4 rounded-2xl hover:bg-slate-50 transition-colors">
-                <div className="w-12 h-12 bg-indigo-50 rounded-xl flex items-center justify-center text-indigo-600">
-                  <feature.icon className="h-6 w-6" />
+              feature.link ? (
+                <a 
+                  key={i} 
+                  href={feature.link} 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-4 p-4 rounded-2xl hover:bg-indigo-50 transition-colors cursor-pointer"
+                  data-testid={`feature-link-${i}`}
+                >
+                  <div className="w-12 h-12 bg-indigo-50 rounded-xl flex items-center justify-center text-indigo-600">
+                    <feature.icon className="h-6 w-6" />
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-slate-900">{feature.title}</h3>
+                    <p className="text-sm text-slate-500">{feature.desc}</p>
+                  </div>
+                </a>
+              ) : (
+                <div key={i} className="flex items-center gap-4 p-4 rounded-2xl hover:bg-slate-50 transition-colors">
+                  <div className="w-12 h-12 bg-indigo-50 rounded-xl flex items-center justify-center text-indigo-600">
+                    <feature.icon className="h-6 w-6" />
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-slate-900">{feature.title}</h3>
+                    <p className="text-sm text-slate-500">{feature.desc}</p>
+                  </div>
                 </div>
-                <div>
-                  <h3 className="font-bold text-slate-900">{feature.title}</h3>
-                  <p className="text-sm text-slate-500">{feature.desc}</p>
-                </div>
-              </div>
+              )
             ))}
           </div>
         </div>

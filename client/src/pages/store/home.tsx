@@ -5,12 +5,46 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Search, ShoppingCart, Menu, ArrowRight, Star, TrendingUp, BookOpen, Truck, ShieldCheck, Phone } from "lucide-react";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { useCart } from "@/lib/cart-context";
 import { cn } from "@/lib/utils";
 import { useQuery } from "@tanstack/react-query";
 import type { Category } from "@shared/schema";
+
+function FloatingCart() {
+  const [, setLocation] = useLocation();
+  const { itemCount, total } = useCart();
+  
+  if (itemCount === 0) return null;
+  
+  return (
+    <AnimatePresence>
+      <motion.div 
+        initial={{ y: 100, opacity: 0 }}
+        animate={{ y: 0, opacity: 1 }}
+        exit={{ y: 100, opacity: 0 }}
+        className="fixed bottom-4 left-4 right-4 z-50 md:hidden"
+      >
+        <Button 
+          onClick={() => setLocation("/cart")}
+          className="w-full h-14 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl shadow-2xl shadow-indigo-300 flex items-center justify-between px-5"
+        >
+          <div className="flex items-center gap-3">
+            <div className="relative">
+              <ShoppingCart className="h-6 w-6" />
+              <span className="absolute -top-2 -right-2 w-5 h-5 bg-white text-indigo-600 text-xs font-bold flex items-center justify-center rounded-full">
+                {itemCount}
+              </span>
+            </div>
+            <span className="font-semibold">Savat</span>
+          </div>
+          <span className="text-lg font-bold">{total.toLocaleString()} so'm</span>
+        </Button>
+      </motion.div>
+    </AnimatePresence>
+  );
+}
 
 export default function StoreHome() {
   const [, setLocation] = useLocation();
@@ -217,6 +251,9 @@ export default function StoreHome() {
           </div>
         </div>
       </section>
+
+      {/* Floating Cart for Mobile */}
+      <FloatingCart />
     </div>
   );
 }

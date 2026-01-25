@@ -73,8 +73,9 @@ export function ProductProvider({ children }: { children: ReactNode }) {
       return products;
     },
     enabled: !isOffline && cacheLoaded,
-    staleTime: 10 * 1000,
+    staleTime: 0,
     refetchOnWindowFocus: true,
+    refetchOnMount: 'always',
     retry: 2,
   });
 
@@ -181,8 +182,7 @@ export function ProductProvider({ children }: { children: ReactNode }) {
 
   const refreshProducts = async () => {
     if (!isOffline) {
-      await syncProductsFromServer();
-      queryClient.invalidateQueries({ queryKey: ["products"] });
+      await queryClient.invalidateQueries({ queryKey: ["products"] });
     }
   };
 

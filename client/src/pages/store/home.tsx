@@ -1,6 +1,5 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
-import { useProducts } from "@/lib/product-context";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -11,6 +10,7 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/co
 import { useCart } from "@/lib/cart-context";
 import { cn } from "@/lib/utils";
 import { useQuery } from "@tanstack/react-query";
+import { useProducts } from "@/lib/product-context";
 import type { Category } from "@shared/schema";
 
 function FloatingCart() {
@@ -55,10 +55,15 @@ function FloatingCart() {
 
 export default function StoreHome() {
   const [, setLocation] = useLocation();
-  const { products, isLoading: productsLoading } = useProducts();
+  const { products, isLoading: productsLoading, refreshProducts } = useProducts();
   const { addItem, itemCount } = useCart();
   const [searchQuery, setSearchQuery] = useState("");
   const [activeCategory, setActiveCategory] = useState("Barchasi");
+  
+  // Refresh products when homepage mounts to ensure fresh data
+  useEffect(() => {
+    refreshProducts();
+  }, []);
   
   const { data: categories = [], isLoading: categoriesLoading } = useQuery<Category[]>({
     queryKey: ["/api/categories"],

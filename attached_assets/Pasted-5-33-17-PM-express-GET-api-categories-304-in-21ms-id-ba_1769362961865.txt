@@ -1,0 +1,76 @@
+5:33:17 PM [express] GET /api/categories 304 in 21ms :: [{"id":"ba6e0e78-a9cb-428c-af5f-7b2fce534ee0","name":"ARAB TILI ","icon":"Book","color":"#3b82f6"}]
+Error fetching products: error: column "sort_order" does not exist
+    at /app/dist/index.cjs:64:13326
+    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+    at async /app/dist/index.cjs:70:31398
+    at async rf.getAllProducts (/app/dist/index.cjs:70:100727)
+    at async /app/dist/index.cjs:70:105323 {
+  length: 111,
+  severity: 'ERROR',
+  code: '42703',
+  detail: undefined,
+  hint: undefined,
+  position: '109',
+  internalPosition: undefined,
+  internalQuery: undefined,
+  where: undefined,
+  schema: undefined,
+  table: undefined,
+  column: undefined,
+  dataType: undefined,
+  constraint: undefined,
+  file: 'parse_relation.c',
+  line: '3716',
+  routine: 'errorMissingColumn'
+}
+5:33:18 PM [express] GET /api/products 500 in 21ms :: {"error":"Failed to fetch products"}
+Error fetching products: error: column "sort_order" does not exist
+    at /app/dist/index.cjs:64:13326
+    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+    at async /app/dist/index.cjs:70:31398
+    at async rf.getAllProducts (/app/dist/index.cjs:70:100727)
+    at async /app/dist/index.cjs:70:105323 {
+  length: 111,
+  severity: 'ERROR',
+  code: '42703',
+  detail: undefined,
+  hint: undefined,
+  position: '109',
+  internalPosition: undefined,
+  internalQuery: undefined,
+  where: undefined,
+  schema: undefined,
+  table: undefined,
+  column: undefined,
+  dataType: undefined,
+  constraint: undefined,
+  file: 'parse_relation.c',
+  line: '3716',
+  routine: 'errorMissingColumn'
+}
+5:33:20 PM [express] GET /api/products 500 in 109ms :: {"error":"Failed to fetch products"}
+  length: 111,
+  severity: 'ERROR',
+  code: '42703',
+Error fetching products: error: column "sort_order" does not exist
+  detail: undefined,
+    at /app/dist/index.cjs:64:13326
+  hint: undefined,
+    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+  position: '109',
+    at async /app/dist/index.cjs:70:31398
+    at async rf.getAllProducts (/app/dist/index.cjs:70:100727)
+  internalPosition: undefined,
+    at async /app/dist/index.cjs:70:105323 {
+  internalQuery: undefined,
+  where: undefined,
+  schema: undefined,
+  table: undefined,
+  column: undefined,
+  dataType: undefined,
+  constraint: undefined,
+  file: 'parse_relation.c',
+  line: '3716',
+  routine: 'errorMissingColumn'
+}
+5:36:05 PM [express] GET /api/products 500 in 109ms :: {"error":"Failed to fetch products"}

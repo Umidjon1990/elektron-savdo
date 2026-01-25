@@ -22,7 +22,7 @@ export function CartSidebar({ items, onUpdateQuantity, onUpdateDiscount, onRemov
   const itemCount = items.reduce((acc, item) => acc + item.quantity, 0);
 
   return (
-    <div className="flex flex-col h-full bg-white border-l shadow-xl w-[400px]">
+    <div className="flex flex-col h-full bg-white border-l shadow-xl w-[420px] lg:w-[460px]">
       <div className="p-4 border-b flex items-center justify-between bg-gray-50/50">
         <div className="flex items-center gap-2">
           <div className="p-2 bg-primary/10 rounded-lg text-primary">
@@ -72,39 +72,39 @@ export function CartSidebar({ items, onUpdateQuantity, onUpdateDiscount, onRemov
         )}
       </ScrollArea>
 
-      <div className="p-4 bg-gray-50 border-t space-y-4">
-        <div className="space-y-2">
+      <div className="p-5 bg-gradient-to-b from-gray-50 to-white border-t shadow-[0_-4px_20px_rgba(0,0,0,0.08)] space-y-4">
+        <div className="space-y-3">
           <div className="flex justify-between text-sm">
             <span className="text-muted-foreground">Jami mahsulot:</span>
-            <span className="font-medium">{itemCount} dona</span>
+            <span className="font-semibold text-base">{itemCount} dona</span>
           </div>
           {totalDiscount > 0 && (
             <div className="flex justify-between text-sm">
               <span className="text-muted-foreground">Skidka:</span>
-              <span className="font-medium font-mono text-red-500">-{totalDiscount.toLocaleString()} so'm</span>
+              <span className="font-semibold font-mono text-red-500 text-base">-{totalDiscount.toLocaleString()} so'm</span>
             </div>
           )}
-          <Separator className="my-2" />
-          <div className="flex justify-between items-baseline">
-            <span className="font-semibold text-lg">Jami summa:</span>
-            <span className="font-bold text-2xl font-mono text-primary">
-              {total.toLocaleString()} so'm
+          <Separator className="my-3" />
+          <div className="flex justify-between items-center bg-primary/5 p-4 rounded-xl -mx-1">
+            <span className="font-bold text-xl text-gray-800">JAMI:</span>
+            <span className="font-bold text-3xl font-mono text-primary">
+              {total.toLocaleString()} <span className="text-lg">so'm</span>
             </span>
           </div>
         </div>
 
-        <div className="grid grid-cols-2 gap-2">
-          <Button variant="outline" className="flex flex-col items-center justify-center h-20 gap-2 border-2 hover:border-primary hover:bg-primary/5 transition-all" onClick={onCheckout}>
-            <Banknote className="h-6 w-6" />
-            <span className="text-xs font-semibold">Naqd</span>
+        <div className="grid grid-cols-2 gap-3">
+          <Button variant="outline" className="flex flex-col items-center justify-center h-20 gap-2 border-2 hover:border-green-500 hover:bg-green-50 transition-all" onClick={onCheckout}>
+            <Banknote className="h-7 w-7 text-green-600" />
+            <span className="text-sm font-semibold">Naqd</span>
           </Button>
-          <Button variant="outline" className="flex flex-col items-center justify-center h-20 gap-2 border-2 hover:border-primary hover:bg-primary/5 transition-all" onClick={onCheckout}>
-            <CreditCard className="h-6 w-6" />
-            <span className="text-xs font-semibold">Karta</span>
+          <Button variant="outline" className="flex flex-col items-center justify-center h-20 gap-2 border-2 hover:border-blue-500 hover:bg-blue-50 transition-all" onClick={onCheckout}>
+            <CreditCard className="h-7 w-7 text-blue-600" />
+            <span className="text-sm font-semibold">Karta</span>
           </Button>
         </div>
         
-        <Button size="lg" className="w-full text-lg h-14 bg-primary hover:bg-primary/90 shadow-lg shadow-primary/25" onClick={onCheckout} disabled={items.length === 0}>
+        <Button size="lg" className="w-full text-xl h-16 bg-primary hover:bg-primary/90 shadow-lg shadow-primary/25 font-bold" onClick={onCheckout} disabled={items.length === 0}>
           To'lov qilish
         </Button>
       </div>

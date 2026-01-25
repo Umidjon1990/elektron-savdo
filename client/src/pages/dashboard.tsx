@@ -440,8 +440,8 @@ export default function Dashboard() {
             </div>
           </div>
 
-          {/* Desktop Cart Sidebar */}
-          <div className="hidden md:block h-full">
+          {/* Desktop Cart Sidebar - Sticky */}
+          <div className="hidden md:block sticky top-0 h-screen shrink-0">
             <CartSidebar 
               items={cart} 
               onUpdateQuantity={updateQuantity}

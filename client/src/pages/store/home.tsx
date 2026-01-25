@@ -14,9 +14,12 @@ import type { Category } from "@shared/schema";
 
 function FloatingCart() {
   const [, setLocation] = useLocation();
-  const { itemCount, total } = useCart();
+  const { items, itemCount, total } = useCart();
   
   if (itemCount === 0) return null;
+  
+  const productNames = items.slice(0, 3).map(item => item.product.name).join(", ");
+  const hasMore = items.length > 3;
   
   return (
     <AnimatePresence>
@@ -28,18 +31,21 @@ function FloatingCart() {
       >
         <Button 
           onClick={() => setLocation("/cart")}
-          className="w-full h-14 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl shadow-2xl shadow-indigo-300 flex items-center justify-between px-5"
+          className="w-full h-auto min-h-14 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl shadow-2xl shadow-indigo-300 flex flex-col items-stretch px-4"
         >
-          <div className="flex items-center gap-3">
-            <div className="relative">
-              <ShoppingCart className="h-6 w-6" />
+          <div className="flex items-center justify-between w-full">
+            <div className="flex items-center gap-2">
+              <ShoppingCart className="h-5 w-5" />
+              <span className="font-semibold">Savat</span>
+              <span className="bg-yellow-400 text-gray-900 text-xs font-bold px-2 py-0.5 rounded-full">
+                {itemCount} dona
+              </span>
             </div>
-            <span className="font-semibold">Savat</span>
-            <span className="bg-yellow-400 text-gray-900 text-sm font-bold px-2.5 py-1 rounded-full">
-              {itemCount} dona
-            </span>
+            <span className="text-base font-bold">{total.toLocaleString()} so'm</span>
           </div>
-          <span className="text-lg font-bold">{total.toLocaleString()} so'm</span>
+          <div className="text-xs text-indigo-200 text-left truncate w-full mt-1">
+            {productNames}{hasMore ? ` +${items.length - 3} ta` : ""}
+          </div>
         </Button>
       </motion.div>
     </AnimatePresence>

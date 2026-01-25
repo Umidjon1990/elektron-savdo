@@ -4,7 +4,7 @@ import { SidebarNav } from "@/components/layout/sidebar-nav";
 import { useProducts } from "@/lib/product-context";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Search, Plus, Filter, MoreHorizontal, ScanBarcode, ArrowRight, Check, X, RotateCcw, PackagePlus, ScanText, Upload, Image as ImageIcon, Loader2, Youtube } from "lucide-react";
+import { Search, Plus, Filter, MoreHorizontal, ScanBarcode, ArrowRight, Check, X, RotateCcw, PackagePlus, ScanText, Upload, Image as ImageIcon, Loader2, Youtube, Trash2 } from "lucide-react";
 import { ScannerOverlay } from "@/components/pos/scanner-overlay";
 import { KNOWN_BOOKS_DB } from "@/data/mock-external-books";
 import { useUpload } from "@/hooks/use-upload";
@@ -47,7 +47,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 
 export default function Inventory() {
-  const { products, addProduct, updateStock, updateProduct } = useProducts();
+  const { products, addProduct, updateStock, updateProduct, deleteProduct } = useProducts();
   const [searchQuery, setSearchQuery] = useState("");
   
   const { data: categories = [] } = useQuery<Category[]>({
@@ -130,6 +130,28 @@ export default function Inventory() {
     });
     setStep(2); // Go directly to details step
     setIsAddDialogOpen(true);
+  };
+
+  const handleDeleteProduct = async (productId: string, productName: string) => {
+    if (!window.confirm(`"${productName}" mahsulotini o'chirishga ishonchingiz komilmi?`)) {
+      return;
+    }
+    try {
+      await deleteProduct(productId);
+      toast({
+        title: "Mahsulot o'chirildi ✓",
+        description: `"${productName}" muvaffaqiyatli o'chirildi`,
+        duration: 3000,
+        className: "bg-green-500 text-white border-none",
+      });
+    } catch (error) {
+      toast({
+        title: "Xatolik",
+        description: "Mahsulotni o'chirishda xatolik yuz berdi",
+        duration: 3000,
+        variant: "destructive",
+      });
+    }
   };
 
   const openScanner = (mode: "barcode" | "text", field: "barcode" | "name" | "author") => {
@@ -631,6 +653,14 @@ export default function Inventory() {
                               <RotateCcw className="mr-2 h-4 w-4" />
                               Tahrirlash
                             </DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem 
+                              onClick={() => handleDeleteProduct(product.id, product.name)}
+                              className="text-red-600 focus:text-red-600"
+                            >
+                              <Trash2 className="mr-2 h-4 w-4" />
+                              O'chirish
+                            </DropdownMenuItem>
                           </DropdownMenuContent>
                         </DropdownMenu>
                       </TableCell>
@@ -672,6 +702,14 @@ export default function Inventory() {
                             <DropdownMenuItem onClick={() => handleEditProduct(product)}>
                               <RotateCcw className="mr-2 h-4 w-4" />
                               Tahrirlash
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem 
+                              onClick={() => handleDeleteProduct(product.id, product.name)}
+                              className="text-red-600 focus:text-red-600"
+                            >
+                              <Trash2 className="mr-2 h-4 w-4" />
+                              O'chirish
                             </DropdownMenuItem>
                           </DropdownMenuContent>
                         </DropdownMenu>

@@ -23,6 +23,7 @@ interface ProductContextType {
   addProduct: (product: Omit<Product, "id">) => Promise<void>;
   updateStock: (id: string, delta: number) => Promise<void>;
   updateProduct: (id: string, updates: Partial<Omit<Product, "id">>) => Promise<void>;
+  deleteProduct: (id: string) => Promise<void>;
   refreshProducts: () => Promise<void>;
 }
 
@@ -150,6 +151,32 @@ export function ProductProvider({ children }: { children: ReactNode }) {
     await updateProductMutation.mutateAsync({ id, data: updates });
   };
 
+  const deleteProductMutation = useMutation({
+    mutationFn: async (id: string) => {
+      await db.products.delete(id);
+      setCachedProducts(prev => prev.filter(p => p.id !== id));
+      
+      if (isOffline) {
+        return { success: true };
+      }
+      
+      const res = await fetch(`/api/products/${id}`, {
+        method: "DELETE",
+      });
+      if (!res.ok) throw new Error("Mahsulotni o'chirishda xatolik");
+      return res.json();
+    },
+    onSuccess: () => {
+      if (!isOffline) {
+        queryClient.invalidateQueries({ queryKey: ["products"] });
+      }
+    },
+  });
+
+  const deleteProduct = async (id: string) => {
+    await deleteProductMutation.mutateAsync(id);
+  };
+
   const refreshProducts = async () => {
     if (!isOffline) {
       await syncProductsFromServer();
@@ -159,7 +186,7 @@ export function ProductProvider({ children }: { children: ReactNode }) {
 
   return (
     <ProductContext.Provider
-      value={{ products, isLoading, isOffline, addProduct, updateStock, updateProduct, refreshProducts }}
+      value={{ products, isLoading, isOffline, addProduct, updateStock, updateProduct, deleteProduct, refreshProducts }}
     >
       {children}
     </ProductContext.Provider>

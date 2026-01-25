@@ -92,6 +92,19 @@ export async function registerRoutes(
     }
   });
 
+  app.delete("/api/products/:id", async (req, res) => {
+    try {
+      const deleted = await storage.deleteProduct(req.params.id);
+      if (!deleted) {
+        return res.status(404).json({ error: "Mahsulot topilmadi" });
+      }
+      res.json({ success: true, message: "Mahsulot o'chirildi" });
+    } catch (error) {
+      console.error("Error deleting product:", error);
+      res.status(500).json({ error: "Mahsulotni o'chirishda xatolik" });
+    }
+  });
+
   // Orders API
   app.get("/api/orders", async (req, res) => {
     try {

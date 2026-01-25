@@ -58,7 +58,7 @@ export function ProductCard({ product, onClick, size = "default" }: ProductCardP
           </div>
         )}
 
-        {product.videoUrl && (
+        {product.videoUrl && product.videoUrl.trim() !== "" && (
           <div 
             className="absolute bottom-2 left-2 z-10"
             onClick={(e) => e.stopPropagation()}

@@ -11,6 +11,7 @@ export interface CachedProduct {
   barcode: string;
   image: string;
   videoUrl?: string;
+  sortOrder?: number;
 }
 
 export interface CachedCategory {

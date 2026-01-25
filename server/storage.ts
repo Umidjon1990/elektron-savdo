@@ -17,6 +17,7 @@ export interface IStorage {
   createProduct(product: InsertProduct): Promise<Product>;
   updateProduct(id: string, product: Partial<InsertProduct>): Promise<Product | undefined>;
   deleteProduct(id: string): Promise<boolean>;
+  reorderProducts(orderedIds: string[]): Promise<void>;
   
   // Orders
   getAllOrders(): Promise<Order[]>;
@@ -57,15 +58,21 @@ export class DatabaseStorage implements IStorage {
 
   // Products
   async getAllProducts(): Promise<Product[]> {
-    return await db.select().from(products);
+    return await db.select().from(products).orderBy(products.sortOrder, products.name);
   }
 
   async getProductsPaginated(limit: number, offset: number): Promise<{ products: Product[]; total: number }> {
     const [productList, countResult] = await Promise.all([
-      db.select().from(products).orderBy(products.name).limit(limit).offset(offset),
+      db.select().from(products).orderBy(products.sortOrder, products.name).limit(limit).offset(offset),
       db.select({ count: sql<number>`count(*)::int` }).from(products)
     ]);
     return { products: productList, total: countResult[0]?.count || 0 };
+  }
+
+  async reorderProducts(orderedIds: string[]): Promise<void> {
+    for (let i = 0; i < orderedIds.length; i++) {
+      await db.update(products).set({ sortOrder: i }).where(eq(products.id, orderedIds[i]));
+    }
   }
 
   async getProduct(id: string): Promise<Product | undefined> {

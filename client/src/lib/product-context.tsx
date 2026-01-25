@@ -14,6 +14,7 @@ interface Product {
   barcode: string;
   image: string;
   videoUrl?: string;
+  sortOrder?: number;
 }
 
 interface ProductContextType {

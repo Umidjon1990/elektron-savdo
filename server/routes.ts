@@ -105,6 +105,20 @@ export async function registerRoutes(
     }
   });
 
+  app.put("/api/products/reorder", async (req, res) => {
+    try {
+      const { orderedIds } = req.body;
+      if (!orderedIds || !Array.isArray(orderedIds)) {
+        return res.status(400).json({ error: "orderedIds massivi kerak" });
+      }
+      await storage.reorderProducts(orderedIds);
+      res.json({ success: true, message: "Tartib saqlandi" });
+    } catch (error) {
+      console.error("Error reordering products:", error);
+      res.status(500).json({ error: "Tartibni saqlashda xatolik" });
+    }
+  });
+
   // Orders API
   app.get("/api/orders", async (req, res) => {
     try {

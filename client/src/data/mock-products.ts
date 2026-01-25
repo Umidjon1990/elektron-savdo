@@ -16,6 +16,7 @@ export interface Product {
   barcode: string;
   image: string;
   videoUrl?: string;
+  sortOrder?: number;
 }
 
 export const MOCK_PRODUCTS: Product[] = [

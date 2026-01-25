@@ -20,6 +20,7 @@ export const products = pgTable("products", {
   barcode: text("barcode").notNull().unique(),
   image: text("image").notNull(),
   videoUrl: text("video_url"),
+  sortOrder: integer("sort_order").notNull().default(0),
 });
 
 export const orders = pgTable("orders", {

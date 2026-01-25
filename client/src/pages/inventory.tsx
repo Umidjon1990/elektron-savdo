@@ -4,7 +4,7 @@ import { SidebarNav } from "@/components/layout/sidebar-nav";
 import { useProducts } from "@/lib/product-context";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Search, Plus, Filter, MoreHorizontal, ScanBarcode, ArrowRight, Check, X, RotateCcw, PackagePlus, ScanText, Upload, Image as ImageIcon, Loader2, Youtube, Trash2 } from "lucide-react";
+import { Search, Plus, Filter, MoreHorizontal, ScanBarcode, ArrowRight, Check, X, RotateCcw, PackagePlus, ScanText, Upload, Image as ImageIcon, Loader2, Youtube, Trash2, ChevronUp, ChevronDown, GripVertical } from "lucide-react";
 import { ScannerOverlay } from "@/components/pos/scanner-overlay";
 import { KNOWN_BOOKS_DB } from "@/data/mock-external-books";
 import { useUpload } from "@/hooks/use-upload";
@@ -322,6 +322,40 @@ export default function Inventory() {
     product.barcode.includes(searchQuery)
   );
 
+  const moveProduct = async (index: number, direction: "up" | "down") => {
+    const newIndex = direction === "up" ? index - 1 : index + 1;
+    if (newIndex < 0 || newIndex >= products.length) return;
+    
+    const newProducts = [...products];
+    const temp = newProducts[index];
+    newProducts[index] = newProducts[newIndex];
+    newProducts[newIndex] = temp;
+    
+    const orderedIds = newProducts.map(p => p.id);
+    
+    try {
+      const res = await fetch("/api/products/reorder", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ orderedIds })
+      });
+      
+      if (res.ok) {
+        toast({
+          title: "Tartib saqlandi ✓",
+          duration: 1500,
+          className: "bg-green-500 text-white border-none",
+        });
+        window.location.reload();
+      }
+    } catch (error) {
+      toast({
+        title: "Xatolik yuz berdi",
+        variant: "destructive",
+      });
+    }
+  };
+
   return (
     <div className="flex flex-col md:flex-row min-h-screen font-sans" style={{backgroundColor: '#f1f5f9'}}>
       <SidebarNav />
@@ -598,6 +632,7 @@ export default function Inventory() {
               <Table>
                 <TableHeader>
                   <TableRow>
+                    <TableHead className="w-[60px]">Tartib</TableHead>
                     <TableHead className="w-[80px]">Rasm</TableHead>
                     <TableHead>Nomi / Muallif</TableHead>
                     <TableHead>Kategoriya</TableHead>
@@ -608,8 +643,30 @@ export default function Inventory() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filteredProducts.map((product) => (
+                  {filteredProducts.map((product, index) => (
                     <TableRow key={product.id}>
+                      <TableCell>
+                        <div className="flex flex-col gap-1">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-6 w-6"
+                            onClick={() => moveProduct(products.findIndex(p => p.id === product.id), "up")}
+                            disabled={products.findIndex(p => p.id === product.id) === 0}
+                          >
+                            <ChevronUp className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-6 w-6"
+                            onClick={() => moveProduct(products.findIndex(p => p.id === product.id), "down")}
+                            disabled={products.findIndex(p => p.id === product.id) === products.length - 1}
+                          >
+                            <ChevronDown className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </TableCell>
                       <TableCell>
                         <div className="w-10 h-14 bg-gray-100 rounded overflow-hidden">
                           <img src={product.image} alt="" className="w-full h-full object-cover" />

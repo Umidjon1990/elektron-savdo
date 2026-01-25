@@ -1,5 +1,17 @@
 import { createContext, useContext, useState, type ReactNode } from "react";
-import { type Product } from "@/data/mock-products";
+
+export interface Product {
+  id: string;
+  name: string;
+  author: string;
+  price: number;
+  costPrice: number;
+  stock: number;
+  category: string;
+  barcode: string;
+  image: string;
+  videoUrl?: string;
+}
 
 export interface CartItem {
   product: Product;

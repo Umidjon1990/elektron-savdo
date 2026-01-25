@@ -21,7 +21,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const login = async (username: string, password: string) => {
     // Mock authentication
-    if (username === "admin" && password === "admin123") {
+    if (username === "Abdulaziz" && password === "Abdulaziz5552") {
       setUser({ username, role: "admin" });
       setLocation("/admin");
       return true;

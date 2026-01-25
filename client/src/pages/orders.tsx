@@ -30,10 +30,15 @@ const statusMap = {
 };
 
 interface OrderItem {
-  productId: string;
-  productName: string;
+  productId?: string;
+  productName?: string;
   quantity: number;
-  price: number;
+  price?: number;
+  product?: {
+    id: string;
+    name: string;
+    price: number;
+  };
 }
 
 function OrderDetailsRow({ order, isExpanded, onToggle }: { order: Order; isExpanded: boolean; onToggle: () => void }) {
@@ -99,22 +104,26 @@ function OrderDetailsRow({ order, isExpanded, onToggle }: { order: Order; isExpa
                     </tr>
                   </thead>
                   <tbody>
-                    {items.map((item, index) => (
-                      <tr key={index} className="border-t border-slate-100">
-                        <td className="p-3 font-medium">{item.productName}</td>
-                        <td className="p-3 text-center">
-                          <Badge variant="secondary" className="bg-blue-100 text-blue-700">
-                            {item.quantity} dona
-                          </Badge>
-                        </td>
-                        <td className="p-3 text-right text-slate-600">
-                          {item.price.toLocaleString()} so'm
-                        </td>
-                        <td className="p-3 text-right font-bold">
-                          {(item.price * item.quantity).toLocaleString()} so'm
-                        </td>
-                      </tr>
-                    ))}
+                    {items.map((item, index) => {
+                      const productName = item.productName || item.product?.name || "Noma'lum";
+                      const price = item.price || item.product?.price || 0;
+                      return (
+                        <tr key={index} className="border-t border-slate-100">
+                          <td className="p-3 font-medium">{productName}</td>
+                          <td className="p-3 text-center">
+                            <Badge variant="secondary" className="bg-blue-100 text-blue-700">
+                              {item.quantity} dona
+                            </Badge>
+                          </td>
+                          <td className="p-3 text-right text-slate-600">
+                            {price.toLocaleString()} so'm
+                          </td>
+                          <td className="p-3 text-right font-bold">
+                            {(price * item.quantity).toLocaleString()} so'm
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                   <tfoot className="bg-slate-50 border-t-2 border-slate-200">
                     <tr>

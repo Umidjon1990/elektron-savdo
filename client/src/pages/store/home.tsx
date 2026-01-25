@@ -33,11 +33,11 @@ function FloatingCart() {
           <div className="flex items-center gap-3">
             <div className="relative">
               <ShoppingCart className="h-6 w-6" />
-              <span className="absolute -top-2 -right-2 w-5 h-5 bg-white text-indigo-600 text-xs font-bold flex items-center justify-center rounded-full">
-                {itemCount}
-              </span>
             </div>
             <span className="font-semibold">Savat</span>
+            <span className="bg-white text-indigo-600 text-sm font-bold px-2.5 py-0.5 rounded-full">
+              {itemCount} dona
+            </span>
           </div>
           <span className="text-lg font-bold">{total.toLocaleString()} so'm</span>
         </Button>

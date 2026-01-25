@@ -35,7 +35,7 @@ function FloatingCart() {
               <ShoppingCart className="h-6 w-6" />
             </div>
             <span className="font-semibold">Savat</span>
-            <span className="bg-white text-indigo-600 text-sm font-bold px-2.5 py-0.5 rounded-full">
+            <span className="bg-yellow-400 text-gray-900 text-sm font-bold px-2.5 py-1 rounded-full">
               {itemCount} dona
             </span>
           </div>

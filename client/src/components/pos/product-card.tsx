@@ -2,7 +2,8 @@ import { useState } from "react";
 import { type Product } from "@/data/mock-products";
 import { Card } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
-import { BookOpen, Plus, ShoppingCart } from "lucide-react";
+import { BookOpen, Plus, ShoppingCart, Play } from "lucide-react";
+import { VideoPopup } from "@/components/ui/video-popup";
 
 interface ProductCardProps {
   product: Product;
@@ -54,6 +55,24 @@ export function ProductCard({ product, onClick, size = "default" }: ProductCardP
         {product.stock <= 5 && (
           <div className="absolute top-2 left-2 bg-red-500 text-white text-[10px] font-bold px-2 py-1 rounded-full uppercase tracking-wide shadow-lg">
             Kam qoldi
+          </div>
+        )}
+
+        {product.videoUrl && (
+          <div 
+            className="absolute bottom-2 left-2 z-10"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <VideoPopup 
+              videoUrl={product.videoUrl} 
+              productName={product.name}
+              trigger={
+                <div className="bg-red-600 hover:bg-red-700 text-white text-[10px] font-bold px-2.5 py-1.5 rounded-full flex items-center gap-1.5 cursor-pointer shadow-lg transition-colors">
+                  <Play className="w-3 h-3 fill-white" />
+                  Batafsil video
+                </div>
+              }
+            />
           </div>
         )}
 

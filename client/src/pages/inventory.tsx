@@ -4,7 +4,7 @@ import { SidebarNav } from "@/components/layout/sidebar-nav";
 import { useProducts } from "@/lib/product-context";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Search, Plus, Filter, MoreHorizontal, ScanBarcode, ArrowRight, Check, X, RotateCcw, PackagePlus, ScanText, Upload, Image as ImageIcon, Loader2 } from "lucide-react";
+import { Search, Plus, Filter, MoreHorizontal, ScanBarcode, ArrowRight, Check, X, RotateCcw, PackagePlus, ScanText, Upload, Image as ImageIcon, Loader2, Youtube } from "lucide-react";
 import { ScannerOverlay } from "@/components/pos/scanner-overlay";
 import { KNOWN_BOOKS_DB } from "@/data/mock-external-books";
 import { useUpload } from "@/hooks/use-upload";
@@ -81,7 +81,8 @@ export default function Inventory() {
     stock: "",
     category: "",
     barcode: "",
-    image: ""
+    image: "",
+    videoUrl: ""
   });
   
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -110,7 +111,7 @@ export default function Inventory() {
     if (!isAddDialogOpen) {
       setStep(1);
       setEditingId(null);
-      setNewProduct({ name: "", author: "", price: "", costPrice: "", stock: "", category: "", barcode: "", image: "" });
+      setNewProduct({ name: "", author: "", price: "", costPrice: "", stock: "", category: "", barcode: "", image: "", videoUrl: "" });
     }
   }, [isAddDialogOpen]);
   
@@ -124,7 +125,8 @@ export default function Inventory() {
       stock: product.stock.toString(),
       category: product.category,
       barcode: product.barcode,
-      image: product.image
+      image: product.image,
+      videoUrl: product.videoUrl || ""
     });
     setStep(2); // Go directly to details step
     setIsAddDialogOpen(true);
@@ -236,7 +238,8 @@ export default function Inventory() {
           stock: Number(newProduct.stock),
           category: newProduct.category || categories[0]?.name || "Boshqa",
           barcode: newProduct.barcode.trim(),
-          image: newProduct.image
+          image: newProduct.image,
+          videoUrl: newProduct.videoUrl || undefined
         });
         toast({
           title: "O'zgartirildi",
@@ -252,7 +255,8 @@ export default function Inventory() {
           stock: Number(newProduct.stock),
           category: newProduct.category || categories[0]?.name || "Boshqa",
           barcode: newProduct.barcode.trim() || Math.random().toString().slice(2, 14),
-          image: newProduct.image || "https://images.unsplash.com/photo-1543002588-bfa74002ed7e?auto=format&fit=crop&q=80&w=300&h=400"
+          image: newProduct.image || "https://images.unsplash.com/photo-1543002588-bfa74002ed7e?auto=format&fit=crop&q=80&w=300&h=400",
+          videoUrl: newProduct.videoUrl || undefined
         });
         toast({
           title: "Muvaffaqiyatli qo'shildi",
@@ -524,6 +528,22 @@ export default function Inventory() {
                               className="bg-white"
                             />
                           </div>
+                        </div>
+
+                        <div className="space-y-2">
+                          <Label htmlFor="videoUrl" className="flex items-center gap-2">
+                            <Youtube className="h-4 w-4 text-red-500" />
+                            YouTube video (ixtiyoriy)
+                          </Label>
+                          <Input 
+                            id="videoUrl" 
+                            type="url" 
+                            placeholder="https://www.youtube.com/watch?v=..."
+                            value={newProduct.videoUrl}
+                            onChange={(e) => setNewProduct({...newProduct, videoUrl: e.target.value})}
+                            className="font-mono text-sm"
+                          />
+                          <p className="text-xs text-muted-foreground">Video qo'shsangiz, tovar kartasida "Batafsil video" tugmasi ko'rinadi</p>
                         </div>
                       </div>
                       <DialogFooter className="gap-2">

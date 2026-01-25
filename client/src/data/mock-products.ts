@@ -15,6 +15,7 @@ export interface Product {
   category: string;
   barcode: string;
   image: string;
+  videoUrl?: string;
 }
 
 export const MOCK_PRODUCTS: Product[] = [

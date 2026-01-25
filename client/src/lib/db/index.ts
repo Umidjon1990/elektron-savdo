@@ -10,6 +10,7 @@ export interface CachedProduct {
   category: string;
   barcode: string;
   image: string;
+  videoUrl?: string;
 }
 
 export interface CachedCategory {

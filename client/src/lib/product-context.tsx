@@ -13,6 +13,7 @@ interface Product {
   category: string;
   barcode: string;
   image: string;
+  videoUrl?: string;
 }
 
 interface ProductContextType {

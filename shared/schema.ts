@@ -19,6 +19,7 @@ export const products = pgTable("products", {
   category: text("category").notNull(),
   barcode: text("barcode").notNull().unique(),
   image: text("image").notNull(),
+  videoUrl: text("video_url"),
 });
 
 export const orders = pgTable("orders", {

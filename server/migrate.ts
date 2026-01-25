@@ -75,6 +75,14 @@ export async function runMigrations() {
           ALTER TABLE transactions ADD COLUMN total_profit INTEGER NOT NULL DEFAULT 0;
         END IF;
       END $$;
+      
+      -- Add video_url column to products if it doesn't exist
+      DO $$ 
+      BEGIN 
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='products' AND column_name='video_url') THEN
+          ALTER TABLE products ADD COLUMN video_url TEXT;
+        END IF;
+      END $$;
     `);
     
     console.log("Database migrations completed successfully!");

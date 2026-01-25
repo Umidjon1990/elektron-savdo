@@ -55,7 +55,7 @@ function FloatingCart() {
 
 export default function StoreHome() {
   const [, setLocation] = useLocation();
-  const { products } = useProducts();
+  const { products, isLoading: productsLoading } = useProducts();
   const { addItem, itemCount } = useCart();
   const [searchQuery, setSearchQuery] = useState("");
   const [activeCategory, setActiveCategory] = useState("Barchasi");
@@ -219,7 +219,24 @@ export default function StoreHome() {
           </div>
 
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6 mt-8">
-            {filteredProducts.map((product) => (
+            {productsLoading ? (
+              Array.from({ length: 8 }).map((_, i) => (
+                <div key={i} className="bg-white rounded-2xl p-3 shadow-sm border border-slate-100 animate-pulse">
+                  <div className="aspect-[2/3] bg-slate-200 rounded-xl mb-3" />
+                  <div className="h-3 bg-slate-200 rounded mb-2 w-1/3" />
+                  <div className="h-4 bg-slate-200 rounded mb-1" />
+                  <div className="h-3 bg-slate-200 rounded mb-3 w-2/3" />
+                  <div className="flex justify-between">
+                    <div className="h-5 bg-slate-200 rounded w-1/2" />
+                    <div className="h-8 w-8 bg-slate-200 rounded-full" />
+                  </div>
+                </div>
+              ))
+            ) : filteredProducts.length === 0 ? (
+              <div className="col-span-full text-center py-12">
+                <p className="text-slate-500">Mahsulotlar topilmadi</p>
+              </div>
+            ) : filteredProducts.map((product) => (
               <motion.div 
                 key={product.id}
                 initial={{ opacity: 0, scale: 0.95 }}

@@ -221,7 +221,7 @@ export default function CartPage() {
                           data-testid="input-telegram"
                           placeholder="+998 90 123 45 67" 
                           value={formData.telegramPhone}
-                          onChange={(e) => setFormData({...formData, telegramPhone: e.target.value})}
+                          onChange={(e) => setFormData({...formData, telegramPhone: e.target.value.replace(/@/g, '')})}
                         />
                       </div>
                       

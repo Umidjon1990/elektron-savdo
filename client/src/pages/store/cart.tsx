@@ -26,7 +26,8 @@ export default function CartPage() {
     deliveryType: "delivery" as "delivery" | "pickup",
     paymentMethod: "click" as "cash" | "card" | "online",
     address: "",
-    shippingType: "BTS" as "BTS" | "Starex"
+    shippingType: "BTS" as "BTS" | "Starex",
+    postalAddress: ""
   });
 
   const handleCheckout = async () => {
@@ -50,7 +51,13 @@ export default function CartPage() {
 
     try {
       // Add order to admin panel and send Telegram notification via backend
-      const telegramInfo = formData.telegramPhone + (formData.deliveryType === "delivery" ? ` | Manzil: ${formData.address} | Pochta: ${formData.shippingType}` : "");
+      let telegramInfo = formData.telegramPhone;
+      if (formData.deliveryType === "delivery") {
+        telegramInfo += ` | Manzil: ${formData.address} | Pochta: ${formData.shippingType}`;
+        if (formData.postalAddress) {
+          telegramInfo += ` | Pochta manzili: ${formData.postalAddress}`;
+        }
+      }
       await addOrder({
         customerName: formData.name,
         customerPhone: formData.phone,
@@ -275,6 +282,15 @@ export default function CartPage() {
                                 <Label htmlFor="starex">Starex</Label>
                               </div>
                             </RadioGroup>
+                          </div>
+
+                          <div className="space-y-2">
+                            <Label>Pochta manzili <span className="text-slate-400 font-normal">(ixtiyoriy)</span></Label>
+                            <Input 
+                              placeholder="Pochta filiali manzili" 
+                              value={formData.postalAddress}
+                              onChange={(e) => setFormData({...formData, postalAddress: e.target.value})}
+                            />
                           </div>
                         </>
                       )}

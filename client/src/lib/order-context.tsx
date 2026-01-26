@@ -6,6 +6,7 @@ export interface Order {
   id: string;
   customerName: string;
   customerPhone: string;
+  customerTelegram?: string;
   items: any; // JSON field
   totalAmount: number;
   status: "new" | "paid" | "shipped" | "cancelled";

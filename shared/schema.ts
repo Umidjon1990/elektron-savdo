@@ -27,6 +27,7 @@ export const orders = pgTable("orders", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   customerName: text("customer_name").notNull(),
   customerPhone: text("customer_phone").notNull(),
+  customerTelegram: text("customer_telegram"),
   items: json("items").notNull(), // Array of {productId, productName, quantity, price}
   totalAmount: integer("total_amount").notNull(),
   status: text("status").notNull().default("new"), // new, paid, shipped, cancelled

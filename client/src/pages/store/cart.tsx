@@ -22,55 +22,48 @@ export default function CartPage() {
   const [formData, setFormData] = useState({
     name: "",
     phone: "",
+    telegram: "",
     deliveryType: "delivery" as "delivery" | "pickup",
     paymentMethod: "click" as "cash" | "card" | "online"
   });
 
-  const handleCheckout = () => {
-    if (!formData.name || !formData.phone) {
+  const handleCheckout = async () => {
+    if (!formData.name || !formData.phone || !formData.telegram) {
       toast({
         title: "Ma'lumotlar to'liq emas",
-        description: "Iltimos, ism va telefon raqamingizni kiriting",
+        description: "Iltimos, ism, telefon va Telegram username kiriting",
         variant: "destructive"
       });
       return;
     }
 
-    // Add order to admin panel
-    addOrder({
-      customerName: formData.name,
-      customerPhone: formData.phone,
-      items: items,
-      totalAmount: total,
-      paymentMethod: formData.paymentMethod,
-      deliveryType: formData.deliveryType
-    });
+    try {
+      // Add order to admin panel and send Telegram notification via backend
+      await addOrder({
+        customerName: formData.name,
+        customerPhone: formData.phone,
+        customerTelegram: formData.telegram,
+        items: items,
+        totalAmount: total,
+        paymentMethod: formData.paymentMethod,
+        deliveryType: formData.deliveryType
+      });
 
-    // Simulate Telegram message
-    const message = `
-📦 Yangi Buyurtma!
+      toast({
+        title: "Buyurtma qabul qilindi! ✅",
+        description: "Tez orada operatorlarimiz siz bilan Telegram orqali bog'lanishadi.",
+      });
 
-👤 Mijoz: ${formData.name}
-📞 Tel: ${formData.phone}
-💰 Summa: ${total.toLocaleString()} so'm
-🚚 Yetkazib berish: ${formData.deliveryType === 'delivery' ? 'Kuryer orqali' : 'Olib ketish'}
-💳 To'lov: ${formData.paymentMethod}
-
-📚 Kitoblar:
-${items.map(i => `- ${i.product.name} (${i.quantity}x)`).join('\n')}
-    `;
-    
-    // In a real app, this would be an API call to a Telegram bot
-    console.log("Sending to Telegram:", message);
-
-    toast({
-      title: "Buyurtma qabul qilindi! ✅",
-      description: "Tez orada operatorlarimiz siz bilan bog'lanishadi.",
-    });
-
-    clearCart();
-    setIsCheckoutOpen(false);
-    setLocation("/");
+      clearCart();
+      setIsCheckoutOpen(false);
+      setLocation("/");
+    } catch (error) {
+      toast({
+        title: "Xatolik yuz berdi",
+        description: "Buyurtmani yuborishda xatolik. Qaytadan urinib ko'ring.",
+        variant: "destructive"
+      });
+    }
   };
 
   if (items.length === 0) {
@@ -200,6 +193,17 @@ ${items.map(i => `- ${i.product.name} (${i.quantity}x)`).join('\n')}
                           value={formData.phone}
                           onChange={(e) => setFormData({...formData, phone: e.target.value})}
                         />
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label>Telegram username</Label>
+                        <Input 
+                          data-testid="input-telegram"
+                          placeholder="@username" 
+                          value={formData.telegram}
+                          onChange={(e) => setFormData({...formData, telegram: e.target.value})}
+                        />
+                        <p className="text-xs text-slate-500">Operator siz bilan Telegram orqali bog'lanadi</p>
                       </div>
                       
                       <div className="space-y-2">

@@ -3,6 +3,7 @@ import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { insertProductSchema, insertOrderSchema, insertCategorySchema, insertTransactionSchema } from "@shared/schema";
 import { registerR2Routes } from "./integrations/r2-routes";
+import { sendTelegramNotification } from "./telegram";
 
 export async function registerRoutes(
   httpServer: Server,
@@ -148,8 +149,18 @@ export async function registerRoutes(
       const validatedData = insertOrderSchema.parse(req.body);
       const order = await storage.createOrder(validatedData);
       
-      // Send to Telegram (we'll implement this next)
-      // await sendToTelegram(order);
+      // Send notification to Telegram bot
+      sendTelegramNotification({
+        id: order.id,
+        customerName: order.customerName,
+        customerPhone: order.customerPhone,
+        customerTelegram: order.customerTelegram,
+        items: order.items as any[],
+        totalAmount: order.totalAmount,
+        paymentMethod: order.paymentMethod,
+        deliveryType: order.deliveryType,
+        createdAt: order.createdAt,
+      }).catch(err => console.error('Failed to send Telegram notification:', err));
       
       res.status(201).json(order);
     } catch (error) {

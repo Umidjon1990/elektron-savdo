@@ -22,16 +22,27 @@ export default function CartPage() {
   const [formData, setFormData] = useState({
     name: "",
     phone: "",
-    telegram: "",
+    telegramPhone: "",
     deliveryType: "delivery" as "delivery" | "pickup",
-    paymentMethod: "click" as "cash" | "card" | "online"
+    paymentMethod: "click" as "cash" | "card" | "online",
+    address: "",
+    shippingType: "BTS" as "BTS" | "Starex"
   });
 
   const handleCheckout = async () => {
-    if (!formData.name || !formData.phone) {
+    if (!formData.name || !formData.phone || !formData.telegramPhone) {
       toast({
         title: "Ma'lumotlar to'liq emas",
-        description: "Iltimos, ism va telefon raqamingizni kiriting",
+        description: "Iltimos, ism va telefon raqamlarini kiriting",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    if (formData.deliveryType === "delivery" && !formData.address) {
+      toast({
+        title: "Manzil kiritilmagan",
+        description: "Iltimos, yetkazib berish manzilingizni kiriting",
         variant: "destructive"
       });
       return;
@@ -39,10 +50,11 @@ export default function CartPage() {
 
     try {
       // Add order to admin panel and send Telegram notification via backend
+      const telegramInfo = formData.telegramPhone + (formData.deliveryType === "delivery" ? ` | Manzil: ${formData.address} | Pochta: ${formData.shippingType}` : "");
       await addOrder({
         customerName: formData.name,
         customerPhone: formData.phone,
-        customerTelegram: formData.telegram || undefined,
+        customerTelegram: telegramInfo,
         items: items,
         totalAmount: total,
         paymentMethod: formData.paymentMethod,
@@ -187,8 +199,7 @@ export default function CartPage() {
                         />
                       </div>
                       <div className="space-y-2">
-                        <Label>Telefon raqam</Label>
-                        <p className="text-xs text-amber-600 mb-1">💡 Iltimos, Telegram ulangan raqamingizni kiriting</p>
+                        <Label>Aloqa uchun telefon</Label>
                         <Input 
                           placeholder="+998 90 123 45 67" 
                           value={formData.phone}
@@ -197,14 +208,14 @@ export default function CartPage() {
                       </div>
 
                       <div className="space-y-2">
-                        <Label>Telegram username <span className="text-slate-400 font-normal">(ixtiyoriy)</span></Label>
+                        <Label>Telegram uchun telefon</Label>
+                        <p className="text-xs text-amber-600 mb-1">💡 Telegram ulangan raqamingizni kiriting</p>
                         <Input 
                           data-testid="input-telegram"
-                          placeholder="@username" 
-                          value={formData.telegram}
-                          onChange={(e) => setFormData({...formData, telegram: e.target.value})}
+                          placeholder="+998 90 123 45 67" 
+                          value={formData.telegramPhone}
+                          onChange={(e) => setFormData({...formData, telegramPhone: e.target.value})}
                         />
-                        <p className="text-xs text-amber-600">💡 Telegram orqali tezroq bog'lanamiz!</p>
                       </div>
                       
                       <div className="space-y-2">
@@ -236,6 +247,37 @@ export default function CartPage() {
                           </div>
                         </RadioGroup>
                       </div>
+
+                      {formData.deliveryType === "delivery" && (
+                        <>
+                          <div className="space-y-2">
+                            <Label>Manzil</Label>
+                            <Input 
+                              placeholder="Shahar, tuman, ko'cha, uy raqami" 
+                              value={formData.address}
+                              onChange={(e) => setFormData({...formData, address: e.target.value})}
+                            />
+                          </div>
+
+                          <div className="space-y-2">
+                            <Label>Pochta turi</Label>
+                            <RadioGroup 
+                              value={formData.shippingType} 
+                              onValueChange={(v: "BTS" | "Starex") => setFormData({...formData, shippingType: v})}
+                              className="flex gap-4"
+                            >
+                              <div className="flex items-center space-x-2">
+                                <RadioGroupItem value="BTS" id="bts" />
+                                <Label htmlFor="bts">BTS</Label>
+                              </div>
+                              <div className="flex items-center space-x-2">
+                                <RadioGroupItem value="Starex" id="starex" />
+                                <Label htmlFor="starex">Starex</Label>
+                              </div>
+                            </RadioGroup>
+                          </div>
+                        </>
+                      )}
 
                       <div className="space-y-2">
                         <Label>To'lov turi</Label>

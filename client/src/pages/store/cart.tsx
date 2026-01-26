@@ -28,10 +28,10 @@ export default function CartPage() {
   });
 
   const handleCheckout = async () => {
-    if (!formData.name || !formData.phone || !formData.telegram) {
+    if (!formData.name || !formData.phone) {
       toast({
         title: "Ma'lumotlar to'liq emas",
-        description: "Iltimos, ism, telefon va Telegram username kiriting",
+        description: "Iltimos, ism va telefon raqamingizni kiriting",
         variant: "destructive"
       });
       return;
@@ -42,7 +42,7 @@ export default function CartPage() {
       await addOrder({
         customerName: formData.name,
         customerPhone: formData.phone,
-        customerTelegram: formData.telegram,
+        customerTelegram: formData.telegram || undefined,
         items: items,
         totalAmount: total,
         paymentMethod: formData.paymentMethod,
@@ -196,14 +196,14 @@ export default function CartPage() {
                       </div>
 
                       <div className="space-y-2">
-                        <Label>Telegram username</Label>
+                        <Label>Telegram username <span className="text-slate-400 font-normal">(ixtiyoriy)</span></Label>
                         <Input 
                           data-testid="input-telegram"
                           placeholder="@username" 
                           value={formData.telegram}
                           onChange={(e) => setFormData({...formData, telegram: e.target.value})}
                         />
-                        <p className="text-xs text-slate-500">Operator siz bilan Telegram orqali bog'lanadi</p>
+                        <p className="text-xs text-amber-600">💡 Telegram orqali tezroq bog'lanamiz!</p>
                       </div>
                       
                       <div className="space-y-2">

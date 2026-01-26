@@ -188,6 +188,7 @@ export default function CartPage() {
                       </div>
                       <div className="space-y-2">
                         <Label>Telefon raqam</Label>
+                        <p className="text-xs text-amber-600 mb-1">💡 Iltimos, Telegram ulangan raqamingizni kiriting</p>
                         <Input 
                           placeholder="+998 90 123 45 67" 
                           value={formData.phone}

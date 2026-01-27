@@ -36,7 +36,7 @@ function formatOrderMessage(order: OrderData): string {
   }).join('\n');
 
   const telegramLink = order.customerTelegram 
-    ? `\n📲 Telegram: ${order.customerTelegram.startsWith('@') ? order.customerTelegram : '@' + order.customerTelegram}` 
+    ? `\n📲 Telegram: ${order.customerTelegram.replace(/@/g, '')}` 
     : '';
 
   return `📦 *YANGI BUYURTMA!*

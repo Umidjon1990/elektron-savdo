@@ -81,7 +81,41 @@ export async function saveTransactionLocally(transaction: Omit<CachedTransaction
   return txn;
 }
 
+export async function syncTransactionsFromServer(): Promise<CachedTransaction[]> {
+  try {
+    const res = await fetch('/api/transactions');
+    if (!res.ok) throw new Error('Failed to fetch transactions');
+    const serverTransactions = await res.json();
+    
+    // Merge server transactions with local cache
+    for (const txn of serverTransactions) {
+      const existing = await db.transactions.get(txn.id);
+      if (!existing) {
+        await db.transactions.put({
+          id: txn.id,
+          date: txn.createdAt || txn.date,
+          items: txn.items || [],
+          totalAmount: txn.totalAmount,
+          totalProfit: txn.totalProfit || 0,
+          paymentMethod: txn.paymentMethod,
+          synced: true,
+          status: txn.status || 'completed'
+        });
+      }
+    }
+    
+    return await db.transactions.orderBy('date').reverse().toArray();
+  } catch (error) {
+    console.error('Failed to sync transactions from server:', error);
+    return await db.transactions.orderBy('date').reverse().toArray();
+  }
+}
+
 export async function getTransactionsFromCache(): Promise<CachedTransaction[]> {
+  // First try to sync from server if online
+  if (isOnline) {
+    return await syncTransactionsFromServer();
+  }
   return await db.transactions.orderBy('date').reverse().toArray();
 }
 

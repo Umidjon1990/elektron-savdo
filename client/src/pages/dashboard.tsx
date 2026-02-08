@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { SidebarNav } from "@/components/layout/sidebar-nav";
 import { ProductCard } from "@/components/pos/product-card";
@@ -61,6 +61,41 @@ export default function Dashboard() {
   const [isReceiptsListOpen, setIsReceiptsListOpen] = useState(false);
   const [isSoldItemsOpen, setIsSoldItemsOpen] = useState(false);
   const { toast } = useToast();
+  const barcodeBufferRef = useRef("");
+  const barcodeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement;
+      const isInputFocused = target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable;
+      
+      if (isInputFocused) return;
+
+      if (e.key === 'Enter') {
+        if (barcodeBufferRef.current.length >= 8) {
+          handleScan(barcodeBufferRef.current);
+        }
+        barcodeBufferRef.current = "";
+        if (barcodeTimerRef.current) clearTimeout(barcodeTimerRef.current);
+        return;
+      }
+
+      if (/^[0-9]$/.test(e.key)) {
+        barcodeBufferRef.current += e.key;
+        
+        if (barcodeTimerRef.current) clearTimeout(barcodeTimerRef.current);
+        barcodeTimerRef.current = setTimeout(() => {
+          if (barcodeBufferRef.current.length >= 8) {
+            handleScan(barcodeBufferRef.current);
+          }
+          barcodeBufferRef.current = "";
+        }, 300);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [products]);
 
   const addToCart = (product: Product) => {
     setCart(prev => {

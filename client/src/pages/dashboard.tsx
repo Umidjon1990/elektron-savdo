@@ -63,39 +63,88 @@ export default function Dashboard() {
   const { toast } = useToast();
   const barcodeBufferRef = useRef("");
   const barcodeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastKeyTimeRef = useRef(0);
+
+  const processBarcode = useCallback((code: string) => {
+    const normalize = (s: string) => s.replace(/[^0-9]/g, "");
+    const cleanCode = normalize(code);
+    if (!cleanCode || cleanCode.length < 8) return;
+
+    const product = products.find(p => {
+      const pBarcode = normalize(p.barcode);
+      return (
+        pBarcode === cleanCode ||
+        pBarcode === "0" + cleanCode ||
+        "0" + pBarcode === cleanCode
+      );
+    });
+
+    if (product) {
+      addToCart(product);
+      setIsMobileCartOpen(true);
+      if (beepSound) {
+        beepSound.currentTime = 0;
+        beepSound.volume = 0.5;
+        beepSound.play().catch(() => {});
+      }
+      toast({
+        title: "Savatchaga qo'shildi",
+        description: `${product.name} - ${product.price.toLocaleString()} so'm`,
+        duration: 1500,
+      });
+    } else {
+      toast({
+        title: "Xatolik",
+        description: `Kitob topilmadi: ${code}`,
+        variant: "destructive",
+      });
+    }
+  }, [products]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      const target = e.target as HTMLElement;
-      const isInputFocused = target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable;
-      
-      if (isInputFocused) return;
+      const now = Date.now();
+      const timeDiff = now - lastKeyTimeRef.current;
+      lastKeyTimeRef.current = now;
 
       if (e.key === 'Enter') {
         if (barcodeBufferRef.current.length >= 8) {
-          handleScan(barcodeBufferRef.current);
+          e.preventDefault();
+          e.stopPropagation();
+          const code = barcodeBufferRef.current;
+          barcodeBufferRef.current = "";
+          if (barcodeTimerRef.current) clearTimeout(barcodeTimerRef.current);
+          setSearchQuery("");
+          processBarcode(code);
         }
         barcodeBufferRef.current = "";
-        if (barcodeTimerRef.current) clearTimeout(barcodeTimerRef.current);
         return;
       }
 
       if (/^[0-9]$/.test(e.key)) {
-        barcodeBufferRef.current += e.key;
-        
+        if (barcodeBufferRef.current.length === 0 || timeDiff < 100) {
+          barcodeBufferRef.current += e.key;
+        } else {
+          barcodeBufferRef.current = e.key;
+        }
+
         if (barcodeTimerRef.current) clearTimeout(barcodeTimerRef.current);
         barcodeTimerRef.current = setTimeout(() => {
           if (barcodeBufferRef.current.length >= 8) {
-            handleScan(barcodeBufferRef.current);
+            const code = barcodeBufferRef.current;
+            barcodeBufferRef.current = "";
+            setSearchQuery("");
+            processBarcode(code);
+          } else {
+            barcodeBufferRef.current = "";
           }
-          barcodeBufferRef.current = "";
-        }, 300);
+        }, 200);
       }
     };
 
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [products]);
+    window.addEventListener('keydown', handleKeyDown, true);
+    return () => window.removeEventListener('keydown', handleKeyDown, true);
+  }, [processBarcode]);
 
   const addToCart = (product: Product) => {
     setCart(prev => {

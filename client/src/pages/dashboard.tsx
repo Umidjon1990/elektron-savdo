@@ -64,44 +64,55 @@ export default function Dashboard() {
   const barcodeBufferRef = useRef("");
   const barcodeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastKeyTimeRef = useRef(0);
+  const productsRef = useRef(products);
+  const searchInputRef = useRef<HTMLInputElement>(null);
 
-  const processBarcode = useCallback((code: string) => {
-    const normalize = (s: string) => s.replace(/[^0-9]/g, "");
-    const cleanCode = normalize(code);
-    if (!cleanCode || cleanCode.length < 8) return;
-
-    const product = products.find(p => {
-      const pBarcode = normalize(p.barcode);
-      return (
-        pBarcode === cleanCode ||
-        pBarcode === "0" + cleanCode ||
-        "0" + pBarcode === cleanCode
-      );
-    });
-
-    if (product) {
-      addToCart(product);
-      setIsMobileCartOpen(true);
-      if (beepSound) {
-        beepSound.currentTime = 0;
-        beepSound.volume = 0.5;
-        beepSound.play().catch(() => {});
-      }
-      toast({
-        title: "Savatchaga qo'shildi",
-        description: `${product.name} - ${product.price.toLocaleString()} so'm`,
-        duration: 1500,
-      });
-    } else {
-      toast({
-        title: "Xatolik",
-        description: `Kitob topilmadi: ${code}`,
-        variant: "destructive",
-      });
-    }
+  useEffect(() => {
+    productsRef.current = products;
   }, [products]);
 
   useEffect(() => {
+    const processBarcodeFromBuffer = (code: string) => {
+      const normalize = (s: string) => s.replace(/[^0-9]/g, "");
+      const cleanCode = normalize(code);
+      if (!cleanCode || cleanCode.length < 8) return;
+
+      const currentProducts = productsRef.current;
+      const product = currentProducts.find(p => {
+        const pBarcode = normalize(p.barcode);
+        return (
+          pBarcode === cleanCode ||
+          pBarcode === "0" + cleanCode ||
+          "0" + pBarcode === cleanCode
+        );
+      });
+
+      if (product) {
+        setCart(prev => {
+          const existing = prev.find(item => item.product.id === product.id);
+          if (existing) {
+            return prev.map(item =>
+              item.product.id === product.id
+                ? { ...item, quantity: item.quantity + 1 }
+                : item
+            );
+          }
+          return [...prev, { product, quantity: 1 }];
+        });
+        setIsMobileCartOpen(true);
+        if (beepSound) {
+          beepSound.currentTime = 0;
+          beepSound.volume = 0.5;
+          beepSound.play().catch(() => {});
+        }
+        if (popSound) {
+          popSound.currentTime = 0;
+          popSound.volume = 0.5;
+          popSound.play().catch(() => {});
+        }
+      }
+    };
+
     const handleKeyDown = (e: KeyboardEvent) => {
       const now = Date.now();
       const timeDiff = now - lastKeyTimeRef.current;
@@ -115,17 +126,26 @@ export default function Dashboard() {
           barcodeBufferRef.current = "";
           if (barcodeTimerRef.current) clearTimeout(barcodeTimerRef.current);
           setSearchQuery("");
-          processBarcode(code);
+          if (searchInputRef.current) {
+            searchInputRef.current.value = "";
+            searchInputRef.current.blur();
+          }
+          processBarcodeFromBuffer(code);
         }
         barcodeBufferRef.current = "";
         return;
       }
 
       if (/^[0-9]$/.test(e.key)) {
-        if (barcodeBufferRef.current.length === 0 || timeDiff < 100) {
+        if (barcodeBufferRef.current.length === 0 || timeDiff < 150) {
           barcodeBufferRef.current += e.key;
         } else {
           barcodeBufferRef.current = e.key;
+        }
+
+        if (barcodeBufferRef.current.length >= 3) {
+          e.preventDefault();
+          e.stopPropagation();
         }
 
         if (barcodeTimerRef.current) clearTimeout(barcodeTimerRef.current);
@@ -134,17 +154,21 @@ export default function Dashboard() {
             const code = barcodeBufferRef.current;
             barcodeBufferRef.current = "";
             setSearchQuery("");
-            processBarcode(code);
+            if (searchInputRef.current) {
+              searchInputRef.current.value = "";
+              searchInputRef.current.blur();
+            }
+            processBarcodeFromBuffer(code);
           } else {
             barcodeBufferRef.current = "";
           }
-        }, 200);
+        }, 300);
       }
     };
 
-    window.addEventListener('keydown', handleKeyDown, true);
-    return () => window.removeEventListener('keydown', handleKeyDown, true);
-  }, [processBarcode]);
+    document.addEventListener('keydown', handleKeyDown, true);
+    return () => document.removeEventListener('keydown', handleKeyDown, true);
+  }, []);
 
   const addToCart = (product: Product) => {
     setCart(prev => {
@@ -348,6 +372,7 @@ export default function Dashboard() {
             <div className="relative w-full max-w-md">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
               <Input 
+                ref={searchInputRef}
                 placeholder="Qidiruv..." 
                 className="pl-9 bg-gray-50 border-gray-200 focus-visible:ring-primary w-full"
                 value={searchQuery}

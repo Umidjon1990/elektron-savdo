@@ -461,12 +461,12 @@ export default function Dashboard() {
               <div className="bg-gradient-to-br from-green-500 to-emerald-600 rounded-xl p-2.5 md:p-4 shadow-sm text-white text-center">
                 <DollarSign className="w-5 h-5 md:w-6 md:h-6 mx-auto mb-1 opacity-80" />
                 <p className="text-[9px] md:text-xs opacity-80 font-medium">Bugun</p>
-                <p className="text-xs md:text-lg font-bold">{(stats.todayTotal / 1000).toFixed(0)}k</p>
+                <p className="text-xs md:text-lg font-bold">{stats.todayTotal.toLocaleString()}</p>
               </div>
               <div className="bg-gradient-to-br from-emerald-600 to-teal-600 rounded-xl p-2.5 md:p-4 shadow-sm text-white text-center">
                 <TrendingUp className="w-5 h-5 md:w-6 md:h-6 mx-auto mb-1 opacity-80" />
                 <p className="text-[9px] md:text-xs opacity-80 font-medium">Daromad</p>
-                <p className="text-xs md:text-lg font-bold">{(stats.todayProfit / 1000).toFixed(0)}k</p>
+                <p className="text-xs md:text-lg font-bold">{stats.todayProfit.toLocaleString()}</p>
               </div>
               <div 
                 className="bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl p-2.5 md:p-4 shadow-sm text-white text-center cursor-pointer hover:opacity-90 transition-opacity"
@@ -489,7 +489,7 @@ export default function Dashboard() {
               <div className="bg-gradient-to-br from-orange-500 to-orange-600 rounded-xl p-2.5 md:p-4 shadow-sm text-white text-center">
                 <TrendingUp className="w-5 h-5 md:w-6 md:h-6 mx-auto mb-1 opacity-80" />
                 <p className="text-[9px] md:text-xs opacity-80 font-medium">Oylik</p>
-                <p className="text-xs md:text-lg font-bold">{(stats.monthTotal / 1000).toFixed(0)}k</p>
+                <p className="text-xs md:text-lg font-bold">{stats.monthTotal.toLocaleString()}</p>
               </div>
             </div>
 

@@ -91,6 +91,11 @@ Key backend files:
 - Added registration/onboarding flow for new stores
 - Added rate limiting and gzip compression
 - Migrated existing data to default tenant
+- Super admin panel (/admin/super) - manage all tenants, create stores, set plans
+- Slug-based store routing: /store/:slug, /store/:slug/cart, /store/:slug/login
+- Stores list page at / showing all active stores
+- Secure slug-based public APIs: /api/store/:slug/products, /api/store/:slug/categories, /api/store/:slug/orders
+- Each store has its own branded page with logo, colors, products
 
 ## External Dependencies
 

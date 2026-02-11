@@ -133,6 +133,55 @@ export async function registerRoutes(
     }
   });
 
+  // ============ STORES LIST (PUBLIC) ============
+
+  app.get("/api/stores", async (req, res) => {
+    try {
+      const allTenants = await storage.getAllTenants();
+      const activeStores = allTenants.filter(t => t.status === "active");
+      const publicData = await Promise.all(activeStores.map(async (t) => {
+        const products = await storage.getAllProducts(t.id);
+        return {
+          id: t.id,
+          slug: t.slug,
+          name: t.name,
+          logo: t.logo,
+          brandColor: t.brandColor,
+          status: t.status,
+          productsCount: products.length,
+        };
+      }));
+      res.json(publicData);
+    } catch (error) {
+      console.error("Error fetching stores:", error);
+      res.status(500).json({ error: "Server xatoligi" });
+    }
+  });
+
+  // ============ STORE PUBLIC API (slug-based, no tenant spoofing) ============
+
+  app.get("/api/store/:slug/products", async (req, res) => {
+    try {
+      const tenant = await getTenantBySlug(req.params.slug);
+      if (!tenant) return res.status(404).json({ error: "Do'kon topilmadi" });
+      const products = await storage.getAllProducts(tenant.id);
+      res.json(products);
+    } catch (error) {
+      res.status(500).json({ error: "Server xatoligi" });
+    }
+  });
+
+  app.get("/api/store/:slug/categories", async (req, res) => {
+    try {
+      const tenant = await getTenantBySlug(req.params.slug);
+      if (!tenant) return res.status(404).json({ error: "Do'kon topilmadi" });
+      const cats = await storage.getAllCategories(tenant.id);
+      res.json(cats);
+    } catch (error) {
+      res.status(500).json({ error: "Server xatoligi" });
+    }
+  });
+
   // ============ TENANT INFO (PUBLIC) ============
 
   app.get("/api/tenant/:slug", async (req, res) => {
@@ -392,9 +441,39 @@ export async function registerRoutes(
     }
   });
 
+  app.post("/api/store/:slug/orders", async (req, res) => {
+    try {
+      const tenant = await getTenantBySlug(req.params.slug);
+      if (!tenant) return res.status(404).json({ error: "Do'kon topilmadi" });
+      const tenantId = tenant.id;
+      const validatedData = insertOrderSchema.parse({ ...req.body, tenantId });
+      const order = await storage.createOrder(validatedData);
+
+      const botToken = tenant.telegramBotToken || process.env.TELEGRAM_BOT_TOKEN;
+      const chatId = tenant.telegramChatId || process.env.TELEGRAM_CHAT_ID;
+      if (botToken && chatId) {
+        sendTelegramNotification({
+          id: order.id,
+          customerName: order.customerName,
+          customerPhone: order.customerPhone,
+          customerTelegram: order.customerTelegram,
+          items: order.items as any[],
+          totalAmount: order.totalAmount,
+          paymentMethod: order.paymentMethod,
+          deliveryType: order.deliveryType,
+          createdAt: order.createdAt,
+        }, botToken, chatId).catch(err => console.error('Failed to send Telegram notification:', err));
+      }
+      res.status(201).json(order);
+    } catch (error) {
+      console.error("Error creating store order:", error);
+      res.status(500).json({ error: "Failed to create order" });
+    }
+  });
+
   app.post("/api/orders", optionalAuth, async (req, res) => {
     try {
-      const tenantId = req.tenantId || req.headers["x-tenant-id"] as string || "default-tenant";
+      const tenantId = req.tenantId || "default-tenant";
 
       const validatedData = insertOrderSchema.parse({ ...req.body, tenantId });
       const order = await storage.createOrder(validatedData);

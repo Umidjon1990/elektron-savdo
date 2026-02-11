@@ -25,9 +25,17 @@ const importSettings = () => import("@/pages/settings");
 const importCategories = () => import("@/pages/categories");
 const importNotFound = () => import("@/pages/not-found");
 const importSuperAdmin = () => import("@/pages/super-admin");
+const importStoresList = () => import("@/pages/store/stores-list");
+const importSlugStore = () => import("@/pages/store/slug-store");
+const importSlugCart = () => import("@/pages/store/slug-cart");
+const importSlugLogin = () => import("@/pages/store/slug-login");
 
 const NotFound = lazy(importNotFound);
 const SuperAdminPage = lazy(importSuperAdmin);
+const StoresListPage = lazy(importStoresList);
+const SlugStorePage = lazy(importSlugStore);
+const SlugCartPage = lazy(importSlugCart);
+const SlugLoginPage = lazy(importSlugLogin);
 const Dashboard = lazy(importDashboard);
 const Inventory = lazy(importInventory);
 const History = lazy(importHistory);
@@ -112,7 +120,10 @@ function Router() {
   return (
     <Switch>
       {/* Public Routes */}
-      <Route path="/" component={StoreHome} />
+      <Route path="/" component={StoresListPage} />
+      <Route path="/store/:slug" component={SlugStorePage} />
+      <Route path="/store/:slug/cart" component={SlugCartPage} />
+      <Route path="/store/:slug/login" component={SlugLoginPage} />
       <Route path="/cart" component={CartPage} />
       <Route path="/login" component={LoginPage} />
       <Route path="/register" component={RegisterPage} />

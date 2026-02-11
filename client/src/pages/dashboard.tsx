@@ -45,7 +45,8 @@ export default function Dashboard() {
   const { data: categories = [] } = useQuery<Category[]>({
     queryKey: ["/api/categories"],
     queryFn: async () => {
-      const res = await fetch("/api/categories");
+      const { getAuthHeaders } = await import("@/lib/auth-context");
+      const res = await fetch("/api/categories", { headers: getAuthHeaders() });
       if (!res.ok) throw new Error("Failed to fetch categories");
       return res.json();
     },

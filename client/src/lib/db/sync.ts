@@ -1,4 +1,5 @@
 import { db, type CachedProduct, type CachedCategory, type CachedTransaction, setLastSyncTime, setCatalogVersion, getCatalogVersion } from './index';
+import { getAuthHeaders } from '../auth-context';
 
 let isOnline = typeof navigator !== 'undefined' ? navigator.onLine : true;
 
@@ -18,7 +19,7 @@ export function getOnlineStatus(): boolean {
 
 export async function syncProductsFromServer(): Promise<CachedProduct[]> {
   try {
-    const res = await fetch('/api/products');
+    const res = await fetch('/api/products', { headers: getAuthHeaders() });
     if (!res.ok) throw new Error('Failed to fetch products');
     const products: CachedProduct[] = await res.json();
     
@@ -38,7 +39,7 @@ export async function syncProductsFromServer(): Promise<CachedProduct[]> {
 
 export async function syncCategoriesFromServer(): Promise<CachedCategory[]> {
   try {
-    const res = await fetch('/api/categories');
+    const res = await fetch('/api/categories', { headers: getAuthHeaders() });
     if (!res.ok) throw new Error('Failed to fetch categories');
     const categories: CachedCategory[] = await res.json();
     
@@ -83,11 +84,10 @@ export async function saveTransactionLocally(transaction: Omit<CachedTransaction
 
 export async function syncTransactionsFromServer(): Promise<CachedTransaction[]> {
   try {
-    const res = await fetch('/api/transactions');
+    const res = await fetch('/api/transactions', { headers: getAuthHeaders() });
     if (!res.ok) throw new Error('Failed to fetch transactions');
     const serverTransactions = await res.json();
     
-    // Merge server transactions with local cache
     for (const txn of serverTransactions) {
       const existing = await db.transactions.get(txn.id);
       if (!existing) {
@@ -112,7 +112,6 @@ export async function syncTransactionsFromServer(): Promise<CachedTransaction[]>
 }
 
 export async function getTransactionsFromCache(): Promise<CachedTransaction[]> {
-  // First try to sync from server if online
   if (isOnline) {
     return await syncTransactionsFromServer();
   }
@@ -131,12 +130,13 @@ export async function syncPendingTransactions(): Promise<void> {
   if (!isOnline) return;
   
   const pending = await getPendingTransactions();
+  const headers = { 'Content-Type': 'application/json', ...getAuthHeaders() };
   
   for (const txn of pending) {
     try {
       const res = await fetch('/api/transactions', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify({
           id: txn.id,
           date: txn.date,
@@ -157,7 +157,7 @@ export async function syncPendingTransactions(): Promise<void> {
         for (const item of txn.items) {
           await fetch(`/api/products/${item.product.id}`, {
             method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
+            headers,
             body: JSON.stringify({ stock: item.product.stock - item.quantity })
           });
         }

@@ -1,36 +1,61 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, integer, timestamp, json } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, integer, timestamp, json, uniqueIndex, boolean } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
+export const tenants = pgTable("tenants", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  slug: text("slug").notNull().unique(),
+  name: text("name").notNull(),
+  logo: text("logo"),
+  brandColor: text("brand_color").notNull().default("#4f46e5"),
+  telegramBotToken: text("telegram_bot_token"),
+  telegramChatId: text("telegram_chat_id"),
+  plan: text("plan").notNull().default("free"),
+  status: text("status").notNull().default("active"),
+  trialEnd: timestamp("trial_end"),
+  maxProducts: integer("max_products").notNull().default(100),
+  maxUsers: integer("max_users").notNull().default(1),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
 export const users = pgTable("users", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  username: text("username").notNull().unique(),
+  username: text("username").notNull(),
+  email: text("email"),
   password: text("password").notNull(),
+  role: text("role").notNull().default("owner"),
+  tenantId: varchar("tenant_id").references(() => tenants.id),
+  isSuper: boolean("is_super").notNull().default(false),
+  createdAt: timestamp("created_at").defaultNow(),
 });
 
 export const products = pgTable("products", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  tenantId: varchar("tenant_id").references(() => tenants.id),
   name: text("name").notNull(),
   author: text("author").notNull(),
   price: integer("price").notNull(),
   costPrice: integer("cost_price").notNull().default(0),
   stock: integer("stock").notNull(),
   category: text("category").notNull(),
-  barcode: text("barcode").notNull().unique(),
+  barcode: text("barcode").notNull(),
   image: text("image").notNull(),
   videoUrl: text("video_url"),
   sortOrder: integer("sort_order").notNull().default(0),
-});
+}, (table) => [
+  uniqueIndex("products_tenant_barcode_idx").on(table.tenantId, table.barcode),
+]);
 
 export const orders = pgTable("orders", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  tenantId: varchar("tenant_id").references(() => tenants.id),
   customerName: text("customer_name").notNull(),
   customerPhone: text("customer_phone").notNull(),
   customerTelegram: text("customer_telegram"),
-  items: json("items").notNull(), // Array of {productId, productName, quantity, price}
+  items: json("items").notNull(),
   totalAmount: integer("total_amount").notNull(),
-  status: text("status").notNull().default("new"), // new, paid, shipped, cancelled
+  status: text("status").notNull().default("new"),
   paymentMethod: text("payment_method").notNull(),
   deliveryType: text("delivery_type").notNull(),
   createdAt: timestamp("created_at").notNull().defaultNow(),
@@ -38,6 +63,7 @@ export const orders = pgTable("orders", {
 
 export const categories = pgTable("categories", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  tenantId: varchar("tenant_id").references(() => tenants.id),
   name: text("name").notNull(),
   icon: text("icon").notNull(),
   color: text("color").notNull().default("#3b82f6"),
@@ -45,6 +71,7 @@ export const categories = pgTable("categories", {
 
 export const transactions = pgTable("transactions", {
   id: varchar("id").primaryKey(),
+  tenantId: varchar("tenant_id").references(() => tenants.id),
   date: timestamp("date").notNull(),
   items: json("items").notNull(),
   totalAmount: integer("total_amount").notNull(),
@@ -54,9 +81,14 @@ export const transactions = pgTable("transactions", {
 });
 
 // Insert schemas
-export const insertUserSchema = createInsertSchema(users).pick({
-  username: true,
-  password: true,
+export const insertTenantSchema = createInsertSchema(tenants).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertUserSchema = createInsertSchema(users).omit({
+  id: true,
+  createdAt: true,
 });
 
 export const insertProductSchema = createInsertSchema(products).omit({
@@ -74,7 +106,26 @@ export const insertCategorySchema = createInsertSchema(categories).omit({
 
 export const insertTransactionSchema = createInsertSchema(transactions);
 
+// Register schema for onboarding
+export const registerTenantSchema = z.object({
+  storeName: z.string().min(2),
+  slug: z.string().min(2).regex(/^[a-z0-9-]+$/),
+  username: z.string().min(3),
+  email: z.string().email().optional(),
+  password: z.string().min(6),
+});
+
+// Login schema
+export const loginSchema = z.object({
+  username: z.string().min(1),
+  password: z.string().min(1),
+  slug: z.string().optional(),
+});
+
 // Types
+export type InsertTenant = z.infer<typeof insertTenantSchema>;
+export type Tenant = typeof tenants.$inferSelect;
+
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type User = typeof users.$inferSelect;
 

@@ -1,6 +1,7 @@
 import { createContext, useContext, type ReactNode } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import type { CartItem } from "./cart-context";
+import { getAuthHeaders } from "./auth-context";
 
 export interface Order {
   id: string;
@@ -35,7 +36,7 @@ export function OrderProvider({ children }: { children: ReactNode }) {
   const { data: orders = [], isLoading } = useQuery({
     queryKey: ["orders"],
     queryFn: async () => {
-      const res = await fetch("/api/orders");
+      const res = await fetch("/api/orders", { headers: getAuthHeaders() });
       if (!res.ok) throw new Error("Failed to fetch orders");
       return res.json() as Promise<Order[]>;
     },
@@ -45,7 +46,7 @@ export function OrderProvider({ children }: { children: ReactNode }) {
     mutationFn: async (order: Omit<Order, "id" | "createdAt" | "status">) => {
       const res = await fetch("/api/orders", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...getAuthHeaders() },
         body: JSON.stringify(order),
       });
       if (!res.ok) throw new Error("Failed to create order");
@@ -60,7 +61,7 @@ export function OrderProvider({ children }: { children: ReactNode }) {
     mutationFn: async ({ id, status }: { id: string; status: Order["status"] }) => {
       const res = await fetch(`/api/orders/${id}/status`, {
         method: "PATCH",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...getAuthHeaders() },
         body: JSON.stringify({ status }),
       });
       if (!res.ok) throw new Error("Failed to update order status");

@@ -4,14 +4,32 @@ import { serveStatic } from "./static";
 import { createServer } from "http";
 import path from "path";
 import { runMigrations } from "./migrate";
+import compression from "compression";
+import rateLimit from "express-rate-limit";
+import { tenantFromSlug } from "./tenant";
 
 const app = express();
 const httpServer = createServer(app);
 
-// Serve attached_assets as static files
-app.use("/assets", express.static(path.resolve(process.cwd(), "attached_assets")));
+app.use(compression());
 
-// Serve PWA files from client/public
+const apiLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 200,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "So'rovlar limiti oshdi, 1 daqiqadan keyin qaytadan urinib ko'ring" },
+});
+app.use("/api/", apiLimiter);
+
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 20,
+  message: { error: "Juda ko'p urinish, 15 daqiqadan keyin qaytadan urinib ko'ring" },
+});
+app.use("/api/auth/", authLimiter);
+
+app.use("/assets", express.static(path.resolve(process.cwd(), "attached_assets")));
 app.use(express.static(path.resolve(process.cwd(), "client/public")));
 
 declare module "http" {
@@ -30,6 +48,8 @@ app.use(
 );
 
 app.use(express.urlencoded({ extended: false, limit: '5mb' }));
+
+app.use(tenantFromSlug);
 
 export function log(message: string, source = "express") {
   const formattedTime = new Date().toLocaleTimeString("en-US", {

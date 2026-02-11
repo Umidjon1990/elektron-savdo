@@ -155,7 +155,8 @@ export function TransactionProvider({ children }: { children: ReactNode }) {
     
     if (getOnlineStatus()) {
       try {
-        await fetch(`/api/transactions/${id}/void`, { method: "POST" });
+        const { getAuthHeaders } = await import("./auth-context");
+        await fetch(`/api/transactions/${id}/void`, { method: "POST", headers: getAuthHeaders() });
       } catch (error) {
         console.error("Failed to sync voided transaction:", error);
       }

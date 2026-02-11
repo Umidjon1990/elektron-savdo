@@ -20,6 +20,7 @@ const importCustomers = () => import("@/pages/customers");
 const importStoreHome = () => import("@/pages/store/home");
 const importCart = () => import("@/pages/store/cart");
 const importLogin = () => import("@/pages/auth/login");
+const importRegister = () => import("@/pages/auth/register");
 const importSettings = () => import("@/pages/settings");
 const importCategories = () => import("@/pages/categories");
 const importNotFound = () => import("@/pages/not-found");
@@ -33,6 +34,7 @@ const CustomersPage = lazy(importCustomers);
 const StoreHome = lazy(importStoreHome);
 const CartPage = lazy(importCart);
 const LoginPage = lazy(importLogin);
+const RegisterPage = lazy(importRegister);
 const SettingsPage = lazy(importSettings);
 const CategoriesPage = lazy(importCategories);
 
@@ -55,13 +57,17 @@ function PageLoader() {
 }
 
 function ProtectedRoute({ component: Component }: { component: React.ComponentType }) {
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, isLoading } = useAuth();
   
   useEffect(() => {
     if (isAuthenticated) {
       preloadAdminPages();
     }
   }, [isAuthenticated]);
+
+  if (isLoading) {
+    return <PageLoader />;
+  }
   
   if (!isAuthenticated) {
     return <Redirect to="/login" />;
@@ -76,6 +82,7 @@ function Router() {
       <Route path="/" component={StoreHome} />
       <Route path="/cart" component={CartPage} />
       <Route path="/login" component={LoginPage} />
+      <Route path="/register" component={RegisterPage} />
       
       {/* Admin Routes - Protected */}
       <Route path="/admin">

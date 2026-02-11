@@ -1,54 +1,97 @@
 import { db } from "@db";
-import { users, products, orders, categories, transactions } from "@shared/schema";
-import type { User, InsertUser, Product, InsertProduct, Order, InsertOrder, Category, InsertCategory, Transaction, InsertTransaction } from "@shared/schema";
-import { eq, desc, sql } from "drizzle-orm";
+import { users, products, orders, categories, transactions, tenants } from "@shared/schema";
+import type { User, InsertUser, Product, InsertProduct, Order, InsertOrder, Category, InsertCategory, Transaction, InsertTransaction, Tenant, InsertTenant } from "@shared/schema";
+import { eq, desc, sql, and } from "drizzle-orm";
 
 export interface IStorage {
+  // Tenants
+  getTenant(id: string): Promise<Tenant | undefined>;
+  getTenantBySlug(slug: string): Promise<Tenant | undefined>;
+  getAllTenants(): Promise<Tenant[]>;
+  createTenant(tenant: InsertTenant): Promise<Tenant>;
+  updateTenant(id: string, data: Partial<InsertTenant>): Promise<Tenant | undefined>;
+
   // Users
   getUser(id: string): Promise<User | undefined>;
-  getUserByUsername(username: string): Promise<User | undefined>;
+  getUserByUsername(username: string, tenantId?: string): Promise<User | undefined>;
+  getUsersByTenant(tenantId: string): Promise<User[]>;
   createUser(user: InsertUser): Promise<User>;
   
-  // Products
-  getAllProducts(): Promise<Product[]>;
-  getProductsPaginated(limit: number, offset: number): Promise<{ products: Product[]; total: number }>;
-  getProduct(id: string): Promise<Product | undefined>;
-  getProductByBarcode(barcode: string): Promise<Product | undefined>;
+  // Products (tenant-scoped)
+  getAllProducts(tenantId: string): Promise<Product[]>;
+  getProductsPaginated(tenantId: string, limit: number, offset: number): Promise<{ products: Product[]; total: number }>;
+  getProduct(id: string, tenantId?: string): Promise<Product | undefined>;
+  getProductByBarcode(barcode: string, tenantId: string): Promise<Product | undefined>;
   createProduct(product: InsertProduct): Promise<Product>;
-  updateProduct(id: string, product: Partial<InsertProduct>): Promise<Product | undefined>;
-  deleteProduct(id: string): Promise<boolean>;
-  reorderProducts(orderedIds: string[]): Promise<void>;
+  updateProduct(id: string, product: Partial<InsertProduct>, tenantId?: string): Promise<Product | undefined>;
+  deleteProduct(id: string, tenantId?: string): Promise<boolean>;
+  reorderProducts(orderedIds: string[], tenantId?: string): Promise<void>;
   
-  // Orders
-  getAllOrders(): Promise<Order[]>;
-  getOrder(id: string): Promise<Order | undefined>;
+  // Orders (tenant-scoped)
+  getAllOrders(tenantId: string): Promise<Order[]>;
+  getOrder(id: string, tenantId?: string): Promise<Order | undefined>;
   createOrder(order: InsertOrder): Promise<Order>;
-  updateOrderStatus(id: string, status: string): Promise<Order | undefined>;
+  updateOrderStatus(id: string, status: string, tenantId?: string): Promise<Order | undefined>;
   
-  // Categories
-  getAllCategories(): Promise<Category[]>;
-  getCategory(id: string): Promise<Category | undefined>;
+  // Categories (tenant-scoped)
+  getAllCategories(tenantId: string): Promise<Category[]>;
+  getCategory(id: string, tenantId?: string): Promise<Category | undefined>;
   createCategory(category: InsertCategory): Promise<Category>;
-  updateCategory(id: string, category: Partial<InsertCategory>): Promise<Category | undefined>;
-  deleteCategory(id: string): Promise<boolean>;
+  updateCategory(id: string, category: Partial<InsertCategory>, tenantId?: string): Promise<Category | undefined>;
+  deleteCategory(id: string, tenantId?: string): Promise<boolean>;
   
-  // Transactions
-  getAllTransactions(): Promise<Transaction[]>;
-  getTransaction(id: string): Promise<Transaction | undefined>;
+  // Transactions (tenant-scoped)
+  getAllTransactions(tenantId: string): Promise<Transaction[]>;
+  getTransaction(id: string, tenantId?: string): Promise<Transaction | undefined>;
   createTransaction(transaction: InsertTransaction): Promise<Transaction>;
-  voidTransaction(id: string): Promise<{transaction: Transaction, alreadyVoided: boolean} | undefined>;
+  voidTransaction(id: string, tenantId?: string): Promise<{transaction: Transaction, alreadyVoided: boolean} | undefined>;
 }
 
 export class DatabaseStorage implements IStorage {
+  // Tenants
+  async getTenant(id: string): Promise<Tenant | undefined> {
+    const [tenant] = await db.select().from(tenants).where(eq(tenants.id, id));
+    return tenant;
+  }
+
+  async getTenantBySlug(slug: string): Promise<Tenant | undefined> {
+    const [tenant] = await db.select().from(tenants).where(eq(tenants.slug, slug));
+    return tenant;
+  }
+
+  async getAllTenants(): Promise<Tenant[]> {
+    return await db.select().from(tenants).orderBy(desc(tenants.createdAt));
+  }
+
+  async createTenant(tenant: InsertTenant): Promise<Tenant> {
+    const [newTenant] = await db.insert(tenants).values(tenant).returning();
+    return newTenant;
+  }
+
+  async updateTenant(id: string, data: Partial<InsertTenant>): Promise<Tenant | undefined> {
+    const [updated] = await db.update(tenants).set(data).where(eq(tenants.id, id)).returning();
+    return updated;
+  }
+
   // Users
   async getUser(id: string): Promise<User | undefined> {
     const [user] = await db.select().from(users).where(eq(users.id, id));
     return user;
   }
 
-  async getUserByUsername(username: string): Promise<User | undefined> {
+  async getUserByUsername(username: string, tenantId?: string): Promise<User | undefined> {
+    if (tenantId) {
+      const [user] = await db.select().from(users).where(
+        and(eq(users.username, username), eq(users.tenantId, tenantId))
+      );
+      return user;
+    }
     const [user] = await db.select().from(users).where(eq(users.username, username));
     return user;
+  }
+
+  async getUsersByTenant(tenantId: string): Promise<User[]> {
+    return await db.select().from(users).where(eq(users.tenantId, tenantId));
   }
 
   async createUser(insertUser: InsertUser): Promise<User> {
@@ -56,32 +99,46 @@ export class DatabaseStorage implements IStorage {
     return user;
   }
 
-  // Products
-  async getAllProducts(): Promise<Product[]> {
-    return await db.select().from(products).orderBy(products.sortOrder, products.name);
+  // Products (tenant-scoped)
+  async getAllProducts(tenantId: string): Promise<Product[]> {
+    return await db.select().from(products)
+      .where(eq(products.tenantId, tenantId))
+      .orderBy(products.sortOrder, products.name);
   }
 
-  async getProductsPaginated(limit: number, offset: number): Promise<{ products: Product[]; total: number }> {
+  async getProductsPaginated(tenantId: string, limit: number, offset: number): Promise<{ products: Product[]; total: number }> {
     const [productList, countResult] = await Promise.all([
-      db.select().from(products).orderBy(products.sortOrder, products.name).limit(limit).offset(offset),
+      db.select().from(products)
+        .where(eq(products.tenantId, tenantId))
+        .orderBy(products.sortOrder, products.name)
+        .limit(limit).offset(offset),
       db.select({ count: sql<number>`count(*)::int` }).from(products)
+        .where(eq(products.tenantId, tenantId))
     ]);
     return { products: productList, total: countResult[0]?.count || 0 };
   }
 
-  async reorderProducts(orderedIds: string[]): Promise<void> {
+  async reorderProducts(orderedIds: string[], tenantId?: string): Promise<void> {
     for (let i = 0; i < orderedIds.length; i++) {
       await db.update(products).set({ sortOrder: i }).where(eq(products.id, orderedIds[i]));
     }
   }
 
-  async getProduct(id: string): Promise<Product | undefined> {
+  async getProduct(id: string, tenantId?: string): Promise<Product | undefined> {
+    if (tenantId) {
+      const [product] = await db.select().from(products).where(
+        and(eq(products.id, id), eq(products.tenantId, tenantId))
+      );
+      return product;
+    }
     const [product] = await db.select().from(products).where(eq(products.id, id));
     return product;
   }
 
-  async getProductByBarcode(barcode: string): Promise<Product | undefined> {
-    const [product] = await db.select().from(products).where(eq(products.barcode, barcode));
+  async getProductByBarcode(barcode: string, tenantId: string): Promise<Product | undefined> {
+    const [product] = await db.select().from(products).where(
+      and(eq(products.barcode, barcode), eq(products.tenantId, tenantId))
+    );
     return product;
   }
 
@@ -90,26 +147,36 @@ export class DatabaseStorage implements IStorage {
     return newProduct;
   }
 
-  async updateProduct(id: string, productData: Partial<InsertProduct>): Promise<Product | undefined> {
-    const [updated] = await db
-      .update(products)
-      .set(productData)
-      .where(eq(products.id, id))
-      .returning();
+  async updateProduct(id: string, productData: Partial<InsertProduct>, tenantId?: string): Promise<Product | undefined> {
+    const condition = tenantId 
+      ? and(eq(products.id, id), eq(products.tenantId, tenantId))
+      : eq(products.id, id);
+    const [updated] = await db.update(products).set(productData).where(condition).returning();
     return updated;
   }
 
-  async deleteProduct(id: string): Promise<boolean> {
-    const result = await db.delete(products).where(eq(products.id, id));
+  async deleteProduct(id: string, tenantId?: string): Promise<boolean> {
+    const condition = tenantId 
+      ? and(eq(products.id, id), eq(products.tenantId, tenantId))
+      : eq(products.id, id);
+    const result = await db.delete(products).where(condition);
     return (result.rowCount ?? 0) > 0;
   }
 
-  // Orders
-  async getAllOrders(): Promise<Order[]> {
-    return await db.select().from(orders).orderBy(desc(orders.createdAt));
+  // Orders (tenant-scoped)
+  async getAllOrders(tenantId: string): Promise<Order[]> {
+    return await db.select().from(orders)
+      .where(eq(orders.tenantId, tenantId))
+      .orderBy(desc(orders.createdAt));
   }
 
-  async getOrder(id: string): Promise<Order | undefined> {
+  async getOrder(id: string, tenantId?: string): Promise<Order | undefined> {
+    if (tenantId) {
+      const [order] = await db.select().from(orders).where(
+        and(eq(orders.id, id), eq(orders.tenantId, tenantId))
+      );
+      return order;
+    }
     const [order] = await db.select().from(orders).where(eq(orders.id, id));
     return order;
   }
@@ -119,21 +186,27 @@ export class DatabaseStorage implements IStorage {
     return newOrder;
   }
 
-  async updateOrderStatus(id: string, status: string): Promise<Order | undefined> {
-    const [updated] = await db
-      .update(orders)
-      .set({ status })
-      .where(eq(orders.id, id))
-      .returning();
+  async updateOrderStatus(id: string, status: string, tenantId?: string): Promise<Order | undefined> {
+    const condition = tenantId 
+      ? and(eq(orders.id, id), eq(orders.tenantId, tenantId))
+      : eq(orders.id, id);
+    const [updated] = await db.update(orders).set({ status }).where(condition).returning();
     return updated;
   }
 
-  // Categories
-  async getAllCategories(): Promise<Category[]> {
-    return await db.select().from(categories);
+  // Categories (tenant-scoped)
+  async getAllCategories(tenantId: string): Promise<Category[]> {
+    return await db.select().from(categories)
+      .where(eq(categories.tenantId, tenantId));
   }
 
-  async getCategory(id: string): Promise<Category | undefined> {
+  async getCategory(id: string, tenantId?: string): Promise<Category | undefined> {
+    if (tenantId) {
+      const [category] = await db.select().from(categories).where(
+        and(eq(categories.id, id), eq(categories.tenantId, tenantId))
+      );
+      return category;
+    }
     const [category] = await db.select().from(categories).where(eq(categories.id, id));
     return category;
   }
@@ -143,26 +216,36 @@ export class DatabaseStorage implements IStorage {
     return newCategory;
   }
 
-  async updateCategory(id: string, categoryData: Partial<InsertCategory>): Promise<Category | undefined> {
-    const [updated] = await db
-      .update(categories)
-      .set(categoryData)
-      .where(eq(categories.id, id))
-      .returning();
+  async updateCategory(id: string, categoryData: Partial<InsertCategory>, tenantId?: string): Promise<Category | undefined> {
+    const condition = tenantId 
+      ? and(eq(categories.id, id), eq(categories.tenantId, tenantId))
+      : eq(categories.id, id);
+    const [updated] = await db.update(categories).set(categoryData).where(condition).returning();
     return updated;
   }
 
-  async deleteCategory(id: string): Promise<boolean> {
-    const result = await db.delete(categories).where(eq(categories.id, id));
+  async deleteCategory(id: string, tenantId?: string): Promise<boolean> {
+    const condition = tenantId 
+      ? and(eq(categories.id, id), eq(categories.tenantId, tenantId))
+      : eq(categories.id, id);
+    const result = await db.delete(categories).where(condition);
     return true;
   }
 
-  // Transactions
-  async getAllTransactions(): Promise<Transaction[]> {
-    return await db.select().from(transactions).orderBy(desc(transactions.date));
+  // Transactions (tenant-scoped)
+  async getAllTransactions(tenantId: string): Promise<Transaction[]> {
+    return await db.select().from(transactions)
+      .where(eq(transactions.tenantId, tenantId))
+      .orderBy(desc(transactions.date));
   }
 
-  async getTransaction(id: string): Promise<Transaction | undefined> {
+  async getTransaction(id: string, tenantId?: string): Promise<Transaction | undefined> {
+    if (tenantId) {
+      const [txn] = await db.select().from(transactions).where(
+        and(eq(transactions.id, id), eq(transactions.tenantId, tenantId))
+      );
+      return txn;
+    }
     const [txn] = await db.select().from(transactions).where(eq(transactions.id, id));
     return txn;
   }
@@ -176,8 +259,8 @@ export class DatabaseStorage implements IStorage {
     return newTxn;
   }
 
-  async voidTransaction(id: string): Promise<{transaction: Transaction, alreadyVoided: boolean} | undefined> {
-    const existing = await this.getTransaction(id);
+  async voidTransaction(id: string, tenantId?: string): Promise<{transaction: Transaction, alreadyVoided: boolean} | undefined> {
+    const existing = await this.getTransaction(id, tenantId);
     if (!existing) {
       return undefined;
     }

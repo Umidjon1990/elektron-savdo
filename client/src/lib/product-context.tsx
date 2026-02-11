@@ -2,6 +2,7 @@ import { createContext, useContext, useState, useEffect, type ReactNode } from "
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { db, type CachedProduct } from "./db";
 import { getOnlineStatus, syncProductsFromServer, getProductsFromCache, addProductToCache, updateProductInCache } from "./db/sync";
+import { getAuthHeaders } from "./auth-context";
 
 interface Product {
   id: string;
@@ -61,7 +62,7 @@ export function ProductProvider({ children }: { children: ReactNode }) {
   const { data: serverProducts = [], isLoading: serverLoading } = useQuery({
     queryKey: ["products"],
     queryFn: async () => {
-      const res = await fetch("/api/products");
+      const res = await fetch("/api/products", { headers: getAuthHeaders() });
       if (!res.ok) throw new Error("Failed to fetch products");
       const rawProducts = await res.json();
       const products: Product[] = rawProducts.map((p: any) => ({ ...p, costPrice: p.costPrice ?? 0 }));
@@ -95,7 +96,7 @@ export function ProductProvider({ children }: { children: ReactNode }) {
       
       const res = await fetch("/api/products", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...getAuthHeaders() },
         body: JSON.stringify(productWithDefaults),
       });
       if (!res.ok) {
@@ -124,7 +125,7 @@ export function ProductProvider({ children }: { children: ReactNode }) {
       
       const res = await fetch(`/api/products/${id}`, {
         method: "PATCH",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...getAuthHeaders() },
         body: JSON.stringify(data),
       });
       if (!res.ok) throw new Error("Failed to update product");
@@ -165,6 +166,7 @@ export function ProductProvider({ children }: { children: ReactNode }) {
       
       const res = await fetch(`/api/products/${id}`, {
         method: "DELETE",
+        headers: getAuthHeaders(),
       });
       if (!res.ok) throw new Error("Mahsulotni o'chirishda xatolik");
       return res.json();

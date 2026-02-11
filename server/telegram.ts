@@ -1,6 +1,3 @@
-const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
-const TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_ID;
-
 interface OrderItem {
   productId?: string;
   productName?: string;
@@ -72,14 +69,17 @@ function getPaymentMethodText(method: string): string {
   }
 }
 
-export async function sendTelegramNotification(order: OrderData): Promise<boolean> {
-  if (!TELEGRAM_BOT_TOKEN || !TELEGRAM_CHAT_ID) {
+export async function sendTelegramNotification(order: OrderData, botToken?: string, chatId?: string): Promise<boolean> {
+  const token = botToken || process.env.TELEGRAM_BOT_TOKEN;
+  const chat = chatId || process.env.TELEGRAM_CHAT_ID;
+
+  if (!token || !chat) {
     console.log('Telegram credentials not configured, skipping notification');
     return false;
   }
 
   const message = formatOrderMessage(order);
-  const url = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`;
+  const url = `https://api.telegram.org/bot${token}/sendMessage`;
 
   try {
     const response = await fetch(url, {
@@ -88,7 +88,7 @@ export async function sendTelegramNotification(order: OrderData): Promise<boolea
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        chat_id: TELEGRAM_CHAT_ID,
+        chat_id: chat,
         text: message,
         parse_mode: 'Markdown',
       }),

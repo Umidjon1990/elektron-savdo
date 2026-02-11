@@ -11,25 +11,32 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 
-const navItems = [
-  { href: "/admin", icon: LayoutDashboard, label: "Kassa", primary: true },
-  { href: "/admin/orders", icon: ShoppingCart, label: "Buyurtmalar", primary: true },
-  { href: "/admin/inventory", icon: Package, label: "Ombor", primary: true },
-  { href: "/admin/history", icon: History, label: "Tarix", primary: true },
-  { href: "/admin/categories", icon: Layers, label: "Kategoriyalar", primary: false },
-  { href: "/admin/customers", icon: Users, label: "Mijozlar", primary: false },
-  { href: "/", icon: Store, label: "Do'kon", primary: false },
-  { href: "/admin/settings", icon: Settings, label: "Sozlamalar", primary: false },
-];
-
-const primaryItems = navItems.filter(item => item.primary);
-const secondaryItems = navItems.filter(item => !item.primary);
+function getNavItems(slug?: string) {
+  const prefix = slug ? `/store/${slug}/admin` : "/admin";
+  const storeLink = slug ? `/store/${slug}` : "/";
+  return [
+    { href: prefix, icon: LayoutDashboard, label: "Kassa", primary: true },
+    { href: `${prefix}/orders`, icon: ShoppingCart, label: "Buyurtmalar", primary: true },
+    { href: `${prefix}/inventory`, icon: Package, label: "Ombor", primary: true },
+    { href: `${prefix}/history`, icon: History, label: "Tarix", primary: true },
+    { href: `${prefix}/categories`, icon: Layers, label: "Kategoriyalar", primary: false },
+    { href: `${prefix}/customers`, icon: Users, label: "Mijozlar", primary: false },
+    { href: storeLink, icon: Store, label: "Do'kon", primary: false },
+    { href: `${prefix}/settings`, icon: Settings, label: "Sozlamalar", primary: false },
+  ];
+}
 
 export function SidebarNav() {
   const [location] = useLocation();
   const [installPrompt, setInstallPrompt] = useState<any>(null);
   const [isInstalled, setIsInstalled] = useState(false);
-  const { user } = useAuth();
+  const { user, tenant, logout } = useAuth();
+
+  const slug = tenant?.slug;
+  const navItems = getNavItems(slug);
+  const primaryItems = navItems.filter(item => item.primary);
+  const secondaryItems = navItems.filter(item => !item.primary);
+  const superAdminHref = slug ? `/store/${slug}/admin/super` : "/admin/super";
 
   useEffect(() => {
     const handler = (e: any) => {
@@ -88,9 +95,9 @@ export function SidebarNav() {
 
         <div className="px-2 w-full space-y-2">
           {user?.isSuper && (
-            <Link href="/admin/super" className={cn(
+            <Link href={superAdminHref} className={cn(
               "w-full h-14 rounded-xl flex flex-col items-center justify-center gap-1 border transition-all",
-              location === "/admin/super"
+              location === superAdminHref
                 ? "bg-amber-500/20 text-amber-400 border-amber-500/30"
                 : "bg-amber-500/10 text-amber-400 hover:text-amber-300 hover:bg-amber-500/20 border-amber-500/20"
             )} data-testid="link-super-admin">
@@ -111,7 +118,7 @@ export function SidebarNav() {
               <span className="text-[9px] font-medium">O'rnatish</span>
             </Button>
           )}
-          <Button variant="ghost" size="icon" className="w-full h-12 rounded-xl text-slate-500 hover:text-red-400 hover:bg-red-500/10">
+          <Button variant="ghost" size="icon" className="w-full h-12 rounded-xl text-slate-500 hover:text-red-400 hover:bg-red-500/10" onClick={logout}>
             <LogOut className="h-5 w-5" />
           </Button>
         </div>
@@ -166,7 +173,7 @@ export function SidebarNav() {
               ))}
               {user?.isSuper && (
                 <DropdownMenuItem asChild>
-                  <Link href="/admin/super" className="flex items-center gap-3 cursor-pointer text-amber-600">
+                  <Link href={superAdminHref} className="flex items-center gap-3 cursor-pointer text-amber-600">
                     <Crown className="h-4 w-4" />
                     <span>Super Admin</span>
                   </Link>

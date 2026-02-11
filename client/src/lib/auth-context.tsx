@@ -113,7 +113,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setToken(data.token);
       setUser(data.user);
       setTenant(data.tenant);
-      setLocation("/admin");
+      const tenantSlug = data.tenant?.slug || slug;
+      if (tenantSlug) {
+        setLocation(`/store/${tenantSlug}/admin`);
+      } else {
+        setLocation("/admin");
+      }
       return true;
     } catch {
       return false;
@@ -138,7 +143,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setToken(data.token);
       setUser(data.user);
       setTenant(data.tenant);
-      setLocation("/admin");
+      const tenantSlug = data.tenant?.slug;
+      if (tenantSlug) {
+        setLocation(`/store/${tenantSlug}/admin`);
+      } else {
+        setLocation("/admin");
+      }
       return { success: true };
     } catch {
       return { success: false, error: "Server bilan bog'lanishda xatolik" };
@@ -146,11 +156,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const logout = () => {
+    const slug = tenant?.slug;
     localStorage.removeItem(TOKEN_KEY);
     setToken(null);
     setUser(null);
     setTenant(null);
-    setLocation("/login");
+    if (slug) {
+      setLocation(`/store/${slug}`);
+    } else {
+      setLocation("/login");
+    }
   };
 
   return (

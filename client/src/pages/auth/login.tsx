@@ -18,7 +18,7 @@ function preloadAdminPages() {
 }
 
 export default function LoginPage() {
-  const { login, isAuthenticated, isLoading: authLoading } = useAuth();
+  const { login, isAuthenticated, isLoading: authLoading, tenant } = useAuth();
   const [, setLocation] = useLocation();
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
@@ -31,9 +31,13 @@ export default function LoginPage() {
   
   useEffect(() => {
     if (isAuthenticated && !authLoading) {
-      setLocation("/admin");
+      if (tenant?.slug) {
+        setLocation(`/store/${tenant.slug}/admin`);
+      } else {
+        setLocation("/admin");
+      }
     }
-  }, [isAuthenticated, authLoading, setLocation]);
+  }, [isAuthenticated, authLoading, setLocation, tenant]);
 
   if (authLoading) {
     return (

@@ -98,7 +98,7 @@ class ErrorBoundary extends React.Component<
 }
 
 function ProtectedRoute({ component: Component }: { component: React.ComponentType }) {
-  const { isAuthenticated, isLoading } = useAuth();
+  const { isAuthenticated, isLoading, tenant } = useAuth();
   
   useEffect(() => {
     if (isAuthenticated) {
@@ -111,8 +111,60 @@ function ProtectedRoute({ component: Component }: { component: React.ComponentTy
   }
   
   if (!isAuthenticated) {
+    if (tenant?.slug) {
+      return <Redirect to={`/store/${tenant.slug}/login`} />;
+    }
     return <Redirect to="/login" />;
   }
+  return <Component />;
+}
+
+function SlugProtectedRoute({ component: Component, slug }: { component: React.ComponentType; slug: string }) {
+  const { isAuthenticated, isLoading, tenant } = useAuth();
+  
+  useEffect(() => {
+    if (isAuthenticated) {
+      preloadAdminPages();
+    }
+  }, [isAuthenticated]);
+
+  if (isLoading) {
+    return <PageLoader />;
+  }
+  
+  if (!isAuthenticated) {
+    return <Redirect to={`/store/${slug}/login`} />;
+  }
+
+  if (tenant && tenant.slug !== slug) {
+    return <Redirect to={`/store/${tenant.slug}/admin`} />;
+  }
+
+  return <Component />;
+}
+
+function LegacyAdminRedirect({ component: Component, subPath }: { component: React.ComponentType; subPath?: string }) {
+  const { isAuthenticated, isLoading, tenant } = useAuth();
+
+  useEffect(() => {
+    if (isAuthenticated) {
+      preloadAdminPages();
+    }
+  }, [isAuthenticated]);
+
+  if (isLoading) {
+    return <PageLoader />;
+  }
+
+  if (isAuthenticated && tenant?.slug) {
+    const target = subPath ? `/store/${tenant.slug}/admin/${subPath}` : `/store/${tenant.slug}/admin`;
+    return <Redirect to={target} />;
+  }
+
+  if (!isAuthenticated) {
+    return <Redirect to="/login" />;
+  }
+
   return <Component />;
 }
 
@@ -121,40 +173,68 @@ function Router() {
     <Switch>
       {/* Public Routes */}
       <Route path="/" component={StoresListPage} />
-      <Route path="/store/:slug" component={SlugStorePage} />
-      <Route path="/store/:slug/cart" component={SlugCartPage} />
-      <Route path="/store/:slug/login" component={SlugLoginPage} />
       <Route path="/cart" component={CartPage} />
       <Route path="/login" component={LoginPage} />
       <Route path="/register" component={RegisterPage} />
       
-      {/* Admin Routes - Protected */}
+      {/* Slug-scoped Admin Routes (must be before /store/:slug to avoid matching) */}
+      <Route path="/store/:slug/admin/inventory">
+        {(params) => <SlugProtectedRoute component={Inventory} slug={params.slug} />}
+      </Route>
+      <Route path="/store/:slug/admin/history">
+        {(params) => <SlugProtectedRoute component={History} slug={params.slug} />}
+      </Route>
+      <Route path="/store/:slug/admin/orders">
+        {(params) => <SlugProtectedRoute component={OrdersPage} slug={params.slug} />}
+      </Route>
+      <Route path="/store/:slug/admin/customers">
+        {(params) => <SlugProtectedRoute component={CustomersPage} slug={params.slug} />}
+      </Route>
+      <Route path="/store/:slug/admin/settings">
+        {(params) => <SlugProtectedRoute component={SettingsPage} slug={params.slug} />}
+      </Route>
+      <Route path="/store/:slug/admin/categories">
+        {(params) => <SlugProtectedRoute component={CategoriesPage} slug={params.slug} />}
+      </Route>
+      <Route path="/store/:slug/admin/super">
+        {(params) => <SlugProtectedRoute component={SuperAdminPage} slug={params.slug} />}
+      </Route>
+      <Route path="/store/:slug/admin">
+        {(params) => <SlugProtectedRoute component={Dashboard} slug={params.slug} />}
+      </Route>
+
+      {/* Public Store Routes */}
+      <Route path="/store/:slug/cart" component={SlugCartPage} />
+      <Route path="/store/:slug/login" component={SlugLoginPage} />
+      <Route path="/store/:slug" component={SlugStorePage} />
+
+      {/* Legacy Admin Routes - redirect to slug-based if tenant exists */}
       <Route path="/admin">
-        {() => <ProtectedRoute component={Dashboard} />}
+        {() => <LegacyAdminRedirect component={Dashboard} />}
       </Route>
       <Route path="/admin/inventory">
-        {() => <ProtectedRoute component={Inventory} />}
+        {() => <LegacyAdminRedirect component={Inventory} subPath="inventory" />}
       </Route>
       <Route path="/admin/history">
-        {() => <ProtectedRoute component={History} />}
+        {() => <LegacyAdminRedirect component={History} subPath="history" />}
       </Route>
       <Route path="/admin/orders">
-        {() => <ProtectedRoute component={OrdersPage} />}
+        {() => <LegacyAdminRedirect component={OrdersPage} subPath="orders" />}
       </Route>
       <Route path="/admin/customers">
-        {() => <ProtectedRoute component={CustomersPage} />}
+        {() => <LegacyAdminRedirect component={CustomersPage} subPath="customers" />}
       </Route>
       <Route path="/admin/settings">
-        {() => <ProtectedRoute component={SettingsPage} />}
+        {() => <LegacyAdminRedirect component={SettingsPage} subPath="settings" />}
       </Route>
       <Route path="/admin/categories">
-        {() => <ProtectedRoute component={CategoriesPage} />}
+        {() => <LegacyAdminRedirect component={CategoriesPage} subPath="categories" />}
       </Route>
       <Route path="/admin/super">
-        {() => <ProtectedRoute component={SuperAdminPage} />}
+        {() => <LegacyAdminRedirect component={SuperAdminPage} subPath="super" />}
       </Route>
       
-      {/* Catch-all for legacy or unknown routes */}
+      {/* Catch-all for unknown routes */}
       <Route component={NotFound} />
     </Switch>
   );

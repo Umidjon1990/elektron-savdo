@@ -96,6 +96,11 @@ Key backend files:
 - Stores list page at / showing all active stores
 - Secure slug-based public APIs: /api/store/:slug/products, /api/store/:slug/categories, /api/store/:slug/orders
 - Each store has its own branded page with logo, colors, products
+- Slug-scoped admin dashboard: /store/:slug/admin/* (kassa, ombor, buyurtmalar, tarix, sozlamalar)
+- Login redirects to /store/:slug/admin, logout returns to /store/:slug
+- SlugProtectedRoute ensures tenant ownership validation
+- Legacy /admin/* routes auto-redirect to /store/:slug/admin/* when tenant exists
+- SidebarNav dynamically generates slug-based navigation links
 
 ## External Dependencies
 

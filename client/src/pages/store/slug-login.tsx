@@ -38,9 +38,9 @@ export default function SlugLoginPage() {
 
   useEffect(() => {
     if (isAuthenticated && !authLoading) {
-      setLocation("/admin");
+      setLocation(`/store/${slug}/admin`);
     }
-  }, [isAuthenticated, authLoading, setLocation]);
+  }, [isAuthenticated, authLoading, setLocation, slug]);
 
   if (authLoading) {
     return (

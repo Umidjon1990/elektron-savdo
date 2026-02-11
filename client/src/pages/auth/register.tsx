@@ -8,7 +8,7 @@ import { Store, ArrowLeft } from "lucide-react";
 import { useLocation } from "wouter";
 
 export default function RegisterPage() {
-  const { register, isAuthenticated, isLoading: authLoading } = useAuth();
+  const { register, isAuthenticated, isLoading: authLoading, tenant } = useAuth();
   const [, setLocation] = useLocation();
   const [storeName, setStoreName] = useState("");
   const [slug, setSlug] = useState("");
@@ -21,9 +21,13 @@ export default function RegisterPage() {
 
   useEffect(() => {
     if (isAuthenticated && !authLoading) {
-      setLocation("/admin");
+      if (tenant?.slug) {
+        setLocation(`/store/${tenant.slug}/admin`);
+      } else {
+        setLocation("/admin");
+      }
     }
-  }, [isAuthenticated, authLoading, setLocation]);
+  }, [isAuthenticated, authLoading, setLocation, tenant]);
 
   const generateSlug = (name: string) => {
     return name

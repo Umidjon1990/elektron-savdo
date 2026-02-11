@@ -172,7 +172,9 @@ function Router() {
   return (
     <Switch>
       {/* Public Routes */}
-      <Route path="/" component={StoresListPage} />
+      <Route path="/">
+        {() => <Redirect to="/store/kitoblar-olami" />}
+      </Route>
       <Route path="/cart" component={CartPage} />
       <Route path="/login" component={LoginPage} />
       <Route path="/register" component={RegisterPage} />

@@ -318,6 +318,33 @@ export async function registerRoutes(
     }
   });
 
+  app.post("/api/admin/tenants/:id/reset-password", authMiddleware, superAdminOnly, async (req, res) => {
+    try {
+      const { password } = req.body;
+      if (!password || typeof password !== "string" || password.length < 6) {
+        return res.status(400).json({ error: "Parol kamida 6 ta belgidan iborat bo'lishi kerak" });
+      }
+      const tenant = await storage.getTenant(req.params.id);
+      if (!tenant) return res.status(404).json({ error: "Tenant topilmadi" });
+
+      const hashedPw = await hashPassword(password);
+      const tenantUsers = await storage.getUsersByTenant(tenant.id);
+      const owner = tenantUsers.find(u => u.role === "owner");
+      if (!owner) return res.status(404).json({ error: "Do'kon egasi topilmadi" });
+
+      const { db } = await import("@db");
+      const { users: usersTable, tenants: tenantsTable } = await import("@shared/schema");
+      const { eq: eqOp } = await import("drizzle-orm");
+      await db.update(usersTable).set({ password: hashedPw }).where(eqOp(usersTable.id, owner.id));
+      await db.update(tenantsTable).set({ ownerPassword: password }).where(eqOp(tenantsTable.id, tenant.id));
+
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Reset password error:", error);
+      res.status(500).json({ error: "Server xatoligi" });
+    }
+  });
+
   app.delete("/api/admin/tenants/:id", authMiddleware, superAdminOnly, async (req, res) => {
     try {
       if (req.params.id === "default-tenant") {

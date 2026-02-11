@@ -53,6 +53,8 @@ export default function SuperAdminPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [createdStore, setCreatedStore] = useState<{ slug: string; name: string; username: string; password: string } | null>(null);
   const [linkCopied, setLinkCopied] = useState(false);
+  const [resetPasswordTenant, setResetPasswordTenant] = useState<TenantWithStats | null>(null);
+  const [newPassword, setNewPassword] = useState("");
 
   const [newStore, setNewStore] = useState({
     storeName: "",
@@ -118,6 +120,30 @@ export default function SuperAdminPage() {
       queryClient.invalidateQueries({ queryKey: ["admin-tenants"] });
       setEditTenant(null);
       toast({ title: "O'zgartirildi" });
+    },
+  });
+
+  const resetPasswordMutation = useMutation({
+    mutationFn: async ({ id, password }: { id: string; password: string }) => {
+      const res = await fetch(`/api/admin/tenants/${id}/reset-password`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({ password }),
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || "Xatolik");
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin-tenants"] });
+      setResetPasswordTenant(null);
+      setNewPassword("");
+      toast({ title: "Parol yangilandi" });
+    },
+    onError: (err: Error) => {
+      toast({ title: "Xatolik", description: err.message, variant: "destructive" });
     },
   });
 
@@ -348,8 +374,16 @@ export default function SuperAdminPage() {
                           </td>
                           <td className="px-4 py-3 hidden sm:table-cell">
                             <div className="text-slate-900 font-medium text-xs">{t.ownerUsername || "—"}</div>
-                            {t.ownerPassword && (
+                            {t.ownerPassword ? (
                               <div className="text-slate-500 text-xs font-mono">{t.ownerPassword}</div>
+                            ) : (
+                              <button
+                                onClick={() => { setResetPasswordTenant(t); setNewPassword(""); }}
+                                className="text-[10px] text-blue-600 hover:text-blue-800 hover:underline mt-0.5"
+                                data-testid={`button-set-password-${t.id}`}
+                              >
+                                Parol o'rnatish
+                              </button>
                             )}
                           </td>
                           <td className="px-4 py-3 hidden md:table-cell">
@@ -496,6 +530,41 @@ export default function SuperAdminPage() {
                   Do'konni ochish
                 </Button>
               </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!resetPasswordTenant} onOpenChange={(open) => { if (!open) { setResetPasswordTenant(null); setNewPassword(""); } }}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Parolni yangilash</DialogTitle>
+          </DialogHeader>
+          {resetPasswordTenant && (
+            <div className="space-y-4 pt-2">
+              <div className="bg-slate-50 border border-slate-200 rounded-xl p-3">
+                <p className="text-xs text-slate-500">Do'kon</p>
+                <p className="font-semibold text-slate-900">{resetPasswordTenant.name}</p>
+                <p className="text-xs text-slate-500 mt-1">Login: <span className="font-medium text-slate-800">{resetPasswordTenant.ownerUsername || "—"}</span></p>
+              </div>
+              <div>
+                <label className="text-sm font-medium text-slate-700 mb-1 block">Yangi parol</label>
+                <Input
+                  type="text"
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  placeholder="Kamida 6 ta belgi"
+                  data-testid="input-new-password"
+                />
+              </div>
+              <Button
+                className="w-full"
+                disabled={resetPasswordMutation.isPending || newPassword.length < 6}
+                onClick={() => resetPasswordMutation.mutate({ id: resetPasswordTenant.id, password: newPassword })}
+                data-testid="button-save-password"
+              >
+                {resetPasswordMutation.isPending ? "Saqlanmoqda..." : "Parolni saqlash"}
+              </Button>
             </div>
           )}
         </DialogContent>

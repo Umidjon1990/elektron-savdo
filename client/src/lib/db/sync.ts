@@ -84,7 +84,11 @@ export async function saveTransactionLocally(transaction: Omit<CachedTransaction
 
 export async function syncTransactionsFromServer(): Promise<CachedTransaction[]> {
   try {
-    const res = await fetch('/api/transactions', { headers: getAuthHeaders() });
+    const headers = getAuthHeaders();
+    if (!headers.Authorization) {
+      return await db.transactions.orderBy('date').reverse().toArray();
+    }
+    const res = await fetch('/api/transactions', { headers });
     if (!res.ok) throw new Error('Failed to fetch transactions');
     const serverTransactions = await res.json();
     

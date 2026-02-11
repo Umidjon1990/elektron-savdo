@@ -73,7 +73,7 @@ export function ProductProvider({ children }: { children: ReactNode }) {
       
       return products;
     },
-    enabled: !isOffline && cacheLoaded,
+    enabled: !isOffline && cacheLoaded && !!getAuthHeaders().Authorization,
     staleTime: 0,
     refetchOnWindowFocus: true,
     refetchOnMount: 'always',

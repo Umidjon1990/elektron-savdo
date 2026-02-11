@@ -40,6 +40,7 @@ export function OrderProvider({ children }: { children: ReactNode }) {
       if (!res.ok) throw new Error("Failed to fetch orders");
       return res.json() as Promise<Order[]>;
     },
+    enabled: !!getAuthHeaders().Authorization,
   });
 
   const addOrderMutation = useMutation({

@@ -181,9 +181,100 @@ export async function registerRoutes(
 
   app.get("/api/admin/tenants", authMiddleware, superAdminOnly, async (req, res) => {
     try {
-      const allTenants = await storage.getAllTenants();
-      res.json(allTenants);
+      const tenantsWithStats = await storage.getAllTenantsWithStats();
+      res.json(tenantsWithStats);
     } catch (error) {
+      console.error("Get tenants error:", error);
+      res.status(500).json({ error: "Server xatoligi" });
+    }
+  });
+
+  app.post("/api/admin/tenants", authMiddleware, superAdminOnly, async (req, res) => {
+    try {
+      const { storeName, slug, plan, username, password, maxProducts, maxUsers } = req.body;
+      if (!storeName || !slug || !username || !password) {
+        return res.status(400).json({ error: "Barcha maydonlarni to'ldiring" });
+      }
+      if (typeof password !== "string" || password.length < 6) {
+        return res.status(400).json({ error: "Parol kamida 6 ta belgidan iborat bo'lishi kerak" });
+      }
+      if (!/^[a-z0-9-]+$/.test(slug)) {
+        return res.status(400).json({ error: "Slug faqat kichik harflar, raqamlar va tire bo'lishi mumkin" });
+      }
+      const existing = await storage.getTenantBySlug(slug);
+      if (existing) {
+        return res.status(400).json({ error: "Bu slug allaqachon mavjud" });
+      }
+      const validPlans = ["free", "starter", "professional", "premium"];
+      const selectedPlan = validPlans.includes(plan) ? plan : "free";
+      const hashedPw = await hashPassword(password);
+
+      const { db } = await import("@db");
+      const result = await db.transaction(async (tx) => {
+        const { tenants, users } = await import("@shared/schema");
+        const [tenant] = await tx.insert(tenants).values({
+          slug,
+          name: storeName,
+          plan: selectedPlan,
+          maxProducts: maxProducts || 100,
+          maxUsers: maxUsers || 1,
+        }).returning();
+        const [user] = await tx.insert(users).values({
+          username,
+          password: hashedPw,
+          role: "owner",
+          tenantId: tenant.id,
+          isSuper: false,
+          email: null,
+        }).returning();
+        return { tenant, owner: { id: user.id, username: user.username } };
+      });
+      res.status(201).json(result);
+    } catch (error: any) {
+      console.error("Create tenant error:", error);
+      res.status(500).json({ error: "Do'kon yaratishda xatolik" });
+    }
+  });
+
+  app.patch("/api/admin/tenants/:id", authMiddleware, superAdminOnly, async (req, res) => {
+    try {
+      const allowedFields = ["name", "plan", "status", "maxProducts", "maxUsers", "brandColor", "logo", "telegramBotToken", "telegramChatId"];
+      const data: Record<string, any> = {};
+      for (const key of allowedFields) {
+        if (req.body[key] !== undefined) data[key] = req.body[key];
+      }
+      if (data.plan) {
+        const validPlans = ["free", "starter", "professional", "premium"];
+        if (!validPlans.includes(data.plan)) {
+          return res.status(400).json({ error: "Noto'g'ri reja" });
+        }
+      }
+      if (data.status) {
+        const validStatuses = ["active", "suspended", "trial"];
+        if (!validStatuses.includes(data.status)) {
+          return res.status(400).json({ error: "Noto'g'ri status" });
+        }
+      }
+      const updated = await storage.updateTenant(req.params.id, data);
+      if (!updated) return res.status(404).json({ error: "Tenant topilmadi" });
+      invalidateTenantCache(updated.slug);
+      res.json(updated);
+    } catch (error) {
+      console.error("Update tenant error:", error);
+      res.status(500).json({ error: "Server xatoligi" });
+    }
+  });
+
+  app.delete("/api/admin/tenants/:id", authMiddleware, superAdminOnly, async (req, res) => {
+    try {
+      if (req.params.id === "default-tenant") {
+        return res.status(400).json({ error: "Default tenantni o'chirish mumkin emas" });
+      }
+      const deleted = await storage.deleteTenant(req.params.id);
+      if (!deleted) return res.status(404).json({ error: "Tenant topilmadi" });
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Delete tenant error:", error);
       res.status(500).json({ error: "Server xatoligi" });
     }
   });

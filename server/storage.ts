@@ -8,8 +8,10 @@ export interface IStorage {
   getTenant(id: string): Promise<Tenant | undefined>;
   getTenantBySlug(slug: string): Promise<Tenant | undefined>;
   getAllTenants(): Promise<Tenant[]>;
+  getAllTenantsWithStats(): Promise<(Tenant & { productsCount: number; ordersCount: number; usersCount: number; ownerUsername: string | null })[]>;
   createTenant(tenant: InsertTenant): Promise<Tenant>;
   updateTenant(id: string, data: Partial<InsertTenant>): Promise<Tenant | undefined>;
+  deleteTenant(id: string): Promise<boolean>;
 
   // Users
   getUser(id: string): Promise<User | undefined>;
@@ -61,6 +63,36 @@ export class DatabaseStorage implements IStorage {
 
   async getAllTenants(): Promise<Tenant[]> {
     return await db.select().from(tenants).orderBy(desc(tenants.createdAt));
+  }
+
+  async getAllTenantsWithStats(): Promise<(Tenant & { productsCount: number; ordersCount: number; usersCount: number; ownerUsername: string | null })[]> {
+    const allTenants = await db.select().from(tenants).orderBy(desc(tenants.createdAt));
+    const results = await Promise.all(allTenants.map(async (tenant) => {
+      const [prodCount] = await db.select({ count: sql<number>`count(*)::int` }).from(products).where(eq(products.tenantId, tenant.id));
+      const [orderCount] = await db.select({ count: sql<number>`count(*)::int` }).from(orders).where(eq(orders.tenantId, tenant.id));
+      const [userCount] = await db.select({ count: sql<number>`count(*)::int` }).from(users).where(eq(users.tenantId, tenant.id));
+      const [owner] = await db.select({ username: users.username }).from(users).where(and(eq(users.tenantId, tenant.id), eq(users.role, "owner")));
+      return {
+        ...tenant,
+        productsCount: prodCount?.count || 0,
+        ordersCount: orderCount?.count || 0,
+        usersCount: userCount?.count || 0,
+        ownerUsername: owner?.username || null,
+      };
+    }));
+    return results;
+  }
+
+  async deleteTenant(id: string): Promise<boolean> {
+    return await db.transaction(async (tx) => {
+      await tx.delete(transactions).where(eq(transactions.tenantId, id));
+      await tx.delete(orders).where(eq(orders.tenantId, id));
+      await tx.delete(products).where(eq(products.tenantId, id));
+      await tx.delete(categories).where(eq(categories.tenantId, id));
+      await tx.delete(users).where(eq(users.tenantId, id));
+      const [deleted] = await tx.delete(tenants).where(eq(tenants.id, id)).returning();
+      return !!deleted;
+    });
   }
 
   async createTenant(tenant: InsertTenant): Promise<Tenant> {

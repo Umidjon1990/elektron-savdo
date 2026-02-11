@@ -1,0 +1,489 @@
+import { useState } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useAuth } from "@/lib/auth-context";
+import { Redirect } from "wouter";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { useToast } from "@/hooks/use-toast";
+import { Store, Plus, Users, Package, ShoppingCart, Crown, ArrowLeft, Trash2, Eye, EyeOff } from "lucide-react";
+import { Link } from "wouter";
+
+interface TenantWithStats {
+  id: string;
+  slug: string;
+  name: string;
+  logo: string | null;
+  brandColor: string;
+  plan: string;
+  status: string;
+  trialEnd: string | null;
+  maxProducts: number;
+  maxUsers: number;
+  createdAt: string;
+  productsCount: number;
+  ordersCount: number;
+  usersCount: number;
+  ownerUsername: string | null;
+}
+
+const planConfig: Record<string, { label: string; color: string; maxProducts: number; maxUsers: number }> = {
+  free: { label: "Bepul sinov", color: "bg-gray-100 text-gray-700", maxProducts: 50, maxUsers: 1 },
+  starter: { label: "Boshlang'ich", color: "bg-blue-100 text-blue-700", maxProducts: 200, maxUsers: 2 },
+  professional: { label: "Professional", color: "bg-purple-100 text-purple-700", maxProducts: 1000, maxUsers: 5 },
+  premium: { label: "Premium", color: "bg-amber-100 text-amber-700", maxProducts: 10000, maxUsers: 20 },
+};
+
+const statusConfig: Record<string, { label: string; color: string }> = {
+  active: { label: "Faol", color: "bg-green-100 text-green-700" },
+  suspended: { label: "To'xtatilgan", color: "bg-red-100 text-red-700" },
+  trial: { label: "Sinov", color: "bg-yellow-100 text-yellow-700" },
+};
+
+export default function SuperAdminPage() {
+  const { user, token } = useAuth();
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const [createOpen, setCreateOpen] = useState(false);
+  const [editTenant, setEditTenant] = useState<TenantWithStats | null>(null);
+  const [showPassword, setShowPassword] = useState(false);
+
+  const [newStore, setNewStore] = useState({
+    storeName: "",
+    slug: "",
+    username: "",
+    password: "",
+    plan: "free",
+  });
+
+  if (!user?.isSuper) {
+    return <Redirect to="/admin" />;
+  }
+
+  const headers = {
+    "Content-Type": "application/json",
+    Authorization: `Bearer ${token}`,
+  };
+
+  const { data: tenantsList = [], isLoading } = useQuery<TenantWithStats[]>({
+    queryKey: ["admin-tenants"],
+    queryFn: async () => {
+      const res = await fetch("/api/admin/tenants", { headers });
+      if (!res.ok) throw new Error("Xatolik");
+      return res.json();
+    },
+  });
+
+  const createMutation = useMutation({
+    mutationFn: async (data: typeof newStore) => {
+      const res = await fetch("/api/admin/tenants", {
+        method: "POST",
+        headers,
+        body: JSON.stringify(data),
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || "Xatolik");
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin-tenants"] });
+      setCreateOpen(false);
+      setNewStore({ storeName: "", slug: "", username: "", password: "", plan: "free" });
+      toast({ title: "Do'kon yaratildi" });
+    },
+    onError: (err: Error) => {
+      toast({ title: "Xatolik", description: err.message, variant: "destructive" });
+    },
+  });
+
+  const updateMutation = useMutation({
+    mutationFn: async ({ id, data }: { id: string; data: Record<string, any> }) => {
+      const res = await fetch(`/api/admin/tenants/${id}`, {
+        method: "PATCH",
+        headers,
+        body: JSON.stringify(data),
+      });
+      if (!res.ok) throw new Error("Xatolik");
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin-tenants"] });
+      setEditTenant(null);
+      toast({ title: "O'zgartirildi" });
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const res = await fetch(`/api/admin/tenants/${id}`, {
+        method: "DELETE",
+        headers,
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || "Xatolik");
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin-tenants"] });
+      toast({ title: "Do'kon o'chirildi" });
+    },
+    onError: (err: Error) => {
+      toast({ title: "Xatolik", description: err.message, variant: "destructive" });
+    },
+  });
+
+  const generateSlug = (name: string) => {
+    return name
+      .toLowerCase()
+      .replace(/[^a-z0-9\s-]/g, "")
+      .replace(/\s+/g, "-")
+      .replace(/-+/g, "-")
+      .trim();
+  };
+
+  const totalProducts = tenantsList.reduce((s, t) => s + t.productsCount, 0);
+  const totalOrders = tenantsList.reduce((s, t) => s + t.ordersCount, 0);
+  const totalUsers = tenantsList.reduce((s, t) => s + t.usersCount, 0);
+  const activeStores = tenantsList.filter((t) => t.status === "active").length;
+
+  return (
+    <div className="min-h-screen bg-slate-50">
+      <div className="bg-gradient-to-r from-slate-900 to-slate-800 text-white">
+        <div className="max-w-7xl mx-auto px-4 py-6">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <Link href="/admin" className="text-slate-400 hover:text-white transition-colors">
+                <ArrowLeft className="h-5 w-5" />
+              </Link>
+              <div className="w-10 h-10 bg-gradient-to-br from-amber-400 to-amber-600 rounded-xl flex items-center justify-center">
+                <Crown className="h-5 w-5 text-white" />
+              </div>
+              <div>
+                <h1 className="text-xl font-bold" data-testid="text-super-admin-title">Super Admin</h1>
+                <p className="text-slate-400 text-sm">Barcha do'konlarni boshqarish</p>
+              </div>
+            </div>
+
+            <Dialog open={createOpen} onOpenChange={setCreateOpen}>
+              <DialogTrigger asChild>
+                <Button className="bg-blue-600 hover:bg-blue-700" data-testid="button-create-store">
+                  <Plus className="h-4 w-4 mr-2" />
+                  Yangi do'kon
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="max-w-md">
+                <DialogHeader>
+                  <DialogTitle>Yangi do'kon yaratish</DialogTitle>
+                </DialogHeader>
+                <div className="space-y-4 pt-2">
+                  <div>
+                    <label className="text-sm font-medium text-slate-700 mb-1 block">Do'kon nomi</label>
+                    <Input
+                      placeholder="Masalan: Kitob Dunyosi"
+                      value={newStore.storeName}
+                      onChange={(e) => {
+                        const name = e.target.value;
+                        setNewStore((s) => ({ ...s, storeName: name, slug: generateSlug(name) }));
+                      }}
+                      data-testid="input-store-name"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium text-slate-700 mb-1 block">Slug (URL manzili)</label>
+                    <Input
+                      placeholder="kitob-dunyosi"
+                      value={newStore.slug}
+                      onChange={(e) => setNewStore((s) => ({ ...s, slug: e.target.value }))}
+                      data-testid="input-store-slug"
+                    />
+                    <p className="text-xs text-slate-500 mt-1">Faqat kichik harflar, raqamlar va tire (-)</p>
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium text-slate-700 mb-1 block">Egasi (login)</label>
+                    <Input
+                      placeholder="admin_username"
+                      value={newStore.username}
+                      onChange={(e) => setNewStore((s) => ({ ...s, username: e.target.value }))}
+                      data-testid="input-owner-username"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium text-slate-700 mb-1 block">Parol</label>
+                    <div className="relative">
+                      <Input
+                        type={showPassword ? "text" : "password"}
+                        placeholder="Kamida 6 ta belgi"
+                        value={newStore.password}
+                        onChange={(e) => setNewStore((s) => ({ ...s, password: e.target.value }))}
+                        data-testid="input-owner-password"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword(!showPassword)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                      >
+                        {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                      </button>
+                    </div>
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium text-slate-700 mb-1 block">Obuna rejasi</label>
+                    <Select value={newStore.plan} onValueChange={(v) => setNewStore((s) => ({ ...s, plan: v }))}>
+                      <SelectTrigger data-testid="select-plan">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {Object.entries(planConfig).map(([key, cfg]) => (
+                          <SelectItem key={key} value={key}>{cfg.label}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <Button
+                    className="w-full"
+                    disabled={!newStore.storeName || !newStore.slug || !newStore.username || newStore.password.length < 6 || createMutation.isPending}
+                    onClick={() => createMutation.mutate(newStore)}
+                    data-testid="button-submit-create"
+                  >
+                    {createMutation.isPending ? "Yaratilmoqda..." : "Do'kon yaratish"}
+                  </Button>
+                </div>
+              </DialogContent>
+            </Dialog>
+          </div>
+        </div>
+      </div>
+
+      <div className="max-w-7xl mx-auto px-4 py-6 space-y-6">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <Card>
+            <CardContent className="p-4 flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-blue-100 flex items-center justify-center">
+                <Store className="h-5 w-5 text-blue-600" />
+              </div>
+              <div>
+                <p className="text-2xl font-bold" data-testid="text-total-stores">{tenantsList.length}</p>
+                <p className="text-xs text-slate-500">Do'konlar</p>
+              </div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-4 flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-green-100 flex items-center justify-center">
+                <Package className="h-5 w-5 text-green-600" />
+              </div>
+              <div>
+                <p className="text-2xl font-bold" data-testid="text-total-products">{totalProducts}</p>
+                <p className="text-xs text-slate-500">Mahsulotlar</p>
+              </div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-4 flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-purple-100 flex items-center justify-center">
+                <ShoppingCart className="h-5 w-5 text-purple-600" />
+              </div>
+              <div>
+                <p className="text-2xl font-bold" data-testid="text-total-orders">{totalOrders}</p>
+                <p className="text-xs text-slate-500">Buyurtmalar</p>
+              </div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-4 flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-amber-100 flex items-center justify-center">
+                <Users className="h-5 w-5 text-amber-600" />
+              </div>
+              <div>
+                <p className="text-2xl font-bold" data-testid="text-total-users">{totalUsers}</p>
+                <p className="text-xs text-slate-500">Foydalanuvchilar</p>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        {isLoading ? (
+          <div className="flex items-center justify-center h-32">
+            <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-indigo-600"></div>
+          </div>
+        ) : (
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg">Do'konlar ro'yxati ({tenantsList.length})</CardTitle>
+            </CardHeader>
+            <CardContent className="p-0">
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b bg-slate-50/80">
+                      <th className="text-left px-4 py-3 font-medium text-slate-600">Do'kon</th>
+                      <th className="text-left px-4 py-3 font-medium text-slate-600 hidden sm:table-cell">Egasi</th>
+                      <th className="text-left px-4 py-3 font-medium text-slate-600">Reja</th>
+                      <th className="text-left px-4 py-3 font-medium text-slate-600 hidden md:table-cell">Status</th>
+                      <th className="text-center px-4 py-3 font-medium text-slate-600 hidden md:table-cell">Mahsulot</th>
+                      <th className="text-center px-4 py-3 font-medium text-slate-600 hidden lg:table-cell">Buyurtma</th>
+                      <th className="text-right px-4 py-3 font-medium text-slate-600">Amallar</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {tenantsList.map((t) => {
+                      const plan = planConfig[t.plan] || planConfig.free;
+                      const status = statusConfig[t.status] || statusConfig.active;
+                      return (
+                        <tr key={t.id} className="border-b last:border-0 hover:bg-slate-50/50 transition-colors" data-testid={`row-tenant-${t.id}`}>
+                          <td className="px-4 py-3">
+                            <div className="font-medium text-slate-900">{t.name}</div>
+                            <div className="text-xs text-slate-500">{t.slug}</div>
+                          </td>
+                          <td className="px-4 py-3 hidden sm:table-cell">
+                            <span className="text-slate-600">{t.ownerUsername || "—"}</span>
+                          </td>
+                          <td className="px-4 py-3">
+                            <Badge className={`${plan.color} border-0 font-medium`} data-testid={`badge-plan-${t.id}`}>{plan.label}</Badge>
+                          </td>
+                          <td className="px-4 py-3 hidden md:table-cell">
+                            <Badge className={`${status.color} border-0`}>{status.label}</Badge>
+                          </td>
+                          <td className="text-center px-4 py-3 hidden md:table-cell text-slate-600">{t.productsCount}</td>
+                          <td className="text-center px-4 py-3 hidden lg:table-cell text-slate-600">{t.ordersCount}</td>
+                          <td className="px-4 py-3 text-right">
+                            <div className="flex items-center justify-end gap-1">
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => setEditTenant(t)}
+                                className="text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+                                data-testid={`button-edit-tenant-${t.id}`}
+                              >
+                                Tahrirlash
+                              </Button>
+                              {t.id !== "default-tenant" && (
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => {
+                                    if (confirm(`"${t.name}" do'konini o'chirmoqchimisiz? Bu qaytarib bo'lmaydi!`)) {
+                                      deleteMutation.mutate(t.id);
+                                    }
+                                  }}
+                                  className="text-red-500 hover:text-red-700 hover:bg-red-50"
+                                  data-testid={`button-delete-tenant-${t.id}`}
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+      </div>
+
+      <Dialog open={!!editTenant} onOpenChange={(open) => !open && setEditTenant(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Do'konni tahrirlash: {editTenant?.name}</DialogTitle>
+          </DialogHeader>
+          {editTenant && (
+            <EditTenantForm
+              tenant={editTenant}
+              onSave={(data) => updateMutation.mutate({ id: editTenant.id, data })}
+              isPending={updateMutation.isPending}
+            />
+          )}
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
+
+function EditTenantForm({
+  tenant,
+  onSave,
+  isPending,
+}: {
+  tenant: TenantWithStats;
+  onSave: (data: Record<string, any>) => void;
+  isPending: boolean;
+}) {
+  const [plan, setPlan] = useState(tenant.plan);
+  const [status, setStatus] = useState(tenant.status);
+  const [name, setName] = useState(tenant.name);
+  const [maxProducts, setMaxProducts] = useState(String(tenant.maxProducts));
+  const [maxUsers, setMaxUsers] = useState(String(tenant.maxUsers));
+
+  const handlePlanChange = (newPlan: string) => {
+    setPlan(newPlan);
+    const cfg = planConfig[newPlan];
+    if (cfg) {
+      setMaxProducts(String(cfg.maxProducts));
+      setMaxUsers(String(cfg.maxUsers));
+    }
+  };
+
+  return (
+    <div className="space-y-4 pt-2">
+      <div>
+        <label className="text-sm font-medium text-slate-700 mb-1 block">Do'kon nomi</label>
+        <Input value={name} onChange={(e) => setName(e.target.value)} data-testid="input-edit-name" />
+      </div>
+      <div>
+        <label className="text-sm font-medium text-slate-700 mb-1 block">Obuna rejasi</label>
+        <Select value={plan} onValueChange={handlePlanChange}>
+          <SelectTrigger data-testid="select-edit-plan">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {Object.entries(planConfig).map(([key, cfg]) => (
+              <SelectItem key={key} value={key}>{cfg.label}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+      <div>
+        <label className="text-sm font-medium text-slate-700 mb-1 block">Status</label>
+        <Select value={status} onValueChange={setStatus}>
+          <SelectTrigger data-testid="select-edit-status">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {Object.entries(statusConfig).map(([key, cfg]) => (
+              <SelectItem key={key} value={key}>{cfg.label}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+      <div className="grid grid-cols-2 gap-3">
+        <div>
+          <label className="text-sm font-medium text-slate-700 mb-1 block">Max mahsulot</label>
+          <Input type="number" value={maxProducts} onChange={(e) => setMaxProducts(e.target.value)} data-testid="input-edit-max-products" />
+        </div>
+        <div>
+          <label className="text-sm font-medium text-slate-700 mb-1 block">Max foydalanuvchi</label>
+          <Input type="number" value={maxUsers} onChange={(e) => setMaxUsers(e.target.value)} data-testid="input-edit-max-users" />
+        </div>
+      </div>
+      <Button
+        className="w-full"
+        disabled={isPending}
+        onClick={() => onSave({ name, plan, status, maxProducts: Number(maxProducts), maxUsers: Number(maxUsers) })}
+        data-testid="button-save-edit"
+      >
+        {isPending ? "Saqlanmoqda..." : "Saqlash"}
+      </Button>
+    </div>
+  );
+}

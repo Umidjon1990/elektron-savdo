@@ -1,8 +1,9 @@
 import { Link, useLocation } from "wouter";
 import { cn } from "@/lib/utils";
-import { LayoutDashboard, Package, History, Settings, LogOut, Store, ShoppingCart, Users, Download, MoreHorizontal, Layers } from "lucide-react";
+import { LayoutDashboard, Package, History, Settings, LogOut, Store, ShoppingCart, Users, Download, MoreHorizontal, Layers, Crown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useState, useEffect } from "react";
+import { useAuth } from "@/lib/auth-context";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -28,6 +29,7 @@ export function SidebarNav() {
   const [location] = useLocation();
   const [installPrompt, setInstallPrompt] = useState<any>(null);
   const [isInstalled, setIsInstalled] = useState(false);
+  const { user } = useAuth();
 
   useEffect(() => {
     const handler = (e: any) => {
@@ -85,6 +87,17 @@ export function SidebarNav() {
         </nav>
 
         <div className="px-2 w-full space-y-2">
+          {user?.isSuper && (
+            <Link href="/admin/super" className={cn(
+              "w-full h-14 rounded-xl flex flex-col items-center justify-center gap-1 border transition-all",
+              location === "/admin/super"
+                ? "bg-amber-500/20 text-amber-400 border-amber-500/30"
+                : "bg-amber-500/10 text-amber-400 hover:text-amber-300 hover:bg-amber-500/20 border-amber-500/20"
+            )} data-testid="link-super-admin">
+              <Crown className="h-5 w-5" />
+              <span className="text-[9px] font-medium">Super Admin</span>
+            </Link>
+          )}
           {!isInstalled && (
             <Button 
               variant="ghost" 
@@ -151,6 +164,14 @@ export function SidebarNav() {
                   </Link>
                 </DropdownMenuItem>
               ))}
+              {user?.isSuper && (
+                <DropdownMenuItem asChild>
+                  <Link href="/admin/super" className="flex items-center gap-3 cursor-pointer text-amber-600">
+                    <Crown className="h-4 w-4" />
+                    <span>Super Admin</span>
+                  </Link>
+                </DropdownMenuItem>
+              )}
               {!isInstalled && (
                 <DropdownMenuItem 
                   onClick={installPrompt ? handleInstall : () => {

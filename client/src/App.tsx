@@ -24,8 +24,10 @@ const importRegister = () => import("@/pages/auth/register");
 const importSettings = () => import("@/pages/settings");
 const importCategories = () => import("@/pages/categories");
 const importNotFound = () => import("@/pages/not-found");
+const importSuperAdmin = () => import("@/pages/super-admin");
 
 const NotFound = lazy(importNotFound);
+const SuperAdminPage = lazy(importSuperAdmin);
 const Dashboard = lazy(importDashboard);
 const Inventory = lazy(importInventory);
 const History = lazy(importHistory);
@@ -136,6 +138,9 @@ function Router() {
       </Route>
       <Route path="/admin/categories">
         {() => <ProtectedRoute component={CategoriesPage} />}
+      </Route>
+      <Route path="/admin/super">
+        {() => <ProtectedRoute component={SuperAdminPage} />}
       </Route>
       
       {/* Catch-all for legacy or unknown routes */}

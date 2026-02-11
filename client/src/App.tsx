@@ -10,7 +10,7 @@ import { CartProvider } from "@/lib/cart-context";
 import { OrderProvider } from "@/lib/order-context";
 import { AuthProvider, useAuth } from "@/lib/auth-context";
 import { SettingsProvider } from "@/lib/settings-context";
-import { lazy, Suspense, useEffect } from "react";
+import React, { lazy, Suspense, useEffect } from "react";
 
 const importDashboard = () => import("@/pages/dashboard");
 const importInventory = () => import("@/pages/inventory");
@@ -54,6 +54,37 @@ function PageLoader() {
       <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-indigo-600"></div>
     </div>
   );
+}
+
+class ErrorBoundary extends React.Component<
+  { children: React.ReactNode },
+  { hasError: boolean; error: Error | null }
+> {
+  constructor(props: { children: React.ReactNode }) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+  static getDerivedStateFromError(error: Error) {
+    return { hasError: true, error };
+  }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div style={{ padding: 40, textAlign: "center" }}>
+          <h2 style={{ color: "red" }}>Xatolik yuz berdi</h2>
+          <pre style={{ whiteSpace: "pre-wrap", color: "#666", fontSize: 12, maxWidth: 600, margin: "16px auto" }}>
+            {this.state.error?.message}
+            {"\n"}
+            {this.state.error?.stack}
+          </pre>
+          <button onClick={() => window.location.reload()} style={{ padding: "8px 24px", background: "#4f46e5", color: "white", border: "none", borderRadius: 8, cursor: "pointer" }}>
+            Qayta yuklash
+          </button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
 }
 
 function ProtectedRoute({ component: Component }: { component: React.ComponentType }) {
@@ -115,27 +146,31 @@ function Router() {
 
 function App() {
   return (
-    <QueryClientProvider client={queryClient}>
-      <AuthProvider>
-        <SettingsProvider>
-          <ProductProvider>
-            <TransactionProvider>
-              <OrderProvider>
-                <CartProvider>
-                  <TooltipProvider>
-                    <Suspense fallback={<PageLoader />}>
-                      <Router />
-                    </Suspense>
-                    <Toaster />
-                    <SonnerToaster position="top-center" richColors />
-                  </TooltipProvider>
-                </CartProvider>
-              </OrderProvider>
-            </TransactionProvider>
-          </ProductProvider>
-        </SettingsProvider>
-      </AuthProvider>
-    </QueryClientProvider>
+    <ErrorBoundary>
+      <QueryClientProvider client={queryClient}>
+        <AuthProvider>
+          <SettingsProvider>
+            <ProductProvider>
+              <TransactionProvider>
+                <OrderProvider>
+                  <CartProvider>
+                    <TooltipProvider>
+                      <Suspense fallback={<PageLoader />}>
+                        <ErrorBoundary>
+                          <Router />
+                        </ErrorBoundary>
+                      </Suspense>
+                      <Toaster />
+                      <SonnerToaster position="top-center" richColors />
+                    </TooltipProvider>
+                  </CartProvider>
+                </OrderProvider>
+              </TransactionProvider>
+            </ProductProvider>
+          </SettingsProvider>
+        </AuthProvider>
+      </QueryClientProvider>
+    </ErrorBoundary>
   );
 }
 

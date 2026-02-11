@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from "react";
 import { useLocation } from "wouter";
+import { clearAllData } from "./db";
 
 interface UserInfo {
   id: string;
@@ -76,6 +77,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       });
       if (res.ok) {
         const data = await res.json();
+        const prevTenantId = localStorage.getItem('kitoblar_tenant_id');
+        const newTenantId = data.tenant?.id;
+        if (prevTenantId && newTenantId && prevTenantId !== newTenantId) {
+          await clearAllData();
+        }
+        if (newTenantId) {
+          localStorage.setItem('kitoblar_tenant_id', newTenantId);
+        }
         setUser(data.user);
         setTenant(data.tenant);
         setToken(savedToken);
@@ -109,6 +118,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
 
       const data = await res.json();
+      const prevTenantId = localStorage.getItem('kitoblar_tenant_id');
+      const newTenantId = data.tenant?.id;
+      if (prevTenantId && newTenantId && prevTenantId !== newTenantId) {
+        await clearAllData();
+      }
+      if (newTenantId) {
+        localStorage.setItem('kitoblar_tenant_id', newTenantId);
+      }
       localStorage.setItem(TOKEN_KEY, data.token);
       setToken(data.token);
       setUser(data.user);
@@ -158,6 +175,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const logout = () => {
     const slug = tenant?.slug;
     localStorage.removeItem(TOKEN_KEY);
+    localStorage.removeItem('kitoblar_tenant_id');
+    clearAllData();
     setToken(null);
     setUser(null);
     setTenant(null);

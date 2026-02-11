@@ -251,7 +251,7 @@ export async function registerRoutes(
 
   app.post("/api/admin/tenants", authMiddleware, superAdminOnly, async (req, res) => {
     try {
-      const { storeName, slug, plan, username, password, maxProducts, maxUsers } = req.body;
+      const { storeName, slug, plan, username, password, maxProducts, maxUsers, subscriptionDays } = req.body;
       if (!storeName || !slug || !username || !password) {
         return res.status(400).json({ error: "Barcha maydonlarni to'ldiring" });
       }
@@ -272,6 +272,13 @@ export async function registerRoutes(
       const { db } = await import("@db");
       const result = await db.transaction(async (tx) => {
         const { tenants, users } = await import("@shared/schema");
+        const rawDays = subscriptionDays ? Number(subscriptionDays) : 0;
+        const days = (!isNaN(rawDays) && rawDays >= 0) ? Math.floor(rawDays) : 0;
+        let trialEnd: Date | null = null;
+        if (days > 0) {
+          trialEnd = new Date();
+          trialEnd.setDate(trialEnd.getDate() + days);
+        }
         const [tenant] = await tx.insert(tenants).values({
           slug,
           name: storeName,
@@ -280,6 +287,8 @@ export async function registerRoutes(
           maxUsers: maxUsers || 1,
           ownerUsername: username,
           ownerPassword: password,
+          subscriptionDays: days,
+          trialEnd,
         }).returning();
         const [user] = await tx.insert(users).values({
           username,
@@ -300,7 +309,7 @@ export async function registerRoutes(
 
   app.patch("/api/admin/tenants/:id", authMiddleware, superAdminOnly, async (req, res) => {
     try {
-      const allowedFields = ["name", "plan", "status", "maxProducts", "maxUsers", "brandColor", "logo", "telegramBotToken", "telegramChatId"];
+      const allowedFields = ["name", "plan", "status", "maxProducts", "maxUsers", "brandColor", "logo", "telegramBotToken", "telegramChatId", "subscriptionDays"];
       const data: Record<string, any> = {};
       for (const key of allowedFields) {
         if (req.body[key] !== undefined) data[key] = req.body[key];
@@ -315,6 +324,20 @@ export async function registerRoutes(
         const validStatuses = ["active", "suspended", "trial"];
         if (!validStatuses.includes(data.status)) {
           return res.status(400).json({ error: "Noto'g'ri status" });
+        }
+      }
+      if (data.subscriptionDays !== undefined) {
+        const days = Number(data.subscriptionDays);
+        if (isNaN(days) || days < 0) {
+          return res.status(400).json({ error: "Noto'g'ri kunlar soni" });
+        }
+        data.subscriptionDays = days;
+        if (days > 0) {
+          const trialEnd = new Date();
+          trialEnd.setDate(trialEnd.getDate() + days);
+          data.trialEnd = trialEnd;
+        } else {
+          data.trialEnd = null;
         }
       }
       const updated = await storage.updateTenant(req.params.id, data);

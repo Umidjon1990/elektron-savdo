@@ -9,7 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { Store, Plus, Users, Package, ShoppingCart, Crown, ArrowLeft, Trash2, Eye, EyeOff, Copy, Check, ExternalLink, Link2 } from "lucide-react";
+import { Store, Plus, Users, Package, ShoppingCart, Crown, ArrowLeft, Trash2, Eye, EyeOff, Copy, Check, ExternalLink, Link2, Clock, AlertTriangle } from "lucide-react";
 import { Link } from "wouter";
 
 interface TenantWithStats {
@@ -21,6 +21,7 @@ interface TenantWithStats {
   plan: string;
   status: string;
   trialEnd: string | null;
+  subscriptionDays: number;
   maxProducts: number;
   maxUsers: number;
   createdAt: string;
@@ -62,6 +63,7 @@ export default function SuperAdminPage() {
     username: "",
     password: "",
     plan: "free",
+    subscriptionDays: "30",
   });
 
   if (!user?.isSuper) {
@@ -99,7 +101,7 @@ export default function SuperAdminPage() {
       queryClient.invalidateQueries({ queryKey: ["admin-tenants"] });
       setCreateOpen(false);
       setCreatedStore({ slug: newStore.slug, name: newStore.storeName, username: newStore.username, password: newStore.password });
-      setNewStore({ storeName: "", slug: "", username: "", password: "", plan: "free" });
+      setNewStore({ storeName: "", slug: "", username: "", password: "", plan: "free", subscriptionDays: "30" });
     },
     onError: (err: Error) => {
       toast({ title: "Xatolik", description: err.message, variant: "destructive" });
@@ -175,6 +177,14 @@ export default function SuperAdminPage() {
       .replace(/\s+/g, "-")
       .replace(/-+/g, "-")
       .trim();
+  };
+
+  const getDaysLeft = (t: TenantWithStats) => {
+    if (!t.trialEnd || t.subscriptionDays === 0) return null;
+    const end = new Date(t.trialEnd);
+    const now = new Date();
+    const diff = Math.ceil((end.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+    return diff;
   };
 
   const totalProducts = tenantsList.reduce((s, t) => s + t.productsCount, 0);
@@ -275,6 +285,18 @@ export default function SuperAdminPage() {
                       </SelectContent>
                     </Select>
                   </div>
+                  <div>
+                    <label className="text-sm font-medium text-slate-700 mb-1 block">Muddat (kun)</label>
+                    <Input
+                      type="number"
+                      min="0"
+                      placeholder="30"
+                      value={newStore.subscriptionDays}
+                      onChange={(e) => setNewStore((s) => ({ ...s, subscriptionDays: e.target.value }))}
+                      data-testid="input-subscription-days"
+                    />
+                    <p className="text-xs text-slate-500 mt-1">0 = cheksiz muddat</p>
+                  </div>
                   <Button
                     className="w-full"
                     disabled={!newStore.storeName || !newStore.slug || !newStore.username || newStore.password.length < 6 || createMutation.isPending}
@@ -356,6 +378,7 @@ export default function SuperAdminPage() {
                       <th className="text-left px-4 py-3 font-medium text-slate-600 hidden sm:table-cell">Login / Parol</th>
                       <th className="text-left px-4 py-3 font-medium text-slate-600 hidden md:table-cell">Link</th>
                       <th className="text-left px-4 py-3 font-medium text-slate-600">Reja</th>
+                      <th className="text-left px-4 py-3 font-medium text-slate-600">Muddat</th>
                       <th className="text-left px-4 py-3 font-medium text-slate-600 hidden md:table-cell">Status</th>
                       <th className="text-center px-4 py-3 font-medium text-slate-600 hidden md:table-cell">Mahsulot</th>
                       <th className="text-center px-4 py-3 font-medium text-slate-600 hidden lg:table-cell">Buyurtma</th>
@@ -411,6 +434,39 @@ export default function SuperAdminPage() {
                           </td>
                           <td className="px-4 py-3">
                             <Badge className={`${plan.color} border-0 font-medium`} data-testid={`badge-plan-${t.id}`}>{plan.label}</Badge>
+                          </td>
+                          <td className="px-4 py-3">
+                            {(() => {
+                              const daysLeft = getDaysLeft(t);
+                              if (daysLeft === null) {
+                                return <span className="text-xs text-slate-400">Cheksiz</span>;
+                              }
+                              if (daysLeft <= 0) {
+                                return (
+                                  <div className="flex items-center gap-1">
+                                    <AlertTriangle className="h-3.5 w-3.5 text-red-500" />
+                                    <span className="text-xs font-semibold text-red-600">Tugagan</span>
+                                  </div>
+                                );
+                              }
+                              if (daysLeft <= 3) {
+                                return (
+                                  <div className="flex items-center gap-1">
+                                    <Clock className="h-3.5 w-3.5 text-orange-500" />
+                                    <span className="text-xs font-semibold text-orange-600">{daysLeft} kun</span>
+                                  </div>
+                                );
+                              }
+                              return (
+                                <div className="flex items-center gap-1">
+                                  <Clock className="h-3.5 w-3.5 text-green-500" />
+                                  <span className="text-xs font-medium text-green-700">{daysLeft} kun</span>
+                                </div>
+                              );
+                            })()}
+                            {t.subscriptionDays > 0 && (
+                              <div className="text-[10px] text-slate-400 mt-0.5">{t.subscriptionDays} kunlik</div>
+                            )}
                           </td>
                           <td className="px-4 py-3 hidden md:table-cell">
                             <Badge className={`${status.color} border-0`}>{status.label}</Badge>
@@ -602,6 +658,7 @@ function EditTenantForm({
   const [name, setName] = useState(tenant.name);
   const [maxProducts, setMaxProducts] = useState(String(tenant.maxProducts));
   const [maxUsers, setMaxUsers] = useState(String(tenant.maxUsers));
+  const [subscriptionDays, setSubscriptionDays] = useState(String(tenant.subscriptionDays || 0));
 
   const handlePlanChange = (newPlan: string) => {
     setPlan(newPlan);
@@ -644,6 +701,22 @@ function EditTenantForm({
           </SelectContent>
         </Select>
       </div>
+      <div>
+        <label className="text-sm font-medium text-slate-700 mb-1 block">Muddat (kun)</label>
+        <Input
+          type="number"
+          min="0"
+          value={subscriptionDays}
+          onChange={(e) => setSubscriptionDays(e.target.value)}
+          data-testid="input-edit-subscription-days"
+        />
+        <p className="text-xs text-slate-500 mt-1">0 = cheksiz muddat. Yangi muddat bugundan boshlab hisoblanadi.</p>
+        {tenant.trialEnd && (
+          <p className="text-xs text-slate-500 mt-1">
+            Hozirgi muddat tugashi: {new Date(tenant.trialEnd).toLocaleDateString("uz-UZ")}
+          </p>
+        )}
+      </div>
       <div className="grid grid-cols-2 gap-3">
         <div>
           <label className="text-sm font-medium text-slate-700 mb-1 block">Max mahsulot</label>
@@ -657,7 +730,7 @@ function EditTenantForm({
       <Button
         className="w-full"
         disabled={isPending}
-        onClick={() => onSave({ name, plan, status, maxProducts: Number(maxProducts), maxUsers: Number(maxUsers) })}
+        onClick={() => onSave({ name, plan, status, maxProducts: Number(maxProducts), maxUsers: Number(maxUsers), subscriptionDays: Number(subscriptionDays) })}
         data-testid="button-save-edit"
       >
         {isPending ? "Saqlanmoqda..." : "Saqlash"}

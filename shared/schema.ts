@@ -16,6 +16,8 @@ export const tenants = pgTable("tenants", {
   trialEnd: timestamp("trial_end"),
   maxProducts: integer("max_products").notNull().default(100),
   maxUsers: integer("max_users").notNull().default(1),
+  ownerUsername: text("owner_username"),
+  ownerPassword: text("owner_password"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 

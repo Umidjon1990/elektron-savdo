@@ -28,6 +28,7 @@ interface TenantWithStats {
   ordersCount: number;
   usersCount: number;
   ownerUsername: string | null;
+  ownerPassword: string | null;
 }
 
 const planConfig: Record<string, { label: string; color: string; maxProducts: number; maxUsers: number }> = {
@@ -326,7 +327,7 @@ export default function SuperAdminPage() {
                   <thead>
                     <tr className="border-b bg-slate-50/80">
                       <th className="text-left px-4 py-3 font-medium text-slate-600">Do'kon</th>
-                      <th className="text-left px-4 py-3 font-medium text-slate-600 hidden sm:table-cell">Egasi</th>
+                      <th className="text-left px-4 py-3 font-medium text-slate-600 hidden sm:table-cell">Login / Parol</th>
                       <th className="text-left px-4 py-3 font-medium text-slate-600 hidden md:table-cell">Link</th>
                       <th className="text-left px-4 py-3 font-medium text-slate-600">Reja</th>
                       <th className="text-left px-4 py-3 font-medium text-slate-600 hidden md:table-cell">Status</th>
@@ -346,7 +347,10 @@ export default function SuperAdminPage() {
                             <div className="text-xs text-slate-500">{t.slug}</div>
                           </td>
                           <td className="px-4 py-3 hidden sm:table-cell">
-                            <span className="text-slate-600">{t.ownerUsername || "—"}</span>
+                            <div className="text-slate-900 font-medium text-xs">{t.ownerUsername || "—"}</div>
+                            {t.ownerPassword && (
+                              <div className="text-slate-500 text-xs font-mono">{t.ownerPassword}</div>
+                            )}
                           </td>
                           <td className="px-4 py-3 hidden md:table-cell">
                             <div className="flex items-center gap-1">

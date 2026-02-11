@@ -40,6 +40,8 @@ export async function registerRoutes(
         trialEnd,
         maxProducts: 100,
         maxUsers: 1,
+        ownerUsername: data.username,
+        ownerPassword: data.password,
       });
 
       const hashedPassword = await hashPassword(data.password);
@@ -267,6 +269,8 @@ export async function registerRoutes(
           plan: selectedPlan,
           maxProducts: maxProducts || 100,
           maxUsers: maxUsers || 1,
+          ownerUsername: username,
+          ownerPassword: password,
         }).returning();
         const [user] = await tx.insert(users).values({
           username,

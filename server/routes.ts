@@ -195,6 +195,18 @@ export async function registerRoutes(
 
   // ============ TENANT INFO (PUBLIC) ============
 
+  app.get("/api/tenant/default", async (req, res) => {
+    try {
+      const { db } = await import("@db");
+      const { tenants } = await import("@shared/schema");
+      const [first] = await db.select().from(tenants).orderBy(tenants.createdAt).limit(1);
+      if (!first) return res.status(404).json({ error: "Tenant topilmadi" });
+      res.json({ slug: first.slug, name: first.name });
+    } catch (error) {
+      res.status(500).json({ error: "Server xatoligi" });
+    }
+  });
+
   app.get("/api/tenant/:slug", async (req, res) => {
     try {
       const tenant = await getTenantBySlug(req.params.slug);

@@ -10,7 +10,8 @@ import { CartProvider } from "@/lib/cart-context";
 import { OrderProvider } from "@/lib/order-context";
 import { AuthProvider, useAuth } from "@/lib/auth-context";
 import { SettingsProvider } from "@/lib/settings-context";
-import React, { lazy, Suspense, useEffect } from "react";
+import React, { lazy, Suspense, useEffect, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 
 const importDashboard = () => import("@/pages/dashboard");
 const importInventory = () => import("@/pages/inventory");
@@ -168,12 +169,37 @@ function LegacyAdminRedirect({ component: Component, subPath }: { component: Rea
   return <Component />;
 }
 
+function HomeRedirect() {
+  const { data: defaultSlug, isLoading } = useQuery({
+    queryKey: ["default-tenant-slug"],
+    queryFn: async () => {
+      const res = await fetch("/api/tenant/default");
+      if (res.ok) {
+        const data = await res.json();
+        return data.slug;
+      }
+      return null;
+    },
+    staleTime: 5 * 60 * 1000,
+  });
+
+  if (isLoading) {
+    return <PageLoader />;
+  }
+
+  if (defaultSlug) {
+    return <Redirect to={`/store/${defaultSlug}`} />;
+  }
+
+  return <Redirect to="/store/kitoblar-olami" />;
+}
+
 function Router() {
   return (
     <Switch>
       {/* Public Routes */}
       <Route path="/">
-        {() => <Redirect to="/store/kitoblar-olami" />}
+        {() => <HomeRedirect />}
       </Route>
       <Route path="/cart" component={CartPage} />
       <Route path="/login" component={LoginPage} />

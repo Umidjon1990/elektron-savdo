@@ -192,8 +192,7 @@ export async function registerRoutes(
 
   app.get("/api/products", optionalAuth, async (req, res) => {
     try {
-      const tenantId = req.tenantId || req.headers["x-tenant-id"] as string;
-      if (!tenantId) return res.status(400).json({ error: "Tenant aniqlanmadi" });
+      const tenantId = req.tenantId || req.headers["x-tenant-id"] as string || "default-tenant";
 
       const limit = parseInt(req.query.limit as string) || 100;
       const offset = parseInt(req.query.offset as string) || 0;
@@ -304,8 +303,7 @@ export async function registerRoutes(
 
   app.post("/api/orders", optionalAuth, async (req, res) => {
     try {
-      const tenantId = req.tenantId || req.headers["x-tenant-id"] as string;
-      if (!tenantId) return res.status(400).json({ error: "Tenant aniqlanmadi" });
+      const tenantId = req.tenantId || req.headers["x-tenant-id"] as string || "default-tenant";
 
       const validatedData = insertOrderSchema.parse({ ...req.body, tenantId });
       const order = await storage.createOrder(validatedData);
@@ -351,8 +349,7 @@ export async function registerRoutes(
 
   app.get("/api/categories", optionalAuth, async (req, res) => {
     try {
-      const tenantId = req.tenantId || req.headers["x-tenant-id"] as string;
-      if (!tenantId) return res.status(400).json({ error: "Tenant aniqlanmadi" });
+      const tenantId = req.tenantId || req.headers["x-tenant-id"] as string || "default-tenant";
       const categories = await storage.getAllCategories(tenantId);
       res.json(categories);
     } catch (error) {

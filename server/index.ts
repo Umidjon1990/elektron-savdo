@@ -11,6 +11,7 @@ import { tenantFromSlug } from "./tenant";
 const app = express();
 const httpServer = createServer(app);
 
+app.set("trust proxy", 1);
 app.use(compression());
 
 const apiLimiter = rateLimit({
@@ -19,6 +20,7 @@ const apiLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: "So'rovlar limiti oshdi, 1 daqiqadan keyin qaytadan urinib ko'ring" },
+  validate: { xForwardedForHeader: false },
 });
 app.use("/api/", apiLimiter);
 
@@ -26,6 +28,7 @@ const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 20,
   message: { error: "Juda ko'p urinish, 15 daqiqadan keyin qaytadan urinib ko'ring" },
+  validate: { xForwardedForHeader: false },
 });
 app.use("/api/auth/", authLimiter);
 

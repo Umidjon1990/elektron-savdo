@@ -139,7 +139,8 @@ export function TransactionProvider({ children }: { children: ReactNode }) {
       throw new Error("Transaction already voided");
     }
     
-    for (const item of transaction.items) {
+    for (const item of (transaction.items || [])) {
+      if (!item || !item.product) continue;
       const product = await db.products.get(item.product.id);
       if (product) {
         await db.products.update(item.product.id, { 
@@ -175,11 +176,13 @@ export function TransactionProvider({ children }: { children: ReactNode }) {
     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
     const monthTransactions = activeTransactions.filter(t => t.date >= startOfMonth);
     
+    const safeItems = (items: any[]) => (items || []).filter((item: any) => item && item.product);
+    
     return {
       todayTotal: todayTransactions.reduce((acc, t) => acc + t.totalAmount, 0),
       todayCount: todayTransactions.length,
       monthTotal: monthTransactions.reduce((acc, t) => acc + t.totalAmount, 0),
-      totalItemsSold: todayTransactions.reduce((acc, t) => acc + t.items.reduce((sum, item) => sum + item.quantity, 0), 0),
+      totalItemsSold: todayTransactions.reduce((acc, t) => acc + safeItems(t.items).reduce((sum, item) => sum + item.quantity, 0), 0),
       todayProfit: todayTransactions.reduce((acc, t) => acc + (t.totalProfit || 0), 0),
       monthProfit: monthTransactions.reduce((acc, t) => acc + (t.totalProfit || 0), 0)
     };

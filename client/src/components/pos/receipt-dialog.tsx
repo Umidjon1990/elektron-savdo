@@ -33,7 +33,7 @@ function ReceiptContent({ transaction, settings }: { transaction: Transaction; s
       </div>
 
       <div className="space-y-2 mb-3">
-        {transaction.items.map((item, idx) => (
+        {(transaction.items || []).filter(item => item && item.product).map((item, idx) => (
           <div key={idx} className="flex justify-between text-sm text-black">
             <div className="text-left flex-1 pr-2">
               <p className="font-bold">{item.product.name}</p>

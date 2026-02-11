@@ -94,7 +94,7 @@ export function ReceiptsListDialog({ isOpen, onClose }: ReceiptsListDialogProps)
                     <p className="text-xs text-muted-foreground">
                       {new Date(transaction.date).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
                       {' • '}
-                      {transaction.items.length} ta mahsulot
+                      {(transaction.items || []).length} ta mahsulot
                     </p>
                   </div>
                   

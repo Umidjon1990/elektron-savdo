@@ -27,7 +27,8 @@ export function SoldItemsDialog({ isOpen, onClose }: SoldItemsDialogProps) {
   const soldItemsMap = new Map<string, SoldItem>();
 
   todayTransactions.forEach(transaction => {
-    transaction.items.forEach(item => {
+    (transaction.items || []).forEach(item => {
+      if (!item || !item.product) return;
       const existing = soldItemsMap.get(item.product.id);
       if (existing) {
         existing.totalQuantity += item.quantity;

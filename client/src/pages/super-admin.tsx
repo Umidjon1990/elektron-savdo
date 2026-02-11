@@ -9,7 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { Store, Plus, Users, Package, ShoppingCart, Crown, ArrowLeft, Trash2, Eye, EyeOff } from "lucide-react";
+import { Store, Plus, Users, Package, ShoppingCart, Crown, ArrowLeft, Trash2, Eye, EyeOff, Copy, Check, ExternalLink, Link2 } from "lucide-react";
 import { Link } from "wouter";
 
 interface TenantWithStats {
@@ -50,6 +50,8 @@ export default function SuperAdminPage() {
   const [createOpen, setCreateOpen] = useState(false);
   const [editTenant, setEditTenant] = useState<TenantWithStats | null>(null);
   const [showPassword, setShowPassword] = useState(false);
+  const [createdStore, setCreatedStore] = useState<{ slug: string; name: string; username: string; password: string } | null>(null);
+  const [linkCopied, setLinkCopied] = useState(false);
 
   const [newStore, setNewStore] = useState({
     storeName: "",
@@ -93,8 +95,8 @@ export default function SuperAdminPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["admin-tenants"] });
       setCreateOpen(false);
+      setCreatedStore({ slug: newStore.slug, name: newStore.storeName, username: newStore.username, password: newStore.password });
       setNewStore({ storeName: "", slug: "", username: "", password: "", plan: "free" });
-      toast({ title: "Do'kon yaratildi" });
     },
     onError: (err: Error) => {
       toast({ title: "Xatolik", description: err.message, variant: "destructive" });
@@ -325,6 +327,7 @@ export default function SuperAdminPage() {
                     <tr className="border-b bg-slate-50/80">
                       <th className="text-left px-4 py-3 font-medium text-slate-600">Do'kon</th>
                       <th className="text-left px-4 py-3 font-medium text-slate-600 hidden sm:table-cell">Egasi</th>
+                      <th className="text-left px-4 py-3 font-medium text-slate-600 hidden md:table-cell">Link</th>
                       <th className="text-left px-4 py-3 font-medium text-slate-600">Reja</th>
                       <th className="text-left px-4 py-3 font-medium text-slate-600 hidden md:table-cell">Status</th>
                       <th className="text-center px-4 py-3 font-medium text-slate-600 hidden md:table-cell">Mahsulot</th>
@@ -344,6 +347,29 @@ export default function SuperAdminPage() {
                           </td>
                           <td className="px-4 py-3 hidden sm:table-cell">
                             <span className="text-slate-600">{t.ownerUsername || "—"}</span>
+                          </td>
+                          <td className="px-4 py-3 hidden md:table-cell">
+                            <div className="flex items-center gap-1">
+                              <button
+                                onClick={() => {
+                                  navigator.clipboard.writeText(`${window.location.origin}/store/${t.slug}`);
+                                  toast({ title: "Link nusxalandi!" });
+                                }}
+                                className="text-xs text-blue-600 hover:text-blue-800 flex items-center gap-1 hover:underline"
+                                data-testid={`button-copy-link-${t.id}`}
+                              >
+                                <Link2 className="h-3 w-3" />
+                                Nusxalash
+                              </button>
+                              <a
+                                href={`/store/${t.slug}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-slate-400 hover:text-blue-600"
+                              >
+                                <ExternalLink className="h-3 w-3" />
+                              </a>
+                            </div>
                           </td>
                           <td className="px-4 py-3">
                             <Badge className={`${plan.color} border-0 font-medium`} data-testid={`badge-plan-${t.id}`}>{plan.label}</Badge>
@@ -391,6 +417,85 @@ export default function SuperAdminPage() {
           </Card>
         )}
       </div>
+
+      <Dialog open={!!createdStore} onOpenChange={(open) => { if (!open) { setCreatedStore(null); setLinkCopied(false); } }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-green-700">
+              <Check className="h-5 w-5" />
+              Do'kon muvaffaqiyatli yaratildi!
+            </DialogTitle>
+          </DialogHeader>
+          {createdStore && (
+            <div className="space-y-4 pt-2">
+              <div className="bg-green-50 border border-green-200 rounded-xl p-4 space-y-3">
+                <div>
+                  <p className="text-xs font-medium text-green-600 mb-1">Do'kon nomi</p>
+                  <p className="font-semibold text-slate-900">{createdStore.name}</p>
+                </div>
+                <div>
+                  <p className="text-xs font-medium text-green-600 mb-1">Do'kon linki (mijozlar uchun)</p>
+                  <div className="flex items-center gap-2">
+                    <code className="flex-1 bg-white border border-green-200 rounded-lg px-3 py-2 text-sm font-mono text-slate-800 break-all" data-testid="text-store-link">
+                      {window.location.origin}/store/{createdStore.slug}
+                    </code>
+                    <Button
+                      size="icon"
+                      variant="outline"
+                      className="shrink-0 border-green-300 hover:bg-green-100"
+                      onClick={() => {
+                        navigator.clipboard.writeText(`${window.location.origin}/store/${createdStore.slug}`);
+                        setLinkCopied(true);
+                        setTimeout(() => setLinkCopied(false), 2000);
+                      }}
+                      data-testid="button-copy-store-link"
+                    >
+                      {linkCopied ? <Check className="h-4 w-4 text-green-600" /> : <Copy className="h-4 w-4" />}
+                    </Button>
+                  </div>
+                </div>
+                <div>
+                  <p className="text-xs font-medium text-green-600 mb-1">Admin kirish linki</p>
+                  <code className="block bg-white border border-green-200 rounded-lg px-3 py-2 text-sm font-mono text-slate-800 break-all">
+                    {window.location.origin}/store/{createdStore.slug}/login
+                  </code>
+                </div>
+              </div>
+
+              <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-2">
+                <p className="text-xs font-medium text-slate-500">Kirish ma'lumotlari</p>
+                <div className="flex justify-between">
+                  <span className="text-sm text-slate-600">Login:</span>
+                  <span className="text-sm font-semibold text-slate-900">{createdStore.username}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-sm text-slate-600">Parol:</span>
+                  <span className="text-sm font-semibold text-slate-900">{createdStore.password}</span>
+                </div>
+              </div>
+
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  className="flex-1"
+                  onClick={() => { setCreatedStore(null); setLinkCopied(false); }}
+                  data-testid="button-close-created"
+                >
+                  Yopish
+                </Button>
+                <Button
+                  className="flex-1 bg-green-600 hover:bg-green-700"
+                  onClick={() => window.open(`/store/${createdStore.slug}`, "_blank")}
+                  data-testid="button-open-store"
+                >
+                  <ExternalLink className="h-4 w-4 mr-2" />
+                  Do'konni ochish
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={!!editTenant} onOpenChange={(open) => !open && setEditTenant(null)}>
         <DialogContent className="max-w-md">

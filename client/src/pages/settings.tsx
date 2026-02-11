@@ -8,12 +8,15 @@ import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
 import { useSettings } from "@/lib/settings-context";
-import { Store, Bell, Printer, Database, Shield, Palette, Receipt } from "lucide-react";
+import { useAuth } from "@/lib/auth-context";
+import { Store, Bell, Printer, Database, Shield, Palette, Receipt, Link2, Copy, Check, ExternalLink } from "lucide-react";
 
 export default function SettingsPage() {
   const { toast } = useToast();
   const { settings, updateSettings } = useSettings();
+  const { tenant } = useAuth();
   const [darkMode, setDarkMode] = useState(false);
+  const [linkCopied, setLinkCopied] = useState(false);
 
   const handleSave = () => {
     toast({
@@ -34,6 +37,54 @@ export default function SettingsPage() {
           </div>
 
           <div className="space-y-6">
+            {tenant?.slug && (
+              <Card className="border-blue-200 bg-blue-50/50">
+                <CardHeader className="pb-3">
+                  <CardTitle className="flex items-center gap-2 text-blue-800">
+                    <Link2 className="h-5 w-5" />
+                    Do'kon linki
+                  </CardTitle>
+                  <CardDescription>Bu linkni mijozlaringizga ulashing</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <div>
+                    <Label className="text-xs text-blue-600 mb-1 block">Mijozlar uchun do'kon linki</Label>
+                    <div className="flex items-center gap-2">
+                      <Input
+                        readOnly
+                        value={`${window.location.origin}/store/${tenant.slug}`}
+                        className="bg-white font-mono text-sm"
+                        data-testid="input-store-link"
+                      />
+                      <Button
+                        size="icon"
+                        variant="outline"
+                        className="shrink-0 border-blue-300 hover:bg-blue-100"
+                        onClick={() => {
+                          navigator.clipboard.writeText(`${window.location.origin}/store/${tenant.slug}`);
+                          setLinkCopied(true);
+                          setTimeout(() => setLinkCopied(false), 2000);
+                          toast({ title: "Link nusxalandi!" });
+                        }}
+                        data-testid="button-copy-my-link"
+                      >
+                        {linkCopied ? <Check className="h-4 w-4 text-green-600" /> : <Copy className="h-4 w-4" />}
+                      </Button>
+                      <Button
+                        size="icon"
+                        variant="outline"
+                        className="shrink-0 border-blue-300 hover:bg-blue-100"
+                        onClick={() => window.open(`/store/${tenant.slug}`, "_blank")}
+                        data-testid="button-open-my-store"
+                      >
+                        <ExternalLink className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">

@@ -78,6 +78,7 @@ export async function registerRoutes(
   app.post("/api/auth/login", async (req, res) => {
     try {
       const data = loginSchema.parse(req.body);
+      const trimmedUsername = data.username.trim();
 
       let user;
       if (data.slug) {
@@ -85,17 +86,25 @@ export async function registerRoutes(
         if (!tenant) {
           return res.status(401).json({ error: "Do'kon topilmadi" });
         }
-        user = await storage.getUserByUsername(data.username, tenant.id);
+        user = await storage.getUserByUsername(trimmedUsername, tenant.id);
+        if (!user) {
+          user = await storage.getUserByUsername(data.username, tenant.id);
+        }
       } else {
-        user = await storage.getUserByUsername(data.username);
+        user = await storage.getUserByUsername(trimmedUsername);
+        if (!user) {
+          user = await storage.getUserByUsername(data.username);
+        }
       }
 
       if (!user) {
+        console.log("Login failed - user not found:", trimmedUsername, "slug:", data.slug);
         return res.status(401).json({ error: "Login yoki parol noto'g'ri" });
       }
 
       const isValid = await comparePassword(data.password, user.password);
       if (!isValid) {
+        console.log("Login failed - wrong password for user:", user.username);
         return res.status(401).json({ error: "Login yoki parol noto'g'ri" });
       }
 

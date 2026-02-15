@@ -16,6 +16,7 @@ interface Product {
   image: string;
   videoUrl?: string;
   sortOrder?: number;
+  isNew?: boolean;
 }
 
 interface ProductContextType {

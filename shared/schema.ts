@@ -46,6 +46,7 @@ export const products = pgTable("products", {
   image: text("image").notNull(),
   videoUrl: text("video_url"),
   sortOrder: integer("sort_order").notNull().default(0),
+  isNew: boolean("is_new").notNull().default(false),
 }, (table) => [
   uniqueIndex("products_tenant_barcode_idx").on(table.tenantId, table.barcode),
 ]);

@@ -82,7 +82,8 @@ export default function Inventory() {
     category: "",
     barcode: "",
     image: "",
-    videoUrl: ""
+    videoUrl: "",
+    isNew: false
   });
   
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -111,7 +112,7 @@ export default function Inventory() {
     if (!isAddDialogOpen) {
       setStep(1);
       setEditingId(null);
-      setNewProduct({ name: "", author: "", price: "", costPrice: "", stock: "", category: "", barcode: "", image: "", videoUrl: "" });
+      setNewProduct({ name: "", author: "", price: "", costPrice: "", stock: "", category: "", barcode: "", image: "", videoUrl: "", isNew: false });
     }
   }, [isAddDialogOpen]);
   
@@ -126,7 +127,8 @@ export default function Inventory() {
       category: product.category,
       barcode: product.barcode,
       image: product.image,
-      videoUrl: product.videoUrl || ""
+      videoUrl: product.videoUrl || "",
+      isNew: product.isNew || false
     });
     setStep(2); // Go directly to details step
     setIsAddDialogOpen(true);
@@ -261,7 +263,8 @@ export default function Inventory() {
           category: newProduct.category || categories[0]?.name || "Boshqa",
           barcode: newProduct.barcode.trim(),
           image: newProduct.image,
-          videoUrl: newProduct.videoUrl || undefined
+          videoUrl: newProduct.videoUrl || undefined,
+          isNew: newProduct.isNew
         });
         toast({
           title: "O'zgartirildi",
@@ -278,7 +281,8 @@ export default function Inventory() {
           category: newProduct.category || categories[0]?.name || "Boshqa",
           barcode: newProduct.barcode.trim() || Math.random().toString().slice(2, 14),
           image: newProduct.image || "https://images.unsplash.com/photo-1543002588-bfa74002ed7e?auto=format&fit=crop&q=80&w=300&h=400",
-          videoUrl: newProduct.videoUrl || undefined
+          videoUrl: newProduct.videoUrl || undefined,
+          isNew: newProduct.isNew
         });
         toast({
           title: "Muvaffaqiyatli qo'shildi",
@@ -601,6 +605,21 @@ export default function Inventory() {
                           />
                           <p className="text-xs text-muted-foreground">Video qo'shsangiz, tovar kartasida "Batafsil video" tugmasi ko'rinadi</p>
                         </div>
+
+                        <div className="flex items-center gap-3 p-3 rounded-lg border border-dashed border-green-300 bg-green-50">
+                          <input
+                            type="checkbox"
+                            id="isNew"
+                            checked={newProduct.isNew}
+                            onChange={(e) => setNewProduct({...newProduct, isNew: e.target.checked})}
+                            className="w-5 h-5 accent-green-600 rounded"
+                            data-testid="checkbox-is-new"
+                          />
+                          <Label htmlFor="isNew" className="cursor-pointer flex-1">
+                            <span className="font-semibold text-green-700">🆕 "YANGI" deb belgilash</span>
+                            <p className="text-xs text-green-600 mt-0.5">Bu mahsulot do'konda alohida dizayn bilan ajralib ko'rinadi</p>
+                          </Label>
+                        </div>
                       </div>
                       <DialogFooter className="gap-2">
                         <Button type="button" variant="outline" onClick={() => setIsAddDialogOpen(false)}>Bekor qilish</Button>
@@ -673,7 +692,12 @@ export default function Inventory() {
                         </div>
                       </TableCell>
                       <TableCell>
-                        <div className="font-medium">{product.name}</div>
+                        <div className="flex items-center gap-1.5">
+                          <span className="font-medium">{product.name}</span>
+                          {product.isNew && (
+                            <span className="bg-gradient-to-r from-amber-500 to-orange-500 text-white text-[9px] font-black px-1.5 py-0.5 rounded-md tracking-wide">YANGI</span>
+                          )}
+                        </div>
                         <div className="text-xs text-muted-foreground">{product.author}</div>
                       </TableCell>
                       <TableCell>
@@ -740,7 +764,12 @@ export default function Inventory() {
                     <div className="flex-1 min-w-0">
                       <div className="flex justify-between items-start">
                         <div>
-                          <h3 className="font-medium text-sm truncate pr-2">{product.name}</h3>
+                          <div className="flex items-center gap-1.5">
+                            <h3 className="font-medium text-sm truncate pr-2">{product.name}</h3>
+                            {product.isNew && (
+                              <span className="bg-gradient-to-r from-amber-500 to-orange-500 text-white text-[8px] font-black px-1.5 py-0.5 rounded shrink-0">YANGI</span>
+                            )}
+                          </div>
                           <p className="text-xs text-muted-foreground">{product.author}</p>
                         </div>
                         <DropdownMenu>

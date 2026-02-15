@@ -26,6 +26,7 @@ interface Product {
   category: string;
   image: string;
   videoUrl?: string;
+  isNew?: boolean;
 }
 
 interface Category {
@@ -265,6 +266,53 @@ export default function SlugStorePage() {
         </div>
       </section>
 
+      {categories.filter(c => c.isPinned).length > 0 && (
+        <section className="py-12 bg-gradient-to-b from-slate-50 to-white">
+          <div className="container mx-auto px-4">
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.5, delay: 0.2 }}
+            >
+              <h2 className="text-2xl font-bold text-slate-900 mb-6 text-center">Ommabop bo'limlar</h2>
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+                {[...categories]
+                  .filter(c => c.isPinned)
+                  .sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0))
+                  .map((cat, i) => (
+                    <motion.div
+                      key={cat.id}
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ duration: 0.3, delay: 0.1 * i }}
+                      onClick={() => {
+                        setActiveCategory(cat.name);
+                        document.getElementById("catalog")?.scrollIntoView({ behavior: "smooth" });
+                      }}
+                      className="group cursor-pointer rounded-2xl p-5 text-center transition-all hover:shadow-lg hover:-translate-y-1 border border-slate-100"
+                      style={{
+                        backgroundColor: (cat.color || brandColor) + "10",
+                        borderColor: (cat.color || brandColor) + "30",
+                      }}
+                      data-testid={`pinned-category-${cat.id}`}
+                    >
+                      <div
+                        className="w-14 h-14 mx-auto mb-3 rounded-xl flex items-center justify-center transition-transform group-hover:scale-110"
+                        style={{ backgroundColor: (cat.color || brandColor) + "20" }}
+                      >
+                        <span className="text-2xl" style={{ color: cat.color || brandColor }}>
+                          📚
+                        </span>
+                      </div>
+                      <p className="font-semibold text-slate-800 text-sm">{cat.name}</p>
+                    </motion.div>
+                  ))}
+              </div>
+            </motion.div>
+          </div>
+        </section>
+      )}
+
       <section className="py-16 bg-slate-50" id="catalog">
         <div className="container mx-auto px-4">
           <div className="flex items-center justify-between mb-8">
@@ -344,27 +392,61 @@ export default function SlugStorePage() {
                   initial={{ opacity: 0, scale: 0.95 }}
                   animate={{ opacity: 1, scale: 1 }}
                   transition={{ duration: 0.3 }}
-                  className="group bg-white rounded-2xl p-3 shadow-sm hover:shadow-xl hover:shadow-indigo-100 transition-all border border-slate-100 flex flex-col"
+                  className={cn(
+                    "group rounded-2xl p-3 shadow-sm hover:shadow-xl transition-all flex flex-col relative overflow-hidden",
+                    product.isNew
+                      ? "bg-gradient-to-br from-amber-50 via-white to-emerald-50 border-2 border-amber-300 hover:shadow-amber-200 ring-1 ring-amber-200"
+                      : "bg-white border border-slate-100 hover:shadow-indigo-100"
+                  )}
                   data-testid={`card-product-${product.id}`}
                 >
-                  <div className="relative aspect-[2/3] bg-slate-100 rounded-xl overflow-hidden mb-3">
-                    <img src={product.image} alt={product.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
-                    {product.stock < 5 && (
+                  {product.isNew && (
+                    <>
+                      <div className="absolute top-0 right-0 z-20">
+                        <div className="bg-gradient-to-r from-amber-500 to-orange-500 text-white text-[10px] font-black px-4 py-1 rounded-bl-xl shadow-lg tracking-widest animate-pulse">
+                          YANGI
+                        </div>
+                      </div>
+                      <div className="absolute -top-10 -left-10 w-24 h-24 bg-amber-400 opacity-10 rounded-full blur-2xl" />
+                      <div className="absolute -bottom-10 -right-10 w-24 h-24 bg-emerald-400 opacity-10 rounded-full blur-2xl" />
+                    </>
+                  )}
+                  <div className={cn(
+                    "relative aspect-[2/3] rounded-xl overflow-hidden mb-3",
+                    product.isNew ? "ring-2 ring-amber-200 ring-offset-2" : "bg-slate-100"
+                  )}>
+                    <img src={product.image} alt={product.name} className={cn(
+                      "w-full h-full object-cover transition-transform duration-500",
+                      product.isNew ? "group-hover:scale-110" : "group-hover:scale-105"
+                    )} />
+                    {product.isNew && (
+                      <div className="absolute inset-0 bg-gradient-to-t from-amber-500/10 to-transparent pointer-events-none" />
+                    )}
+                    {product.stock < 5 && !product.isNew && (
                       <span className="absolute top-2 left-2 bg-red-500 text-white text-[10px] font-bold px-2 py-1 rounded-md">KAM QOLDI</span>
                     )}
                   </div>
                   <div className="flex-1 flex flex-col">
-                    <div className="text-xs font-medium mb-1" style={{ color: brandColor }}>{product.category}</div>
-                    <h3 className="font-bold text-slate-900 leading-tight mb-1 line-clamp-2">{product.name}</h3>
+                    <div className="text-xs font-medium mb-1" style={{ color: product.isNew ? "#d97706" : brandColor }}>{product.category}</div>
+                    <h3 className={cn(
+                      "font-bold leading-tight mb-1 line-clamp-2",
+                      product.isNew ? "text-amber-900" : "text-slate-900"
+                    )}>{product.name}</h3>
                     <p className="text-sm text-slate-500 mb-3">{product.author}</p>
                     <div className="mt-auto flex items-center justify-between">
-                      <div className="font-bold text-lg text-slate-900">
+                      <div className={cn(
+                        "font-bold text-lg",
+                        product.isNew ? "text-amber-700" : "text-slate-900"
+                      )}>
                         {product.price.toLocaleString()} <span className="text-xs text-slate-500 font-normal">so'm</span>
                       </div>
                       <Button
                         size="icon"
-                        className="h-8 w-8 rounded-full text-white transition-colors"
-                        style={{ backgroundColor: brandColor }}
+                        className={cn(
+                          "h-8 w-8 rounded-full text-white transition-all",
+                          product.isNew ? "bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 shadow-md shadow-amber-200" : ""
+                        )}
+                        style={product.isNew ? {} : { backgroundColor: brandColor }}
                         onClick={() => addItem(product)}
                         data-testid={`button-add-${product.id}`}
                       >

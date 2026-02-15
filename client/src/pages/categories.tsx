@@ -68,7 +68,10 @@ import {
   Search,
   Package,
   CheckSquare,
-  X
+  X,
+  ArrowUp,
+  ArrowDown,
+  ArrowUpDown
 } from "lucide-react";
 import type { Category, Product } from "@shared/schema";
 import { getAuthHeaders } from "@/lib/auth-context";
@@ -259,6 +262,22 @@ export default function Categories() {
     },
   });
 
+  const reorderProductsMutation = useMutation({
+    mutationFn: async (orderedIds: string[]) => {
+      const res = await fetch("/api/products/reorder", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json", ...getAuthHeaders() },
+        body: JSON.stringify({ orderedIds }),
+      });
+      if (!res.ok) throw new Error("Failed to reorder");
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/products"] });
+      toast.success("Tartib saqlandi", { duration: 2000 });
+    },
+  });
+
   const unassignMutation = useMutation({
     mutationFn: async (productIds: string[]) => {
       const res = await fetch("/api/categories/unassign-products", {
@@ -297,16 +316,71 @@ export default function Categories() {
       return p.name.toLowerCase().includes(search) || (p.barcode && p.barcode.toLowerCase().includes(search));
     };
     return {
-      inCategory: categoryProducts.filter(filterFn),
+      inCategory: categoryProducts.filter(filterFn).sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0)),
       uncategorized: uncategorizedProducts.filter(filterFn),
       otherCategory: otherCategoryProducts.filter(filterFn),
     };
   }, [categoryProducts, uncategorizedProducts, otherCategoryProducts, productSearch]);
 
+  const [draggedProductId, setDraggedProductId] = useState<string | null>(null);
+  const [dragOverProductId, setDragOverProductId] = useState<string | null>(null);
+  const [reorderMode, setReorderMode] = useState(false);
+
+  const sortedCategoryProducts = useMemo(() => {
+    return [...categoryProducts].sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0));
+  }, [categoryProducts]);
+
+  const handleDragStart = (productId: string) => {
+    setDraggedProductId(productId);
+  };
+
+  const handleDragOver = (e: React.DragEvent, productId: string) => {
+    e.preventDefault();
+    if (productId !== draggedProductId) {
+      setDragOverProductId(productId);
+    }
+  };
+
+  const handleDrop = (targetProductId: string) => {
+    if (!draggedProductId || draggedProductId === targetProductId) {
+      setDraggedProductId(null);
+      setDragOverProductId(null);
+      return;
+    }
+    const items = [...sortedCategoryProducts];
+    const dragIdx = items.findIndex(p => p.id === draggedProductId);
+    const dropIdx = items.findIndex(p => p.id === targetProductId);
+    if (dragIdx === -1 || dropIdx === -1) return;
+    const [moved] = items.splice(dragIdx, 1);
+    items.splice(dropIdx, 0, moved);
+    const orderedIds = items.map(p => p.id);
+    reorderProductsMutation.mutate(orderedIds);
+    setDraggedProductId(null);
+    setDragOverProductId(null);
+  };
+
+  const handleDragEnd = () => {
+    setDraggedProductId(null);
+    setDragOverProductId(null);
+  };
+
+  const moveProduct = (productId: string, direction: "up" | "down") => {
+    const items = [...sortedCategoryProducts];
+    const idx = items.findIndex(p => p.id === productId);
+    if (idx === -1) return;
+    if (direction === "up" && idx === 0) return;
+    if (direction === "down" && idx === items.length - 1) return;
+    const swapIdx = direction === "up" ? idx - 1 : idx + 1;
+    [items[idx], items[swapIdx]] = [items[swapIdx], items[idx]];
+    const orderedIds = items.map(p => p.id);
+    reorderProductsMutation.mutate(orderedIds);
+  };
+
   const openManageProducts = (category: Category) => {
     setManageCategory(category);
     setProductSearch("");
     setSelectedProductIds(new Set());
+    setReorderMode(false);
   };
 
   const toggleProduct = (id: string) => {
@@ -385,16 +459,16 @@ export default function Categories() {
   const unpinnedCategories = categories.filter(c => !c.isPinned);
   const displayOrder = [...pinnedCategories, ...unpinnedCategories];
 
-  const handleDragStart = (index: number) => {
+  const handleCatDragStart = (index: number) => {
     dragItem.current = index;
     setDragIndex(index);
   };
 
-  const handleDragEnter = (index: number) => {
+  const handleCatDragEnter = (index: number) => {
     dragOverItem.current = index;
   };
 
-  const handleDragEnd = () => {
+  const handleCatDragEnd = () => {
     if (dragItem.current === null || dragOverItem.current === null) {
       setDragIndex(null);
       return;
@@ -529,9 +603,9 @@ export default function Categories() {
                         category={category}
                         index={index}
                         isDragging={dragIndex === index}
-                        onDragStart={handleDragStart}
-                        onDragEnter={handleDragEnter}
-                        onDragEnd={handleDragEnd}
+                        onDragStart={handleCatDragStart}
+                        onDragEnter={handleCatDragEnter}
+                        onDragEnd={handleCatDragEnd}
                         onEdit={openEditDialog}
                         onDelete={setDeleteConfirm}
                         onTogglePin={(id, pinned) => pinMutation.mutate({ id, isPinned: pinned })}
@@ -558,9 +632,9 @@ export default function Categories() {
                         category={category}
                         index={pinnedCategories.length + index}
                         isDragging={dragIndex === pinnedCategories.length + index}
-                        onDragStart={handleDragStart}
-                        onDragEnter={handleDragEnter}
-                        onDragEnd={handleDragEnd}
+                        onDragStart={handleCatDragStart}
+                        onDragEnter={handleCatDragEnter}
+                        onDragEnd={handleCatDragEnd}
                         onEdit={openEditDialog}
                         onDelete={setDeleteConfirm}
                         onTogglePin={(id, pinned) => pinMutation.mutate({ id, isPinned: pinned })}
@@ -670,32 +744,101 @@ export default function Categories() {
                     <Package className="w-3 h-3" />
                     Bu kategoriyada ({filteredProducts.inCategory.length})
                   </h3>
-                  <div className="flex gap-1">
+                  <div className="flex gap-1 items-center">
                     <button
-                      onClick={() => selectAll(filteredProducts.inCategory)}
-                      className="text-[10px] text-blue-600 hover:underline"
+                      onClick={() => setReorderMode(!reorderMode)}
+                      className={`text-[10px] flex items-center gap-0.5 ${reorderMode ? 'text-indigo-600 font-semibold' : 'text-indigo-500 hover:underline'}`}
+                      data-testid="button-toggle-reorder"
                     >
-                      Barchasini tanlash
+                      <ArrowUpDown className="w-3 h-3" />
+                      {reorderMode ? "Tartibni yopish" : "Tartib"}
                     </button>
-                    <span className="text-slate-300">|</span>
-                    <button
-                      onClick={() => deselectAll(filteredProducts.inCategory)}
-                      className="text-[10px] text-slate-500 hover:underline"
-                    >
-                      Bekor
-                    </button>
+                    {!reorderMode && (
+                      <>
+                        <span className="text-slate-300">|</span>
+                        <button
+                          onClick={() => selectAll(filteredProducts.inCategory)}
+                          className="text-[10px] text-blue-600 hover:underline"
+                        >
+                          Barchasini tanlash
+                        </button>
+                        <span className="text-slate-300">|</span>
+                        <button
+                          onClick={() => deselectAll(filteredProducts.inCategory)}
+                          className="text-[10px] text-slate-500 hover:underline"
+                        >
+                          Bekor
+                        </button>
+                      </>
+                    )}
                   </div>
                 </div>
                 <div className="space-y-1">
-                  {filteredProducts.inCategory.map(product => (
-                    <ProductCheckItem
-                      key={product.id}
-                      product={product}
-                      checked={selectedProductIds.has(product.id)}
-                      onToggle={() => toggleProduct(product.id)}
-                      inCategory
-                    />
-                  ))}
+                  {reorderMode ? (
+                    sortedCategoryProducts
+                      .filter(p => {
+                        const search = productSearch.toLowerCase().trim();
+                        if (!search) return true;
+                        return p.name.toLowerCase().includes(search) || (p.barcode && p.barcode.toLowerCase().includes(search));
+                      })
+                      .map((product, idx) => (
+                        <div
+                          key={product.id}
+                          draggable
+                          onDragStart={() => handleDragStart(product.id)}
+                          onDragOver={(e) => handleDragOver(e, product.id)}
+                          onDrop={() => handleDrop(product.id)}
+                          onDragEnd={handleDragEnd}
+                          className={`flex items-center gap-2 p-2 rounded-lg border transition-all cursor-grab active:cursor-grabbing ${
+                            draggedProductId === product.id ? 'opacity-40 border-indigo-300 bg-indigo-50' :
+                            dragOverProductId === product.id ? 'border-indigo-400 bg-indigo-50 shadow-sm' :
+                            'border-slate-200 bg-white hover:border-slate-300'
+                          }`}
+                          data-testid={`reorder-item-${product.id}`}
+                        >
+                          <GripVertical className="w-4 h-4 text-slate-400 shrink-0" />
+                          <span className="text-xs text-slate-400 w-5 text-center shrink-0">{idx + 1}</span>
+                          {product.image ? (
+                            <img src={product.image} alt="" className="w-8 h-8 rounded object-cover shrink-0" />
+                          ) : (
+                            <div className="w-8 h-8 rounded bg-slate-100 flex items-center justify-center shrink-0">
+                              <Package className="w-4 h-4 text-slate-400" />
+                            </div>
+                          )}
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium text-slate-800 truncate">{product.name}</p>
+                          </div>
+                          <div className="flex gap-1 shrink-0">
+                            <button
+                              onClick={(e) => { e.stopPropagation(); moveProduct(product.id, "up"); }}
+                              disabled={idx === 0}
+                              className="p-1 rounded hover:bg-slate-100 disabled:opacity-30"
+                              data-testid={`move-up-${product.id}`}
+                            >
+                              <ArrowUp className="w-3.5 h-3.5 text-slate-500" />
+                            </button>
+                            <button
+                              onClick={(e) => { e.stopPropagation(); moveProduct(product.id, "down"); }}
+                              disabled={idx === sortedCategoryProducts.length - 1}
+                              className="p-1 rounded hover:bg-slate-100 disabled:opacity-30"
+                              data-testid={`move-down-${product.id}`}
+                            >
+                              <ArrowDown className="w-3.5 h-3.5 text-slate-500" />
+                            </button>
+                          </div>
+                        </div>
+                      ))
+                  ) : (
+                    filteredProducts.inCategory.map(product => (
+                      <ProductCheckItem
+                        key={product.id}
+                        product={product}
+                        checked={selectedProductIds.has(product.id)}
+                        onToggle={() => toggleProduct(product.id)}
+                        inCategory
+                      />
+                    ))
+                  )}
                 </div>
               </div>
             )}
@@ -811,8 +954,8 @@ function ProductCheckItem({
         onCheckedChange={onToggle}
         className="shrink-0"
       />
-      {product.imageUrl ? (
-        <img src={product.imageUrl} alt="" className="w-8 h-8 rounded object-cover shrink-0" />
+      {product.image ? (
+        <img src={product.image} alt="" className="w-8 h-8 rounded object-cover shrink-0" />
       ) : (
         <div className="w-8 h-8 rounded bg-slate-100 flex items-center justify-center shrink-0">
           <Package className="w-4 h-4 text-slate-400" />

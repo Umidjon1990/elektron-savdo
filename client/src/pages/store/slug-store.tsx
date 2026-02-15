@@ -137,6 +137,19 @@ export default function SlugStorePage() {
     staleTime: 60000,
   });
 
+  const [initialCategorySet, setInitialCategorySet] = useState(false);
+  useEffect(() => {
+    if (categories.length > 0 && !initialCategorySet) {
+      const firstPinned = [...categories]
+        .filter(c => c.isPinned)
+        .sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0))[0];
+      if (firstPinned) {
+        setActiveCategory(firstPinned.name);
+      }
+      setInitialCategorySet(true);
+    }
+  }, [categories, initialCategorySet]);
+
   if (tenantLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-slate-50">
@@ -268,52 +281,6 @@ export default function SlugStorePage() {
         </div>
       </section>
 
-      {categories.filter(c => c.isPinned).length > 0 && (
-        <section className="py-12 bg-gradient-to-b from-slate-50 to-white">
-          <div className="container mx-auto px-4">
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.5, delay: 0.2 }}
-            >
-              <h2 className="text-2xl font-bold text-slate-900 mb-6 text-center">Ommabop bo'limlar</h2>
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
-                {[...categories]
-                  .filter(c => c.isPinned)
-                  .sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0))
-                  .map((cat, i) => (
-                    <motion.div
-                      key={cat.id}
-                      initial={{ opacity: 0, y: 20 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ duration: 0.3, delay: 0.1 * i }}
-                      onClick={() => {
-                        setActiveCategory(cat.name);
-                        document.getElementById("catalog")?.scrollIntoView({ behavior: "smooth" });
-                      }}
-                      className="group cursor-pointer rounded-2xl p-5 text-center transition-all hover:shadow-lg hover:-translate-y-1 border border-slate-100"
-                      style={{
-                        backgroundColor: (cat.color || brandColor) + "10",
-                        borderColor: (cat.color || brandColor) + "30",
-                      }}
-                      data-testid={`pinned-category-${cat.id}`}
-                    >
-                      <div
-                        className="w-14 h-14 mx-auto mb-3 rounded-xl flex items-center justify-center transition-transform group-hover:scale-110"
-                        style={{ backgroundColor: (cat.color || brandColor) + "20" }}
-                      >
-                        <span className="text-2xl" style={{ color: cat.color || brandColor }}>
-                          📚
-                        </span>
-                      </div>
-                      <p className="font-semibold text-slate-800 text-sm">{cat.name}</p>
-                    </motion.div>
-                  ))}
-              </div>
-            </motion.div>
-          </div>
-        </section>
-      )}
 
       <section className="py-16 bg-slate-50" id="catalog">
         <div className="container mx-auto px-4">

@@ -64,6 +64,7 @@ import {
   Layers
 } from "lucide-react";
 import type { Category } from "@shared/schema";
+import { getAuthHeaders } from "@/lib/auth-context";
 
 const AVAILABLE_ICONS = [
   { name: "Book", icon: Book },
@@ -123,7 +124,7 @@ export default function Categories() {
   const { data: categories = [], isLoading } = useQuery<Category[]>({
     queryKey: ["/api/categories"],
     queryFn: async () => {
-      const res = await fetch("/api/categories");
+      const res = await fetch("/api/categories", { headers: getAuthHeaders() });
       if (!res.ok) throw new Error("Failed to fetch categories");
       return res.json();
     },
@@ -133,7 +134,7 @@ export default function Categories() {
     mutationFn: async (data: { name: string; icon: string; color: string }) => {
       const res = await fetch("/api/categories", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...getAuthHeaders() },
         body: JSON.stringify(data),
       });
       if (!res.ok) throw new Error("Failed to create category");
@@ -151,7 +152,7 @@ export default function Categories() {
     mutationFn: async ({ id, data }: { id: string; data: Partial<{ name: string; icon: string; color: string }> }) => {
       const res = await fetch(`/api/categories/${id}`, {
         method: "PATCH",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...getAuthHeaders() },
         body: JSON.stringify(data),
       });
       if (!res.ok) throw new Error("Failed to update category");
@@ -168,7 +169,7 @@ export default function Categories() {
 
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
-      const res = await fetch(`/api/categories/${id}`, { method: "DELETE" });
+      const res = await fetch(`/api/categories/${id}`, { method: "DELETE", headers: getAuthHeaders() });
       if (!res.ok) throw new Error("Failed to delete category");
       return res.json();
     },

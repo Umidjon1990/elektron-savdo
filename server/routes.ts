@@ -631,6 +631,28 @@ export async function registerRoutes(
     }
   });
 
+  app.post("/api/categories/reorder", authMiddleware, async (req, res) => {
+    try {
+      const { orderedIds } = req.body;
+      if (!Array.isArray(orderedIds)) return res.status(400).json({ error: "orderedIds must be an array" });
+      await storage.reorderCategories(orderedIds, req.tenantId!);
+      res.json({ success: true });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to reorder categories" });
+    }
+  });
+
+  app.patch("/api/categories/:id/pin", authMiddleware, async (req, res) => {
+    try {
+      const { isPinned } = req.body;
+      const category = await storage.updateCategory(req.params.id, { isPinned: !!isPinned }, req.tenantId);
+      if (!category) return res.status(404).json({ error: "Category not found" });
+      res.json(category);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to pin category" });
+    }
+  });
+
   // ============ TRANSACTIONS API (tenant-scoped) ============
 
   app.get("/api/transactions", authMiddleware, async (req, res) => {

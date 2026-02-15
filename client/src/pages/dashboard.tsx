@@ -10,7 +10,7 @@ import type { Product } from "@/data/mock-products";
 import type { Category } from "@shared/schema";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Search, ScanBarcode, Wifi, WifiOff, Bluetooth, RefreshCw, BookOpen, ShoppingCart, Filter, ChevronDown, Check, TrendingUp, DollarSign, CreditCard, Package } from "lucide-react";
+import { Search, ScanBarcode, Wifi, WifiOff, Bluetooth, RefreshCw, BookOpen, ShoppingCart, Filter, ChevronDown, Check, TrendingUp, DollarSign, CreditCard, Package, Pin } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -494,6 +494,42 @@ export default function Dashboard() {
               </div>
             </div>
 
+            {/* Pinned Category Quick Filters */}
+            {categories.filter(c => c.isPinned).length > 0 && (
+              <div className="mb-3 flex flex-wrap gap-2">
+                <button
+                  onClick={() => setSelectedCategory("Barchasi")}
+                  className={`px-3 py-1.5 rounded-full text-sm font-medium transition-all ${
+                    selectedCategory === "Barchasi"
+                      ? "bg-blue-600 text-white shadow-md"
+                      : "bg-white text-slate-600 border border-slate-200 hover:bg-slate-50"
+                  }`}
+                  data-testid="filter-all"
+                >
+                  Barchasi
+                </button>
+                {categories.filter(c => c.isPinned).map(category => (
+                  <button
+                    key={category.id}
+                    onClick={() => setSelectedCategory(category.name)}
+                    className={`px-3 py-1.5 rounded-full text-sm font-medium transition-all flex items-center gap-1.5 ${
+                      selectedCategory === category.name
+                        ? "text-white shadow-md"
+                        : "bg-white border border-slate-200 hover:bg-slate-50"
+                    }`}
+                    style={selectedCategory === category.name
+                      ? { backgroundColor: category.color }
+                      : { color: category.color, borderColor: category.color + "40" }
+                    }
+                    data-testid={`filter-pinned-${category.id}`}
+                  >
+                    <Pin className="w-3 h-3" />
+                    {category.name}
+                  </button>
+                ))}
+              </div>
+            )}
+
             {/* Category Filter Dropdown */}
             <div className="mb-4 flex items-center gap-3">
               <DropdownMenu>
@@ -513,7 +549,19 @@ export default function Dashboard() {
                     <span className="flex-1">Barchasi</span>
                     {selectedCategory === "Barchasi" && <Check className="h-4 w-4 text-primary" />}
                   </DropdownMenuItem>
-                  {categories.map(category => (
+                  {categories.filter(c => c.isPinned).map(category => (
+                    <DropdownMenuItem
+                      key={category.id}
+                      onClick={() => setSelectedCategory(category.name)}
+                      className="cursor-pointer"
+                      style={{color: '#1e293b', backgroundColor: '#fffbeb'}}
+                    >
+                      <Pin className="h-3 w-3 mr-1 text-amber-500" />
+                      <span className="flex-1 font-medium">{category.name}</span>
+                      {selectedCategory === category.name && <Check className="h-4 w-4 text-primary" />}
+                    </DropdownMenuItem>
+                  ))}
+                  {categories.filter(c => !c.isPinned).map(category => (
                     <DropdownMenuItem
                       key={category.id}
                       onClick={() => setSelectedCategory(category.name)}

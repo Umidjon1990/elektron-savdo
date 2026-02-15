@@ -41,6 +41,7 @@ export interface IStorage {
   createCategory(category: InsertCategory): Promise<Category>;
   updateCategory(id: string, category: Partial<InsertCategory>, tenantId?: string): Promise<Category | undefined>;
   deleteCategory(id: string, tenantId?: string): Promise<boolean>;
+  reorderCategories(orderedIds: string[], tenantId: string): Promise<void>;
   
   // Transactions (tenant-scoped)
   getAllTransactions(tenantId: string): Promise<Transaction[]>;
@@ -227,7 +228,8 @@ export class DatabaseStorage implements IStorage {
   // Categories (tenant-scoped)
   async getAllCategories(tenantId: string): Promise<Category[]> {
     return await db.select().from(categories)
-      .where(eq(categories.tenantId, tenantId));
+      .where(eq(categories.tenantId, tenantId))
+      .orderBy(categories.sortOrder);
   }
 
   async getCategory(id: string, tenantId?: string): Promise<Category | undefined> {
@@ -260,6 +262,16 @@ export class DatabaseStorage implements IStorage {
       : eq(categories.id, id);
     const result = await db.delete(categories).where(condition);
     return true;
+  }
+
+  async reorderCategories(orderedIds: string[], tenantId: string): Promise<void> {
+    await db.transaction(async (tx) => {
+      for (let i = 0; i < orderedIds.length; i++) {
+        await tx.update(categories)
+          .set({ sortOrder: i })
+          .where(and(eq(categories.id, orderedIds[i]), eq(categories.tenantId, tenantId)));
+      }
+    });
   }
 
   // Transactions (tenant-scoped)

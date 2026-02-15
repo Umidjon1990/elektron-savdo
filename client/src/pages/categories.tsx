@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { SidebarNav } from "@/components/layout/sidebar-nav";
 import { Card, CardContent } from "@/components/ui/card";
@@ -22,7 +22,6 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { toast } from "sonner";
 import { 
   Plus, 
@@ -61,7 +60,10 @@ import {
   Plane,
   Ticket,
   Tag,
-  Layers
+  Layers,
+  Pin,
+  PinOff,
+  GripVertical
 } from "lucide-react";
 import type { Category } from "@shared/schema";
 import { getAuthHeaders } from "@/lib/auth-context";
@@ -120,6 +122,9 @@ export default function Categories() {
   const [editingCategory, setEditingCategory] = useState<Category | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<Category | null>(null);
   const [formData, setFormData] = useState({ name: "", icon: "Tag", color: "#3b82f6" });
+  const dragItem = useRef<number | null>(null);
+  const dragOverItem = useRef<number | null>(null);
+  const [dragIndex, setDragIndex] = useState<number | null>(null);
 
   const { data: categories = [], isLoading } = useQuery<Category[]>({
     queryKey: ["/api/categories"],
@@ -144,7 +149,7 @@ export default function Categories() {
       queryClient.invalidateQueries({ queryKey: ["/api/categories"] });
       setIsDialogOpen(false);
       setFormData({ name: "", icon: "Tag", color: "#3b82f6" });
-      toast.success("Kategoriya yaratildi ✓", { duration: 2000 });
+      toast.success("Kategoriya yaratildi", { duration: 2000 });
     },
   });
 
@@ -163,7 +168,7 @@ export default function Categories() {
       setIsDialogOpen(false);
       setEditingCategory(null);
       setFormData({ name: "", icon: "Tag", color: "#3b82f6" });
-      toast.success("Kategoriya yangilandi ✓", { duration: 2000 });
+      toast.success("Kategoriya yangilandi", { duration: 2000 });
     },
   });
 
@@ -176,7 +181,38 @@ export default function Categories() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/categories"] });
       setDeleteConfirm(null);
-      toast.success("Kategoriya o'chirildi ✓", { duration: 2000 });
+      toast.success("Kategoriya o'chirildi", { duration: 2000 });
+    },
+  });
+
+  const reorderMutation = useMutation({
+    mutationFn: async (orderedIds: string[]) => {
+      const res = await fetch("/api/categories/reorder", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...getAuthHeaders() },
+        body: JSON.stringify({ orderedIds }),
+      });
+      if (!res.ok) throw new Error("Failed to reorder");
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/categories"] });
+    },
+  });
+
+  const pinMutation = useMutation({
+    mutationFn: async ({ id, isPinned }: { id: string; isPinned: boolean }) => {
+      const res = await fetch(`/api/categories/${id}/pin`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", ...getAuthHeaders() },
+        body: JSON.stringify({ isPinned }),
+      });
+      if (!res.ok) throw new Error("Failed to pin");
+      return res.json();
+    },
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/categories"] });
+      toast.success(variables.isPinned ? "Kategoriya pin qilindi" : "Pin olib tashlandi", { duration: 2000 });
     },
   });
 
@@ -201,6 +237,34 @@ export default function Categories() {
     setEditingCategory(null);
     setFormData({ name: "", icon: "Tag", color: "#3b82f6" });
     setIsDialogOpen(true);
+  };
+
+  const pinnedCategories = categories.filter(c => c.isPinned);
+  const unpinnedCategories = categories.filter(c => !c.isPinned);
+  const displayOrder = [...pinnedCategories, ...unpinnedCategories];
+
+  const handleDragStart = (index: number) => {
+    dragItem.current = index;
+    setDragIndex(index);
+  };
+
+  const handleDragEnter = (index: number) => {
+    dragOverItem.current = index;
+  };
+
+  const handleDragEnd = () => {
+    if (dragItem.current === null || dragOverItem.current === null) {
+      setDragIndex(null);
+      return;
+    }
+    const reordered = [...displayOrder];
+    const [removed] = reordered.splice(dragItem.current, 1);
+    reordered.splice(dragOverItem.current, 0, removed);
+    
+    reorderMutation.mutate(reordered.map(c => c.id));
+    dragItem.current = null;
+    dragOverItem.current = null;
+    setDragIndex(null);
   };
 
   return (
@@ -309,57 +373,59 @@ export default function Categories() {
               </Button>
             </div>
           ) : (
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
-              {categories.map((category) => {
-                const Icon = getIconComponent(category.icon);
-                return (
-                  <Card 
-                    key={category.id} 
-                    className="group border-0 shadow-sm hover:shadow-md transition-all cursor-pointer overflow-hidden"
-                    data-testid={`category-card-${category.id}`}
-                  >
-                    <CardContent className="p-0">
-                      <div 
-                        className="aspect-square flex items-center justify-center relative"
-                        style={{ backgroundColor: category.color + "15" }}
-                      >
-                        <Icon 
-                          className="w-12 h-12 md:w-16 md:h-16" 
-                          style={{ color: category.color }} 
-                        />
-                        <div className="absolute top-2 right-2 flex gap-1">
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              openEditDialog(category);
-                            }}
-                            className="p-1.5 bg-white rounded-lg shadow-md hover:bg-blue-50 transition-colors"
-                            data-testid={`edit-category-${category.id}`}
-                          >
-                            <Pencil className="w-4 h-4 text-blue-600" />
-                          </button>
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setDeleteConfirm(category);
-                            }}
-                            className="p-1.5 bg-white rounded-lg shadow-md hover:bg-red-50 transition-colors"
-                            data-testid={`delete-category-${category.id}`}
-                          >
-                            <Trash2 className="w-4 h-4 text-red-600" />
-                          </button>
-                        </div>
-                      </div>
-                      <div className="p-3 bg-white">
-                        <p className="font-semibold text-slate-800 text-center text-sm truncate">
-                          {category.name}
-                        </p>
-                      </div>
-                    </CardContent>
-                  </Card>
-                );
-              })}
-            </div>
+            <>
+              {pinnedCategories.length > 0 && (
+                <div className="mb-6">
+                  <div className="flex items-center gap-2 mb-3">
+                    <Pin className="w-4 h-4 text-amber-500" />
+                    <h2 className="text-sm font-semibold text-slate-600 uppercase tracking-wide">Pin qilingan</h2>
+                  </div>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
+                    {pinnedCategories.map((category, index) => (
+                      <CategoryCard
+                        key={category.id}
+                        category={category}
+                        index={index}
+                        isDragging={dragIndex === index}
+                        onDragStart={handleDragStart}
+                        onDragEnter={handleDragEnter}
+                        onDragEnd={handleDragEnd}
+                        onEdit={openEditDialog}
+                        onDelete={setDeleteConfirm}
+                        onTogglePin={(id, pinned) => pinMutation.mutate({ id, isPinned: pinned })}
+                      />
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {unpinnedCategories.length > 0 && (
+                <div>
+                  {pinnedCategories.length > 0 && (
+                    <div className="flex items-center gap-2 mb-3">
+                      <Layers className="w-4 h-4 text-slate-400" />
+                      <h2 className="text-sm font-semibold text-slate-600 uppercase tracking-wide">Barchasi</h2>
+                    </div>
+                  )}
+                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
+                    {unpinnedCategories.map((category, index) => (
+                      <CategoryCard
+                        key={category.id}
+                        category={category}
+                        index={pinnedCategories.length + index}
+                        isDragging={dragIndex === pinnedCategories.length + index}
+                        onDragStart={handleDragStart}
+                        onDragEnter={handleDragEnter}
+                        onDragEnd={handleDragEnd}
+                        onEdit={openEditDialog}
+                        onDelete={setDeleteConfirm}
+                        onTogglePin={(id, pinned) => pinMutation.mutate({ id, isPinned: pinned })}
+                      />
+                    ))}
+                  </div>
+                </div>
+              )}
+            </>
           )}
         </div>
       </div>
@@ -385,5 +451,109 @@ export default function Categories() {
         </AlertDialogContent>
       </AlertDialog>
     </div>
+  );
+}
+
+function CategoryCard({
+  category,
+  index,
+  isDragging,
+  onDragStart,
+  onDragEnter,
+  onDragEnd,
+  onEdit,
+  onDelete,
+  onTogglePin,
+}: {
+  category: Category;
+  index: number;
+  isDragging: boolean;
+  onDragStart: (index: number) => void;
+  onDragEnter: (index: number) => void;
+  onDragEnd: () => void;
+  onEdit: (category: Category) => void;
+  onDelete: (category: Category) => void;
+  onTogglePin: (id: string, isPinned: boolean) => void;
+}) {
+  const Icon = getIconComponent(category.icon);
+
+  return (
+    <Card
+      draggable
+      onDragStart={() => onDragStart(index)}
+      onDragEnter={() => onDragEnter(index)}
+      onDragEnd={onDragEnd}
+      onDragOver={(e) => e.preventDefault()}
+      className={`group border-0 shadow-sm hover:shadow-md transition-all cursor-grab active:cursor-grabbing overflow-hidden ${
+        isDragging ? "opacity-50 scale-95" : ""
+      } ${category.isPinned ? "ring-2 ring-amber-400 ring-offset-1" : ""}`}
+      data-testid={`category-card-${category.id}`}
+    >
+      <CardContent className="p-0">
+        <div
+          className="aspect-square flex items-center justify-center relative"
+          style={{ backgroundColor: category.color + "15" }}
+        >
+          <div className="absolute top-2 left-2 opacity-0 group-hover:opacity-100 transition-opacity cursor-grab">
+            <GripVertical className="w-4 h-4 text-slate-400" />
+          </div>
+          <Icon
+            className="w-12 h-12 md:w-16 md:h-16"
+            style={{ color: category.color }}
+          />
+          {category.isPinned && (
+            <div className="absolute top-2 left-2 group-hover:opacity-0 transition-opacity">
+              <Pin className="w-4 h-4 text-amber-500 fill-amber-500" />
+            </div>
+          )}
+          <div className="absolute top-2 right-2 flex gap-1">
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onTogglePin(category.id, !category.isPinned);
+              }}
+              className={`p-1.5 rounded-lg shadow-md transition-colors ${
+                category.isPinned
+                  ? "bg-amber-50 hover:bg-amber-100"
+                  : "bg-white hover:bg-amber-50"
+              }`}
+              data-testid={`pin-category-${category.id}`}
+              title={category.isPinned ? "Pin olib tashlash" : "Pin qilish"}
+            >
+              {category.isPinned ? (
+                <PinOff className="w-4 h-4 text-amber-600" />
+              ) : (
+                <Pin className="w-4 h-4 text-amber-500" />
+              )}
+            </button>
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onEdit(category);
+              }}
+              className="p-1.5 bg-white rounded-lg shadow-md hover:bg-blue-50 transition-colors"
+              data-testid={`edit-category-${category.id}`}
+            >
+              <Pencil className="w-4 h-4 text-blue-600" />
+            </button>
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onDelete(category);
+              }}
+              className="p-1.5 bg-white rounded-lg shadow-md hover:bg-red-50 transition-colors"
+              data-testid={`delete-category-${category.id}`}
+            >
+              <Trash2 className="w-4 h-4 text-red-600" />
+            </button>
+          </div>
+        </div>
+        <div className="p-3 bg-white">
+          <p className="font-semibold text-slate-800 text-center text-sm truncate">
+            {category.name}
+          </p>
+        </div>
+      </CardContent>
+    </Card>
   );
 }

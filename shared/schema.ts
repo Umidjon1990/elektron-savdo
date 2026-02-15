@@ -70,6 +70,8 @@ export const categories = pgTable("categories", {
   name: text("name").notNull(),
   icon: text("icon").notNull(),
   color: text("color").notNull().default("#3b82f6"),
+  sortOrder: integer("sort_order").notNull().default(0),
+  isPinned: boolean("is_pinned").notNull().default(false),
 });
 
 export const transactions = pgTable("transactions", {

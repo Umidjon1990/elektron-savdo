@@ -42,6 +42,7 @@ export interface IStorage {
   updateCategory(id: string, category: Partial<InsertCategory>, tenantId?: string): Promise<Category | undefined>;
   deleteCategory(id: string, tenantId?: string): Promise<boolean>;
   reorderCategories(orderedIds: string[], tenantId: string): Promise<void>;
+  renameProductCategory(oldName: string, newName: string, tenantId: string): Promise<void>;
   
   // Transactions (tenant-scoped)
   getAllTransactions(tenantId: string): Promise<Transaction[]>;
@@ -262,6 +263,12 @@ export class DatabaseStorage implements IStorage {
       : eq(categories.id, id);
     const result = await db.delete(categories).where(condition);
     return true;
+  }
+
+  async renameProductCategory(oldName: string, newName: string, tenantId: string): Promise<void> {
+    await db.update(products)
+      .set({ category: newName })
+      .where(and(eq(products.category, oldName), eq(products.tenantId, tenantId)));
   }
 
   async reorderCategories(orderedIds: string[], tenantId: string): Promise<void> {

@@ -614,8 +614,16 @@ export async function registerRoutes(
 
   app.patch("/api/categories/:id", authMiddleware, async (req, res) => {
     try {
+      const oldCategory = await storage.getCategory(req.params.id, req.tenantId);
+      if (!oldCategory) return res.status(404).json({ error: "Category not found" });
+      
       const category = await storage.updateCategory(req.params.id, req.body, req.tenantId);
       if (!category) return res.status(404).json({ error: "Category not found" });
+      
+      if (req.body.name && req.body.name !== oldCategory.name) {
+        await storage.renameProductCategory(oldCategory.name, req.body.name, req.tenantId!);
+      }
+      
       res.json(category);
     } catch (error) {
       res.status(500).json({ error: "Failed to update category" });

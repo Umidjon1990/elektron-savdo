@@ -661,6 +661,32 @@ export async function registerRoutes(
     }
   });
 
+  app.post("/api/categories/assign-products", authMiddleware, async (req, res) => {
+    try {
+      const { productIds, categoryName } = req.body;
+      if (!Array.isArray(productIds) || !categoryName) {
+        return res.status(400).json({ error: "productIds and categoryName required" });
+      }
+      await storage.assignProductsToCategory(productIds, categoryName, req.tenantId!);
+      res.json({ success: true });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to assign products" });
+    }
+  });
+
+  app.post("/api/categories/unassign-products", authMiddleware, async (req, res) => {
+    try {
+      const { productIds } = req.body;
+      if (!Array.isArray(productIds)) {
+        return res.status(400).json({ error: "productIds required" });
+      }
+      await storage.unassignProductsFromCategory(productIds, req.tenantId!);
+      res.json({ success: true });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to unassign products" });
+    }
+  });
+
   // ============ TRANSACTIONS API (tenant-scoped) ============
 
   app.get("/api/transactions", authMiddleware, async (req, res) => {

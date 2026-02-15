@@ -1,7 +1,7 @@
 import { db } from "@db";
 import { users, products, orders, categories, transactions, tenants } from "@shared/schema";
 import type { User, InsertUser, Product, InsertProduct, Order, InsertOrder, Category, InsertCategory, Transaction, InsertTransaction, Tenant, InsertTenant } from "@shared/schema";
-import { eq, desc, sql, and } from "drizzle-orm";
+import { eq, desc, sql, and, inArray } from "drizzle-orm";
 
 export interface IStorage {
   // Tenants
@@ -43,6 +43,8 @@ export interface IStorage {
   deleteCategory(id: string, tenantId?: string): Promise<boolean>;
   reorderCategories(orderedIds: string[], tenantId: string): Promise<void>;
   renameProductCategory(oldName: string, newName: string, tenantId: string): Promise<void>;
+  assignProductsToCategory(productIds: string[], categoryName: string, tenantId: string): Promise<void>;
+  unassignProductsFromCategory(productIds: string[], tenantId: string): Promise<void>;
   
   // Transactions (tenant-scoped)
   getAllTransactions(tenantId: string): Promise<Transaction[]>;
@@ -269,6 +271,18 @@ export class DatabaseStorage implements IStorage {
     await db.update(products)
       .set({ category: newName })
       .where(and(eq(products.category, oldName), eq(products.tenantId, tenantId)));
+  }
+
+  async assignProductsToCategory(productIds: string[], categoryName: string, tenantId: string): Promise<void> {
+    await db.update(products)
+      .set({ category: categoryName })
+      .where(and(inArray(products.id, productIds), eq(products.tenantId, tenantId)));
+  }
+
+  async unassignProductsFromCategory(productIds: string[], tenantId: string): Promise<void> {
+    await db.update(products)
+      .set({ category: "" })
+      .where(and(inArray(products.id, productIds), eq(products.tenantId, tenantId)));
   }
 
   async reorderCategories(orderedIds: string[], tenantId: string): Promise<void> {

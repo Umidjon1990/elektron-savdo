@@ -31,6 +31,10 @@ interface Product {
 interface Category {
   id: string;
   name: string;
+  icon: string;
+  color: string;
+  isPinned: boolean;
+  sortOrder: number;
 }
 
 interface CartItem {
@@ -288,13 +292,27 @@ export default function SlugStorePage() {
             >
               Barchasi
             </Button>
-            {categories.map((cat) => (
+            {[...categories].sort((a, b) => {
+              if (a.isPinned && !b.isPinned) return -1;
+              if (!a.isPinned && b.isPinned) return 1;
+              return (a.sortOrder || 0) - (b.sortOrder || 0);
+            }).map((cat) => (
               <Button
                 key={cat.id}
                 onClick={() => setActiveCategory(cat.name)}
                 variant={activeCategory === cat.name ? "default" : "outline"}
-                className={cn("rounded-full whitespace-nowrap", activeCategory === cat.name ? "text-white" : "bg-white border-slate-200")}
-                style={activeCategory === cat.name ? { backgroundColor: brandColor } : {}}
+                className={cn(
+                  "rounded-full whitespace-nowrap",
+                  activeCategory === cat.name ? "text-white" : "bg-white border-slate-200",
+                  cat.isPinned && activeCategory !== cat.name ? "ring-1 ring-amber-300 border-amber-200" : ""
+                )}
+                data-testid={`category-filter-${cat.id}`}
+                style={activeCategory === cat.name
+                  ? { backgroundColor: cat.color || brandColor }
+                  : cat.isPinned && cat.color
+                    ? { borderColor: cat.color + "60", backgroundColor: cat.color + "10" }
+                    : {}
+                }
               >
                 {cat.name}
               </Button>

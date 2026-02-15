@@ -1,10 +1,11 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { SidebarNav } from "@/components/layout/sidebar-nav";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog,
   DialogContent,
@@ -63,9 +64,13 @@ import {
   Layers,
   Pin,
   PinOff,
-  GripVertical
+  GripVertical,
+  Search,
+  Package,
+  CheckSquare,
+  X
 } from "lucide-react";
-import type { Category } from "@shared/schema";
+import type { Category, Product } from "@shared/schema";
 import { getAuthHeaders } from "@/lib/auth-context";
 
 const AVAILABLE_ICONS = [
@@ -125,6 +130,9 @@ export default function Categories() {
   const dragItem = useRef<number | null>(null);
   const dragOverItem = useRef<number | null>(null);
   const [dragIndex, setDragIndex] = useState<number | null>(null);
+  const [manageCategory, setManageCategory] = useState<Category | null>(null);
+  const [productSearch, setProductSearch] = useState("");
+  const [selectedProductIds, setSelectedProductIds] = useState<Set<string>>(new Set());
 
   const { data: categories = [], isLoading } = useQuery<Category[]>({
     queryKey: ["/api/categories"],
@@ -134,6 +142,25 @@ export default function Categories() {
       return res.json();
     },
   });
+
+  const { data: allProducts = [] } = useQuery<Product[]>({
+    queryKey: ["/api/products"],
+    queryFn: async () => {
+      const res = await fetch("/api/products", { headers: getAuthHeaders() });
+      if (!res.ok) throw new Error("Failed to fetch products");
+      return res.json();
+    },
+  });
+
+  const productCountByCategory = useMemo(() => {
+    const counts: Record<string, number> = {};
+    allProducts.forEach(p => {
+      if (p.category) {
+        counts[p.category] = (counts[p.category] || 0) + 1;
+      }
+    });
+    return counts;
+  }, [allProducts]);
 
   const createMutation = useMutation({
     mutationFn: async (data: { name: string; icon: string; color: string }) => {
@@ -215,6 +242,121 @@ export default function Categories() {
       toast.success(variables.isPinned ? "Kategoriya pin qilindi" : "Pin olib tashlandi", { duration: 2000 });
     },
   });
+
+  const assignMutation = useMutation({
+    mutationFn: async ({ productIds, categoryName }: { productIds: string[]; categoryName: string }) => {
+      const res = await fetch("/api/categories/assign-products", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...getAuthHeaders() },
+        body: JSON.stringify({ productIds, categoryName }),
+      });
+      if (!res.ok) throw new Error("Failed to assign");
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/products"] });
+      toast.success("Mahsulotlar qo'shildi", { duration: 2000 });
+    },
+  });
+
+  const unassignMutation = useMutation({
+    mutationFn: async (productIds: string[]) => {
+      const res = await fetch("/api/categories/unassign-products", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...getAuthHeaders() },
+        body: JSON.stringify({ productIds }),
+      });
+      if (!res.ok) throw new Error("Failed to unassign");
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/products"] });
+      toast.success("Mahsulotlar olib tashlandi", { duration: 2000 });
+    },
+  });
+
+  const categoryProducts = useMemo(() => {
+    if (!manageCategory) return [];
+    return allProducts.filter(p => p.category === manageCategory.name);
+  }, [allProducts, manageCategory]);
+
+  const uncategorizedProducts = useMemo(() => {
+    if (!manageCategory) return [];
+    return allProducts.filter(p => !p.category || p.category === "");
+  }, [allProducts, manageCategory]);
+
+  const otherCategoryProducts = useMemo(() => {
+    if (!manageCategory) return [];
+    return allProducts.filter(p => p.category && p.category !== "" && p.category !== manageCategory.name);
+  }, [allProducts, manageCategory]);
+
+  const filteredProducts = useMemo(() => {
+    const search = productSearch.toLowerCase().trim();
+    const filterFn = (p: Product) => {
+      if (!search) return true;
+      return p.name.toLowerCase().includes(search) || (p.barcode && p.barcode.toLowerCase().includes(search));
+    };
+    return {
+      inCategory: categoryProducts.filter(filterFn),
+      uncategorized: uncategorizedProducts.filter(filterFn),
+      otherCategory: otherCategoryProducts.filter(filterFn),
+    };
+  }, [categoryProducts, uncategorizedProducts, otherCategoryProducts, productSearch]);
+
+  const openManageProducts = (category: Category) => {
+    setManageCategory(category);
+    setProductSearch("");
+    setSelectedProductIds(new Set());
+  };
+
+  const toggleProduct = (id: string) => {
+    setSelectedProductIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const selectAll = (products: Product[]) => {
+    setSelectedProductIds(prev => {
+      const next = new Set(prev);
+      products.forEach(p => next.add(p.id));
+      return next;
+    });
+  };
+
+  const deselectAll = (products: Product[]) => {
+    setSelectedProductIds(prev => {
+      const next = new Set(prev);
+      products.forEach(p => next.delete(p.id));
+      return next;
+    });
+  };
+
+  const handleAssignSelected = () => {
+    if (!manageCategory || selectedProductIds.size === 0) return;
+    const toAssign = Array.from(selectedProductIds).filter(id => {
+      const p = allProducts.find(pr => pr.id === id);
+      return p && p.category !== manageCategory.name;
+    });
+    if (toAssign.length > 0) {
+      assignMutation.mutate({ productIds: toAssign, categoryName: manageCategory.name });
+    }
+    setSelectedProductIds(new Set());
+  };
+
+  const handleUnassignSelected = () => {
+    if (!manageCategory || selectedProductIds.size === 0) return;
+    const toUnassign = Array.from(selectedProductIds).filter(id => {
+      const p = allProducts.find(pr => pr.id === id);
+      return p && p.category === manageCategory.name;
+    });
+    if (toUnassign.length > 0) {
+      unassignMutation.mutate(toUnassign);
+    }
+    setSelectedProductIds(new Set());
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -393,6 +535,8 @@ export default function Categories() {
                         onEdit={openEditDialog}
                         onDelete={setDeleteConfirm}
                         onTogglePin={(id, pinned) => pinMutation.mutate({ id, isPinned: pinned })}
+                        onManage={openManageProducts}
+                        productCount={productCountByCategory[category.name] || 0}
                       />
                     ))}
                   </div>
@@ -420,6 +564,8 @@ export default function Categories() {
                         onEdit={openEditDialog}
                         onDelete={setDeleteConfirm}
                         onTogglePin={(id, pinned) => pinMutation.mutate({ id, isPinned: pinned })}
+                        onManage={openManageProducts}
+                        productCount={productCountByCategory[category.name] || 0}
                       />
                     ))}
                   </div>
@@ -450,7 +596,243 @@ export default function Categories() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <Dialog open={!!manageCategory} onOpenChange={(open) => { if (!open) setManageCategory(null); }}>
+        <DialogContent className="max-w-lg max-h-[90vh] flex flex-col p-0">
+          <DialogHeader className="px-4 pt-4 pb-2 border-b shrink-0">
+            <DialogTitle className="flex items-center gap-2">
+              {manageCategory && (() => {
+                const Icon = getIconComponent(manageCategory.icon);
+                return <Icon className="w-5 h-5" style={{ color: manageCategory.color }} />;
+              })()}
+              {manageCategory?.name} - Mahsulotlar
+            </DialogTitle>
+          </DialogHeader>
+
+          <div className="px-4 py-2 border-b shrink-0">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+              <Input
+                placeholder="Mahsulot qidirish..."
+                value={productSearch}
+                onChange={(e) => setProductSearch(e.target.value)}
+                className="pl-9"
+                data-testid="input-product-search"
+              />
+            </div>
+          </div>
+
+          {selectedProductIds.size > 0 && (
+            <div className="px-4 py-2 bg-blue-50 border-b flex items-center justify-between shrink-0">
+              <span className="text-sm text-blue-700 font-medium">
+                {selectedProductIds.size} ta tanlandi
+              </span>
+              <div className="flex gap-2">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={handleAssignSelected}
+                  disabled={assignMutation.isPending}
+                  className="text-xs h-7 bg-green-50 border-green-300 text-green-700 hover:bg-green-100"
+                  data-testid="button-assign-selected"
+                >
+                  <CheckSquare className="w-3 h-3 mr-1" />
+                  Qo'shish
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={handleUnassignSelected}
+                  disabled={unassignMutation.isPending}
+                  className="text-xs h-7 bg-red-50 border-red-300 text-red-700 hover:bg-red-100"
+                  data-testid="button-unassign-selected"
+                >
+                  <X className="w-3 h-3 mr-1" />
+                  Olib tashlash
+                </Button>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => setSelectedProductIds(new Set())}
+                  className="text-xs h-7"
+                >
+                  Bekor
+                </Button>
+              </div>
+            </div>
+          )}
+
+          <div className="flex-1 overflow-y-auto px-4 py-2 space-y-4">
+            {filteredProducts.inCategory.length > 0 && (
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <h3 className="text-xs font-semibold text-green-700 uppercase tracking-wide flex items-center gap-1">
+                    <Package className="w-3 h-3" />
+                    Bu kategoriyada ({filteredProducts.inCategory.length})
+                  </h3>
+                  <div className="flex gap-1">
+                    <button
+                      onClick={() => selectAll(filteredProducts.inCategory)}
+                      className="text-[10px] text-blue-600 hover:underline"
+                    >
+                      Barchasini tanlash
+                    </button>
+                    <span className="text-slate-300">|</span>
+                    <button
+                      onClick={() => deselectAll(filteredProducts.inCategory)}
+                      className="text-[10px] text-slate-500 hover:underline"
+                    >
+                      Bekor
+                    </button>
+                  </div>
+                </div>
+                <div className="space-y-1">
+                  {filteredProducts.inCategory.map(product => (
+                    <ProductCheckItem
+                      key={product.id}
+                      product={product}
+                      checked={selectedProductIds.has(product.id)}
+                      onToggle={() => toggleProduct(product.id)}
+                      inCategory
+                    />
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {filteredProducts.uncategorized.length > 0 && (
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wide flex items-center gap-1">
+                    <Package className="w-3 h-3" />
+                    Kategoriyasiz ({filteredProducts.uncategorized.length})
+                  </h3>
+                  <div className="flex gap-1">
+                    <button
+                      onClick={() => selectAll(filteredProducts.uncategorized)}
+                      className="text-[10px] text-blue-600 hover:underline"
+                    >
+                      Barchasini tanlash
+                    </button>
+                    <span className="text-slate-300">|</span>
+                    <button
+                      onClick={() => deselectAll(filteredProducts.uncategorized)}
+                      className="text-[10px] text-slate-500 hover:underline"
+                    >
+                      Bekor
+                    </button>
+                  </div>
+                </div>
+                <div className="space-y-1">
+                  {filteredProducts.uncategorized.map(product => (
+                    <ProductCheckItem
+                      key={product.id}
+                      product={product}
+                      checked={selectedProductIds.has(product.id)}
+                      onToggle={() => toggleProduct(product.id)}
+                    />
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {filteredProducts.otherCategory.length > 0 && (
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <h3 className="text-xs font-semibold text-amber-600 uppercase tracking-wide flex items-center gap-1">
+                    <Package className="w-3 h-3" />
+                    Boshqa kategoriyalarda ({filteredProducts.otherCategory.length})
+                  </h3>
+                  <div className="flex gap-1">
+                    <button
+                      onClick={() => selectAll(filteredProducts.otherCategory)}
+                      className="text-[10px] text-blue-600 hover:underline"
+                    >
+                      Barchasini tanlash
+                    </button>
+                    <span className="text-slate-300">|</span>
+                    <button
+                      onClick={() => deselectAll(filteredProducts.otherCategory)}
+                      className="text-[10px] text-slate-500 hover:underline"
+                    >
+                      Bekor
+                    </button>
+                  </div>
+                </div>
+                <div className="space-y-1">
+                  {filteredProducts.otherCategory.map(product => (
+                    <ProductCheckItem
+                      key={product.id}
+                      product={product}
+                      checked={selectedProductIds.has(product.id)}
+                      onToggle={() => toggleProduct(product.id)}
+                      otherCategory={product.category || undefined}
+                    />
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {filteredProducts.inCategory.length === 0 && filteredProducts.uncategorized.length === 0 && filteredProducts.otherCategory.length === 0 && (
+              <div className="text-center py-8 text-slate-400">
+                <Package className="w-10 h-10 mx-auto mb-2" />
+                <p className="text-sm">Mahsulotlar topilmadi</p>
+              </div>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
+  );
+}
+
+function ProductCheckItem({
+  product,
+  checked,
+  onToggle,
+  inCategory,
+  otherCategory,
+}: {
+  product: Product;
+  checked: boolean;
+  onToggle: () => void;
+  inCategory?: boolean;
+  otherCategory?: string;
+}) {
+  return (
+    <label
+      className={`flex items-center gap-3 p-2 rounded-lg cursor-pointer transition-colors ${
+        checked ? "bg-blue-50" : "hover:bg-slate-50"
+      } ${inCategory ? "border-l-2 border-green-400" : ""}`}
+      data-testid={`product-check-${product.id}`}
+    >
+      <Checkbox
+        checked={checked}
+        onCheckedChange={onToggle}
+        className="shrink-0"
+      />
+      {product.imageUrl ? (
+        <img src={product.imageUrl} alt="" className="w-8 h-8 rounded object-cover shrink-0" />
+      ) : (
+        <div className="w-8 h-8 rounded bg-slate-100 flex items-center justify-center shrink-0">
+          <Package className="w-4 h-4 text-slate-400" />
+        </div>
+      )}
+      <div className="flex-1 min-w-0">
+        <p className="text-sm font-medium text-slate-800 truncate">{product.name}</p>
+        <div className="flex items-center gap-2 text-xs text-slate-400">
+          {product.barcode && <span>{product.barcode}</span>}
+          {otherCategory && (
+            <span className="text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded text-[10px]">
+              {otherCategory}
+            </span>
+          )}
+        </div>
+      </div>
+      <span className="text-xs font-medium text-slate-600 shrink-0">
+        {Number(product.price).toLocaleString()} so'm
+      </span>
+    </label>
   );
 }
 
@@ -464,6 +846,8 @@ function CategoryCard({
   onEdit,
   onDelete,
   onTogglePin,
+  onManage,
+  productCount,
 }: {
   category: Category;
   index: number;
@@ -474,6 +858,8 @@ function CategoryCard({
   onEdit: (category: Category) => void;
   onDelete: (category: Category) => void;
   onTogglePin: (id: string, isPinned: boolean) => void;
+  onManage: (category: Category) => void;
+  productCount?: number;
 }) {
   const Icon = getIconComponent(category.icon);
 
@@ -484,7 +870,8 @@ function CategoryCard({
       onDragEnter={() => onDragEnter(index)}
       onDragEnd={onDragEnd}
       onDragOver={(e) => e.preventDefault()}
-      className={`group border-0 shadow-sm hover:shadow-md transition-all cursor-grab active:cursor-grabbing overflow-hidden ${
+      onClick={() => onManage(category)}
+      className={`group border-0 shadow-sm hover:shadow-md transition-all cursor-pointer overflow-hidden ${
         isDragging ? "opacity-50 scale-95" : ""
       } ${category.isPinned ? "ring-2 ring-amber-400 ring-offset-1" : ""}`}
       data-testid={`category-card-${category.id}`}
@@ -552,6 +939,11 @@ function CategoryCard({
           <p className="font-semibold text-slate-800 text-center text-sm truncate">
             {category.name}
           </p>
+          {productCount !== undefined && (
+            <p className="text-xs text-slate-400 text-center mt-0.5">
+              {productCount} ta mahsulot
+            </p>
+          )}
         </div>
       </CardContent>
     </Card>

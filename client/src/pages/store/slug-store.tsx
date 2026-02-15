@@ -167,6 +167,8 @@ export default function SlugStorePage() {
     (p.name.toLowerCase().includes(searchQuery.toLowerCase()) || p.author.toLowerCase().includes(searchQuery.toLowerCase()))
   );
 
+  const newProducts = products.filter(p => p.isNew);
+
   return (
     <div className="min-h-screen bg-slate-50 font-sans">
       <nav className="sticky top-0 z-50 bg-white/80 backdrop-blur-md border-b border-slate-200">
@@ -366,6 +368,59 @@ export default function SlugStorePage() {
               </Button>
             ))}
           </div>
+
+          {newProducts.length > 0 && activeCategory === "Barchasi" && !searchQuery && (
+            <div className="mt-8 mb-6">
+              <div className="flex items-center gap-3 mb-5">
+                <div className="bg-gradient-to-r from-amber-500 to-orange-500 text-white text-sm font-black px-4 py-1.5 rounded-full shadow-md shadow-amber-200/50 animate-pulse tracking-wider">
+                  YANGI
+                </div>
+                <div className="h-px flex-1 bg-gradient-to-r from-amber-300 to-transparent" />
+              </div>
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6">
+                {newProducts.map((product) => (
+                  <motion.div
+                    key={`new-${product.id}`}
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.5 }}
+                    className="group rounded-2xl p-3 shadow-lg hover:shadow-xl transition-all flex flex-col relative overflow-hidden bg-gradient-to-br from-amber-50 via-white to-orange-50 border-2 border-amber-300 hover:shadow-amber-200 ring-1 ring-amber-200"
+                    data-testid={`card-new-product-${product.id}`}
+                  >
+                    <div className="absolute top-0 right-0 z-20">
+                      <div className="bg-gradient-to-r from-amber-500 to-orange-500 text-white text-[10px] font-black px-4 py-1 rounded-bl-xl shadow-lg tracking-widest animate-pulse">
+                        YANGI
+                      </div>
+                    </div>
+                    <div className="absolute -top-10 -left-10 w-24 h-24 bg-amber-400 opacity-10 rounded-full blur-2xl" />
+                    <div className="absolute -bottom-10 -right-10 w-24 h-24 bg-orange-400 opacity-10 rounded-full blur-2xl" />
+                    <div className="relative aspect-[2/3] rounded-xl overflow-hidden mb-3 ring-2 ring-amber-200 ring-offset-2">
+                      <img src={product.image} alt={product.name} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" />
+                      <div className="absolute inset-0 bg-gradient-to-t from-amber-500/10 to-transparent pointer-events-none" />
+                    </div>
+                    <div className="flex-1 flex flex-col">
+                      <div className="text-xs font-medium mb-1 text-amber-600">{product.category}</div>
+                      <h3 className="font-bold leading-tight mb-1 line-clamp-2 text-amber-900">{product.name}</h3>
+                      <p className="text-sm text-slate-500 mb-3">{product.author}</p>
+                      <div className="mt-auto flex items-center justify-between">
+                        <div className="font-bold text-lg text-amber-700">
+                          {product.price.toLocaleString()} <span className="text-xs text-slate-500 font-normal">so'm</span>
+                        </div>
+                        <Button
+                          size="icon"
+                          className="h-8 w-8 rounded-full text-white bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 shadow-md shadow-amber-200"
+                          onClick={() => addItem(product)}
+                          data-testid={`button-add-new-${product.id}`}
+                        >
+                          <ShoppingCart className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </div>
+                  </motion.div>
+                ))}
+              </div>
+            </div>
+          )}
 
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6 mt-8">
             {productsLoading ? (

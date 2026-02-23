@@ -19,7 +19,7 @@ interface TenantInfo {
 export default function SlugLoginPage() {
   const params = useParams<{ slug: string }>();
   const slug = params.slug || "";
-  const { login, isAuthenticated, isLoading: authLoading } = useAuth();
+  const { login, isAuthenticated, isLoading: authLoading, tenant: authTenant } = useAuth();
   const [, setLocation] = useLocation();
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
@@ -37,10 +37,17 @@ export default function SlugLoginPage() {
   });
 
   useEffect(() => {
-    if (isAuthenticated && !authLoading) {
-      setLocation(`/store/${slug}/admin`);
+    if (!authLoading && isAuthenticated) {
+      if (authTenant && authTenant.slug !== slug) {
+        localStorage.removeItem("kitoblar_token");
+        localStorage.removeItem("kitoblar_tenant_id");
+        window.location.reload();
+        return;
+      }
+      const targetSlug = authTenant?.slug || slug;
+      setLocation(`/store/${targetSlug}/admin`);
     }
-  }, [isAuthenticated, authLoading, setLocation, slug]);
+  }, [isAuthenticated, authLoading, setLocation, slug, authTenant]);
 
   if (authLoading) {
     return (

@@ -29,6 +29,7 @@ interface LabelDims {
 const PRESETS = [
   { label: "30×20", w: 30, h: 20 },
   { label: "40×25", w: 40, h: 25 },
+  { label: "40×30", w: 40, h: 30 },
   { label: "50×30", w: 50, h: 30 },
   { label: "58×40", w: 58, h: 40 },
 ];

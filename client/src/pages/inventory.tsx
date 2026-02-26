@@ -4,7 +4,8 @@ import { SidebarNav } from "@/components/layout/sidebar-nav";
 import { useProducts } from "@/lib/product-context";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Search, Plus, Filter, MoreHorizontal, ScanBarcode, ArrowRight, Check, X, RotateCcw, PackagePlus, ScanText, Upload, Image as ImageIcon, Loader2, Youtube, Trash2, ChevronUp, ChevronDown, GripVertical } from "lucide-react";
+import { Search, Plus, Filter, MoreHorizontal, ScanBarcode, ArrowRight, Check, X, RotateCcw, PackagePlus, ScanText, Upload, Image as ImageIcon, Loader2, Youtube, Trash2, ChevronUp, ChevronDown, GripVertical, Printer } from "lucide-react";
+import BarcodePrintDialog from "@/components/barcode-print";
 import { ScannerOverlay } from "@/components/pos/scanner-overlay";
 import { KNOWN_BOOKS_DB } from "@/data/mock-external-books";
 import { useUpload } from "@/hooks/use-upload";
@@ -72,6 +73,8 @@ export default function Inventory() {
   const [restockAmount, setRestockAmount] = useState<string>("10");
   
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [printProducts, setPrintProducts] = useState<Array<{ id: string; name: string; barcode: string; price: number }>>([]);
+  const [isPrintDialogOpen, setIsPrintDialogOpen] = useState(false);
 
   const [newProduct, setNewProduct] = useState({
     name: "",
@@ -387,6 +390,19 @@ export default function Inventory() {
             </div>
             
             <div className="flex gap-2">
+              <Button 
+                variant="outline" 
+                className="gap-2 flex-1 md:flex-none justify-center"
+                onClick={() => {
+                  setPrintProducts(filteredProducts.map(p => ({ id: p.id, name: p.name, barcode: p.barcode, price: p.price })));
+                  setIsPrintDialogOpen(true);
+                }}
+                data-testid="button-print-all-barcodes"
+              >
+                <Printer className="h-4 w-4" />
+                <span className="hidden sm:inline">Barcode</span>
+              </Button>
+
               <Button variant="outline" className="gap-2 flex-1 md:flex-none justify-center">
                 <Filter className="h-4 w-4" />
                 Filter
@@ -748,6 +764,13 @@ export default function Inventory() {
                               <RotateCcw className="mr-2 h-4 w-4" />
                               Tahrirlash
                             </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => {
+                              setPrintProducts([{ id: product.id, name: product.name, barcode: product.barcode, price: product.price }]);
+                              setIsPrintDialogOpen(true);
+                            }}>
+                              <Printer className="mr-2 h-4 w-4" />
+                              Barcode chop etish
+                            </DropdownMenuItem>
                             <DropdownMenuSeparator />
                             <DropdownMenuItem 
                               onClick={() => handleDeleteProduct(product.id, product.name)}
@@ -803,6 +826,13 @@ export default function Inventory() {
                               <RotateCcw className="mr-2 h-4 w-4" />
                               Tahrirlash
                             </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => {
+                              setPrintProducts([{ id: product.id, name: product.name, barcode: product.barcode, price: product.price }]);
+                              setIsPrintDialogOpen(true);
+                            }}>
+                              <Printer className="mr-2 h-4 w-4" />
+                              Barcode chop etish
+                            </DropdownMenuItem>
                             <DropdownMenuSeparator />
                             <DropdownMenuItem 
                               onClick={() => handleDeleteProduct(product.id, product.name)}
@@ -846,6 +876,12 @@ export default function Inventory() {
         onClose={() => setIsScannerOpen(false)} 
         onScan={handleScanResult}
         mode={scannerMode}
+      />
+
+      <BarcodePrintDialog
+        products={printProducts}
+        open={isPrintDialogOpen}
+        onClose={() => { setIsPrintDialogOpen(false); setPrintProducts([]); }}
       />
 
       <Dialog open={!!restockProduct} onOpenChange={(open) => !open && setRestockProduct(null)}>

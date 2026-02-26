@@ -214,8 +214,8 @@ export default function Inventory() {
     } else {
       setNewProduct(prev => ({ ...prev, barcode: code }));
       toast({
-        title: "Yangi kitob",
-        description: "Iltimos, kitob ma'lumotlarini kiriting",
+        title: "Yangi tovar",
+        description: "Iltimos, tovar ma'lumotlarini kiriting",
       });
     }
     
@@ -279,7 +279,7 @@ export default function Inventory() {
           costPrice: Number(newProduct.costPrice) || 0,
           stock: Number(newProduct.stock),
           category: newProduct.category || categories[0]?.name || "Boshqa",
-          barcode: newProduct.barcode.trim() || Math.random().toString().slice(2, 14),
+          barcode: newProduct.barcode.trim(),
           image: newProduct.image || "https://images.unsplash.com/photo-1543002588-bfa74002ed7e?auto=format&fit=crop&q=80&w=300&h=400",
           videoUrl: newProduct.videoUrl || undefined,
           isNew: newProduct.isNew
@@ -396,7 +396,7 @@ export default function Inventory() {
                 <DialogTrigger asChild>
                   <Button className="gap-2 flex-1 md:flex-none justify-center">
                     <Plus className="h-4 w-4" />
-                    <span className="hidden sm:inline">Yangi kitob</span>
+                    <span className="hidden sm:inline">Yangi tovar</span>
                     <span className="sm:hidden">Qo'shish</span>
                   </Button>
                 </DialogTrigger>
@@ -441,6 +441,20 @@ export default function Inventory() {
                           <ArrowRight className="h-4 w-4 ml-2" />
                         </Button>
                       </form>
+
+                      <Button 
+                        type="button" 
+                        variant="outline" 
+                        className="w-full text-muted-foreground"
+                        onClick={() => {
+                          const autoCode = `AUTO-${Date.now()}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`;
+                          setNewProduct(prev => ({ ...prev, barcode: autoCode }));
+                          setStep(2);
+                        }}
+                        data-testid="button-skip-barcode"
+                      >
+                        Kodsiz davom etish (avto-kod yaratiladi)
+                      </Button>
                     </div>
                   ) : (
                     <form onSubmit={handleAddProduct}>

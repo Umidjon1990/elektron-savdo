@@ -9,14 +9,52 @@ import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
 import { useSettings } from "@/lib/settings-context";
 import { useAuth } from "@/lib/auth-context";
-import { Store, Bell, Printer, Database, Shield, Palette, Receipt, Link2, Copy, Check, ExternalLink } from "lucide-react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { Store, Bell, Printer, Database, Shield, Palette, Receipt, Link2, Copy, Check, ExternalLink, Bot, Send } from "lucide-react";
 
 export default function SettingsPage() {
   const { toast } = useToast();
   const { settings, updateSettings } = useSettings();
-  const { tenant } = useAuth();
+  const { tenant, token } = useAuth();
+  const queryClient = useQueryClient();
   const [darkMode, setDarkMode] = useState(false);
   const [linkCopied, setLinkCopied] = useState(false);
+  const [telegramBotToken, setTelegramBotToken] = useState("");
+  const [telegramChatId, setTelegramChatId] = useState("");
+
+  const { data: tenantSettings } = useQuery({
+    queryKey: ["tenant-settings"],
+    queryFn: async () => {
+      const res = await fetch("/api/tenant-settings", {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error("Failed to fetch");
+      const data = await res.json();
+      if (data.telegramBotToken) setTelegramBotToken(data.telegramBotToken);
+      if (data.telegramChatId) setTelegramChatId(data.telegramChatId);
+      return data;
+    },
+    enabled: !!token,
+  });
+
+  const saveTelegramMutation = useMutation({
+    mutationFn: async () => {
+      const res = await fetch("/api/tenant-settings", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ telegramBotToken: telegramBotToken.trim(), telegramChatId: telegramChatId.trim() }),
+      });
+      if (!res.ok) throw new Error("Failed to save");
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["tenant-settings"] });
+      toast({ title: "Saqlandi", description: "Telegram sozlamalari saqlandi" });
+    },
+    onError: () => {
+      toast({ title: "Xatolik", description: "Telegram sozlamalarini saqlashda xatolik", variant: "destructive" });
+    },
+  });
 
   const handleSave = () => {
     toast({
@@ -244,6 +282,52 @@ export default function SettingsPage() {
                     />
                   </div>
                 </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Bot className="h-5 w-5" />
+                  Telegram bot
+                </CardTitle>
+                <CardDescription>Yangi buyurtmalar haqida xabar olish uchun Telegram botingizni ulang</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid gap-4 md:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label htmlFor="telegramBotToken">Bot Token</Label>
+                    <Input 
+                      id="telegramBotToken" 
+                      value={telegramBotToken}
+                      onChange={(e) => setTelegramBotToken(e.target.value)}
+                      placeholder="123456789:ABCdefGHIjklMNOpqr..."
+                      type="password"
+                      data-testid="input-telegram-bot-token"
+                    />
+                    <p className="text-xs text-muted-foreground">@BotFather dan olingan token</p>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="telegramChatId">Chat ID</Label>
+                    <Input 
+                      id="telegramChatId" 
+                      value={telegramChatId}
+                      onChange={(e) => setTelegramChatId(e.target.value)}
+                      placeholder="-1001234567890"
+                      data-testid="input-telegram-chat-id"
+                    />
+                    <p className="text-xs text-muted-foreground">Guruh yoki kanal ID raqami</p>
+                  </div>
+                </div>
+                <Button 
+                  onClick={() => saveTelegramMutation.mutate()}
+                  disabled={saveTelegramMutation.isPending}
+                  className="gap-2"
+                  data-testid="button-save-telegram"
+                >
+                  <Send className="h-4 w-4" />
+                  {saveTelegramMutation.isPending ? "Saqlanmoqda..." : "Telegram sozlamalarini saqlash"}
+                </Button>
               </CardContent>
             </Card>
 

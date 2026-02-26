@@ -230,7 +230,12 @@ export async function registerRoutes(
     try {
       const tenant = await storage.getTenant(req.tenantId!);
       if (!tenant) return res.status(404).json({ error: "Tenant topilmadi" });
-      res.json(tenant);
+      if (req.user!.role === "owner") {
+        res.json(tenant);
+      } else {
+        const { telegramBotToken, telegramChatId, ...safe } = tenant;
+        res.json({ ...safe, telegramBotToken: !!telegramBotToken, telegramChatId: !!telegramChatId });
+      }
     } catch (error) {
       res.status(500).json({ error: "Server xatoligi" });
     }
@@ -241,7 +246,12 @@ export async function registerRoutes(
       if (req.user!.role !== "owner") {
         return res.status(403).json({ error: "Faqat do'kon egasi uchun" });
       }
-      const updated = await storage.updateTenant(req.tenantId!, req.body);
+      const allowedFields = ["name", "brandColor", "logo", "telegramBotToken", "telegramChatId"];
+      const data: Record<string, any> = {};
+      for (const key of allowedFields) {
+        if (req.body[key] !== undefined) data[key] = req.body[key];
+      }
+      const updated = await storage.updateTenant(req.tenantId!, data);
       if (updated) invalidateTenantCache(updated.slug);
       res.json(updated);
     } catch (error) {
@@ -449,7 +459,11 @@ export async function registerRoutes(
 
   app.post("/api/products", authMiddleware, async (req, res) => {
     try {
-      const validatedData = insertProductSchema.parse({ ...req.body, tenantId: req.tenantId });
+      let barcode = req.body.barcode?.trim();
+      if (!barcode) {
+        barcode = `AUTO-${Date.now()}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`;
+      }
+      const validatedData = insertProductSchema.parse({ ...req.body, barcode, tenantId: req.tenantId });
       const product = await storage.createProduct(validatedData);
       res.status(201).json(product);
     } catch (error: any) {

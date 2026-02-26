@@ -105,23 +105,39 @@ export default function BarcodePrintDialog({ products, open, onClose }: BarcodeP
   const [labelSize, setLabelSize] = useState<LabelSize>("50x30");
   const [showPrice, setShowPrice] = useState(true);
   const [copies, setCopies] = useState<Record<string, number>>({});
+  const [selected, setSelected] = useState<Record<string, boolean>>({});
   const [searchQuery, setSearchQuery] = useState("");
   const printRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (open && products.length > 0) {
       const initial: Record<string, number> = {};
-      products.forEach(p => { initial[p.id] = 1; });
+      const initialSelected: Record<string, boolean> = {};
+      products.forEach(p => { initial[p.id] = 1; initialSelected[p.id] = products.length === 1; });
       setCopies(initial);
+      setSelected(initialSelected);
       setSearchQuery("");
     }
   }, [open, products]);
+
+  const toggleSelect = (id: string) => {
+    setSelected(prev => ({ ...prev, [id]: !prev[id] }));
+  };
+
+  const toggleSelectAll = () => {
+    const allSelected = filteredProducts.every(p => selected[p.id]);
+    const update: Record<string, boolean> = { ...selected };
+    filteredProducts.forEach(p => { update[p.id] = !allSelected; });
+    setSelected(update);
+  };
 
   const filteredProducts = products.filter(p => {
     if (!searchQuery.trim()) return true;
     const q = searchQuery.toLowerCase();
     return p.name.toLowerCase().includes(q) || p.barcode.toLowerCase().includes(q);
   });
+
+  const selectedProducts = filteredProducts.filter(p => selected[p.id]);
 
   const updateCopies = (id: string, delta: number) => {
     setCopies(prev => ({
@@ -130,7 +146,7 @@ export default function BarcodePrintDialog({ products, open, onClose }: BarcodeP
     }));
   };
 
-  const totalLabels = filteredProducts.reduce((sum, p) => sum + (copies[p.id] || 1), 0);
+  const totalLabels = selectedProducts.reduce((sum, p) => sum + (copies[p.id] || 1), 0);
 
   const handlePrint = () => {
     const printContent = printRef.current;
@@ -211,7 +227,7 @@ export default function BarcodePrintDialog({ products, open, onClose }: BarcodeP
   };
 
   const labelsToRender: ProductForPrint[] = [];
-  filteredProducts.forEach(p => {
+  selectedProducts.forEach(p => {
     const count = copies[p.id] || 1;
     for (let i = 0; i < count; i++) {
       labelsToRender.push(p);
@@ -261,7 +277,12 @@ export default function BarcodePrintDialog({ products, open, onClose }: BarcodeP
           <div className="space-y-2">
             <div className="flex items-center justify-between">
               <Label>Tovarlar</Label>
-              <span className="text-xs text-muted-foreground">{filteredProducts.length} / {products.length} ta</span>
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-muted-foreground">{selectedProducts.length} ta tanlandi</span>
+                <Button variant="ghost" size="sm" className="h-6 text-xs px-2" onClick={toggleSelectAll} data-testid="button-toggle-select-all">
+                  {filteredProducts.every(p => selected[p.id]) ? "Bekor qilish" : "Hammasini tanlash"}
+                </Button>
+              </div>
             </div>
             <div className="relative">
               <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
@@ -273,42 +294,57 @@ export default function BarcodePrintDialog({ products, open, onClose }: BarcodeP
                 data-testid="input-search-barcode-print"
               />
             </div>
-            <div className="space-y-2 max-h-[200px] overflow-y-auto">
+            <div className="space-y-1 max-h-[200px] overflow-y-auto">
               {filteredProducts.map(p => (
-                <div key={p.id} className="flex items-center justify-between bg-gray-50 p-2 rounded-lg">
-                  <div className="flex-1 min-w-0 mr-2">
+                <div
+                  key={p.id}
+                  className={`flex items-center gap-2 p-2 rounded-lg cursor-pointer transition-colors ${selected[p.id] ? "bg-blue-50 border border-blue-200" : "bg-gray-50 border border-transparent hover:bg-gray-100"}`}
+                  onClick={() => toggleSelect(p.id)}
+                >
+                  <input
+                    type="checkbox"
+                    checked={!!selected[p.id]}
+                    onChange={() => toggleSelect(p.id)}
+                    className="h-4 w-4 rounded border-gray-300 text-blue-600 shrink-0"
+                    onClick={(e) => e.stopPropagation()}
+                    data-testid={`checkbox-select-${p.id}`}
+                  />
+                  <div className="flex-1 min-w-0">
                     <div className="text-sm font-medium truncate">{p.name}</div>
                     <div className="text-xs text-muted-foreground font-mono">{p.barcode}</div>
                   </div>
-                  <div className="flex items-center gap-1">
-                    <Button
-                      variant="outline"
-                      size="icon"
-                      className="h-7 w-7"
-                      onClick={() => updateCopies(p.id, -1)}
-                      data-testid={`button-decrease-copies-${p.id}`}
-                    >
-                      <Minus className="h-3 w-3" />
-                    </Button>
-                    <Input
-                      className="w-12 h-7 text-center text-sm p-0"
-                      value={copies[p.id] || 1}
-                      onChange={(e) => {
-                        const val = parseInt(e.target.value) || 1;
-                        setCopies(prev => ({ ...prev, [p.id]: Math.max(1, Math.min(100, val)) }));
-                      }}
-                      data-testid={`input-copies-${p.id}`}
-                    />
-                    <Button
-                      variant="outline"
-                      size="icon"
-                      className="h-7 w-7"
-                      onClick={() => updateCopies(p.id, 1)}
-                      data-testid={`button-increase-copies-${p.id}`}
-                    >
-                      <Plus className="h-3 w-3" />
-                    </Button>
-                  </div>
+                  {selected[p.id] && (
+                    <div className="flex items-center gap-1 shrink-0">
+                      <Button
+                        variant="outline"
+                        size="icon"
+                        className="h-7 w-7"
+                        onClick={(e) => { e.stopPropagation(); updateCopies(p.id, -1); }}
+                        data-testid={`button-decrease-copies-${p.id}`}
+                      >
+                        <Minus className="h-3 w-3" />
+                      </Button>
+                      <Input
+                        className="w-12 h-7 text-center text-sm p-0"
+                        value={copies[p.id] || 1}
+                        onChange={(e) => {
+                          const val = parseInt(e.target.value) || 1;
+                          setCopies(prev => ({ ...prev, [p.id]: Math.max(1, Math.min(100, val)) }));
+                        }}
+                        onClick={(e) => e.stopPropagation()}
+                        data-testid={`input-copies-${p.id}`}
+                      />
+                      <Button
+                        variant="outline"
+                        size="icon"
+                        className="h-7 w-7"
+                        onClick={(e) => { e.stopPropagation(); updateCopies(p.id, 1); }}
+                        data-testid={`button-increase-copies-${p.id}`}
+                      >
+                        <Plus className="h-3 w-3" />
+                      </Button>
+                    </div>
+                  )}
                 </div>
               ))}
             </div>

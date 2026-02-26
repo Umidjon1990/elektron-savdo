@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Printer, Minus, Plus } from "lucide-react";
+import { Printer, Minus, Plus, Search } from "lucide-react";
 
 interface ProductForPrint {
   id: string;
@@ -105,6 +105,7 @@ export default function BarcodePrintDialog({ products, open, onClose }: BarcodeP
   const [labelSize, setLabelSize] = useState<LabelSize>("50x30");
   const [showPrice, setShowPrice] = useState(true);
   const [copies, setCopies] = useState<Record<string, number>>({});
+  const [searchQuery, setSearchQuery] = useState("");
   const printRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -112,8 +113,15 @@ export default function BarcodePrintDialog({ products, open, onClose }: BarcodeP
       const initial: Record<string, number> = {};
       products.forEach(p => { initial[p.id] = 1; });
       setCopies(initial);
+      setSearchQuery("");
     }
   }, [open, products]);
+
+  const filteredProducts = products.filter(p => {
+    if (!searchQuery.trim()) return true;
+    const q = searchQuery.toLowerCase();
+    return p.name.toLowerCase().includes(q) || p.barcode.toLowerCase().includes(q);
+  });
 
   const updateCopies = (id: string, delta: number) => {
     setCopies(prev => ({
@@ -122,7 +130,7 @@ export default function BarcodePrintDialog({ products, open, onClose }: BarcodeP
     }));
   };
 
-  const totalLabels = Object.values(copies).reduce((sum, n) => sum + n, 0);
+  const totalLabels = filteredProducts.reduce((sum, p) => sum + (copies[p.id] || 1), 0);
 
   const handlePrint = () => {
     const printContent = printRef.current;
@@ -203,7 +211,7 @@ export default function BarcodePrintDialog({ products, open, onClose }: BarcodeP
   };
 
   const labelsToRender: ProductForPrint[] = [];
-  products.forEach(p => {
+  filteredProducts.forEach(p => {
     const count = copies[p.id] || 1;
     for (let i = 0; i < count; i++) {
       labelsToRender.push(p);
@@ -251,9 +259,22 @@ export default function BarcodePrintDialog({ products, open, onClose }: BarcodeP
           </div>
 
           <div className="space-y-2">
-            <Label>Nusxalar soni</Label>
+            <div className="flex items-center justify-between">
+              <Label>Tovarlar</Label>
+              <span className="text-xs text-muted-foreground">{filteredProducts.length} / {products.length} ta</span>
+            </div>
+            <div className="relative">
+              <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Tovar nomi yoki barcode qidirish..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-9"
+                data-testid="input-search-barcode-print"
+              />
+            </div>
             <div className="space-y-2 max-h-[200px] overflow-y-auto">
-              {products.map(p => (
+              {filteredProducts.map(p => (
                 <div key={p.id} className="flex items-center justify-between bg-gray-50 p-2 rounded-lg">
                   <div className="flex-1 min-w-0 mr-2">
                     <div className="text-sm font-medium truncate">{p.name}</div>

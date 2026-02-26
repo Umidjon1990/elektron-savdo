@@ -1,10 +1,10 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 import JsBarcode from "jsbarcode";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Slider } from "@/components/ui/slider";
 import { Printer, Minus, Plus, Search } from "lucide-react";
 
 interface ProductForPrint {
@@ -20,49 +20,47 @@ interface BarcodePrintProps {
   onClose: () => void;
 }
 
-type LabelSize = "30x20" | "40x25" | "50x30" | "58x30" | "58x40";
+interface LabelDims {
+  width: number;
+  height: number;
+  barcodeHeight: number;
+}
 
-const LABEL_SIZES: Record<LabelSize, { width: number; height: number; label: string }> = {
-  "30x20": { width: 30, height: 20, label: "30×20 mm (kichik)" },
-  "40x25": { width: 40, height: 25, label: "40×25 mm" },
-  "50x30": { width: 50, height: 30, label: "50×30 mm" },
-  "58x30": { width: 58, height: 30, label: "58×30 mm" },
-  "58x40": { width: 58, height: 40, label: "58×40 mm (katta)" },
-};
+const PRESETS = [
+  { label: "30×20", w: 30, h: 20 },
+  { label: "40×25", w: 40, h: 25 },
+  { label: "50×30", w: 50, h: 30 },
+  { label: "58×40", w: 58, h: 40 },
+];
 
-function BarcodeLabel({ product, size, showPrice }: { product: ProductForPrint; size: LabelSize; showPrice: boolean }) {
+function BarcodeLabel({ product, dims, showPrice }: { product: ProductForPrint; dims: LabelDims; showPrice: boolean }) {
   const svgRef = useRef<SVGSVGElement>(null);
-  const dims = LABEL_SIZES[size];
 
   useEffect(() => {
-    if (svgRef.current) {
-      try {
-        JsBarcode(svgRef.current, product.barcode, {
-          format: product.barcode.match(/^\d{13}$/) ? "EAN13" :
-                  product.barcode.match(/^\d{12}$/) ? "UPC" :
-                  "CODE128",
-          width: dims.width < 40 ? 1 : 1.5,
-          height: dims.height < 25 ? 25 : 35,
-          displayValue: true,
-          fontSize: dims.width < 40 ? 8 : 10,
-          margin: 0,
-          textMargin: 1,
-          font: "monospace",
-        });
-      } catch {
-        JsBarcode(svgRef.current, product.barcode, {
-          format: "CODE128",
-          width: dims.width < 40 ? 1 : 1.5,
-          height: dims.height < 25 ? 25 : 35,
-          displayValue: true,
-          fontSize: dims.width < 40 ? 8 : 10,
-          margin: 0,
-          textMargin: 1,
-          font: "monospace",
-        });
-      }
+    if (!svgRef.current) return;
+    const barcodeOpts = {
+      format: "CODE128" as string,
+      width: Math.max(0.8, Math.min(2, dims.width / 40)),
+      height: dims.barcodeHeight,
+      displayValue: true,
+      fontSize: Math.max(7, Math.min(12, dims.width / 5)),
+      margin: 0,
+      textMargin: 1,
+      font: "monospace",
+    };
+    if (product.barcode.match(/^\d{13}$/)) barcodeOpts.format = "EAN13";
+    else if (product.barcode.match(/^\d{12}$/)) barcodeOpts.format = "UPC";
+
+    try {
+      JsBarcode(svgRef.current, product.barcode, barcodeOpts);
+    } catch {
+      barcodeOpts.format = "CODE128";
+      JsBarcode(svgRef.current, product.barcode, barcodeOpts);
     }
-  }, [product.barcode, size]);
+  }, [product.barcode, dims]);
+
+  const nameFontSize = Math.max(5, Math.min(10, dims.width / 6));
+  const priceFontSize = Math.max(6, Math.min(11, dims.width / 5.5));
 
   return (
     <div
@@ -76,11 +74,9 @@ function BarcodeLabel({ product, size, showPrice }: { product: ProductForPrint; 
       }}
     >
       <div
-        className="text-center font-bold leading-tight overflow-hidden"
+        className="text-center font-bold leading-tight w-full"
         style={{
-          fontSize: dims.width < 40 ? "6px" : "7px",
-          maxHeight: showPrice ? "3mm" : "4mm",
-          width: "100%",
+          fontSize: `${nameFontSize}px`,
           whiteSpace: "nowrap",
           textOverflow: "ellipsis",
           overflow: "hidden",
@@ -88,12 +84,9 @@ function BarcodeLabel({ product, size, showPrice }: { product: ProductForPrint; 
       >
         {product.name}
       </div>
-      <svg ref={svgRef} className="barcode-svg" style={{ maxWidth: "100%", flex: 1 }} />
+      <svg ref={svgRef} style={{ maxWidth: "100%", flex: "0 0 auto" }} />
       {showPrice && (
-        <div
-          className="font-bold text-center"
-          style={{ fontSize: dims.width < 40 ? "7px" : "9px" }}
-        >
+        <div className="font-bold text-center" style={{ fontSize: `${priceFontSize}px` }}>
           {product.price.toLocaleString()} so'm
         </div>
       )}
@@ -102,7 +95,7 @@ function BarcodeLabel({ product, size, showPrice }: { product: ProductForPrint; 
 }
 
 export default function BarcodePrintDialog({ products, open, onClose }: BarcodePrintProps) {
-  const [labelSize, setLabelSize] = useState<LabelSize>("50x30");
+  const [dims, setDims] = useState<LabelDims>({ width: 50, height: 30, barcodeHeight: 30 });
   const [showPrice, setShowPrice] = useState(true);
   const [copies, setCopies] = useState<Record<string, number>>({});
   const [selected, setSelected] = useState<Record<string, boolean>>({});
@@ -124,18 +117,18 @@ export default function BarcodePrintDialog({ products, open, onClose }: BarcodeP
     setSelected(prev => ({ ...prev, [id]: !prev[id] }));
   };
 
-  const toggleSelectAll = () => {
-    const allSelected = filteredProducts.every(p => selected[p.id]);
-    const update: Record<string, boolean> = { ...selected };
-    filteredProducts.forEach(p => { update[p.id] = !allSelected; });
-    setSelected(update);
-  };
-
   const filteredProducts = products.filter(p => {
     if (!searchQuery.trim()) return true;
     const q = searchQuery.toLowerCase();
     return p.name.toLowerCase().includes(q) || p.barcode.toLowerCase().includes(q);
   });
+
+  const toggleSelectAll = useCallback(() => {
+    const allSelected = filteredProducts.every(p => selected[p.id]);
+    const update: Record<string, boolean> = { ...selected };
+    filteredProducts.forEach(p => { update[p.id] = !allSelected; });
+    setSelected(update);
+  }, [filteredProducts, selected]);
 
   const selectedProducts = filteredProducts.filter(p => selected[p.id]);
 
@@ -154,8 +147,6 @@ export default function BarcodePrintDialog({ products, open, onClose }: BarcodeP
 
     const printWindow = window.open("", "_blank", "width=800,height=600");
     if (!printWindow) return;
-
-    const dims = LABEL_SIZES[labelSize];
 
     printWindow.document.write(`
       <!DOCTYPE html>
@@ -187,25 +178,7 @@ export default function BarcodePrintDialog({ products, open, onClose }: BarcodeP
             page-break-inside: avoid;
             border: 0.5px dashed #ccc;
           }
-          .barcode-label .product-name {
-            font-size: ${dims.width < 40 ? "6px" : "7px"};
-            font-weight: bold;
-            text-align: center;
-            white-space: nowrap;
-            text-overflow: ellipsis;
-            overflow: hidden;
-            width: 100%;
-            max-height: 4mm;
-          }
-          .barcode-label .product-price {
-            font-size: ${dims.width < 40 ? "7px" : "9px"};
-            font-weight: bold;
-            text-align: center;
-          }
-          .barcode-label svg {
-            max-width: 100%;
-            flex: 1;
-          }
+          .barcode-label svg { max-width: 100%; }
         </style>
       </head>
       <body>
@@ -214,10 +187,7 @@ export default function BarcodePrintDialog({ products, open, onClose }: BarcodeP
         </div>
         <script>
           window.onload = function() {
-            setTimeout(function() {
-              window.print();
-              window.close();
-            }, 500);
+            setTimeout(function() { window.print(); window.close(); }, 500);
           };
         </script>
       </body>
@@ -234,6 +204,10 @@ export default function BarcodePrintDialog({ products, open, onClose }: BarcodeP
     }
   });
 
+  const applyPreset = (w: number, h: number) => {
+    setDims(prev => ({ ...prev, width: w, height: h }));
+  };
+
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="sm:max-w-[700px] max-h-[90vh] overflow-y-auto">
@@ -245,32 +219,82 @@ export default function BarcodePrintDialog({ products, open, onClose }: BarcodeP
         </DialogHeader>
 
         <div className="space-y-4">
-          <div className="grid gap-4 md:grid-cols-2">
-            <div className="space-y-2">
-              <Label>Etiketka o'lchami</Label>
-              <Select value={labelSize} onValueChange={(v) => setLabelSize(v as LabelSize)}>
-                <SelectTrigger data-testid="select-label-size">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {Object.entries(LABEL_SIZES).map(([key, val]) => (
-                    <SelectItem key={key} value={key}>{val.label}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+          <div className="space-y-3">
+            <Label>Etiketka o'lchami</Label>
+            <div className="flex flex-wrap gap-1.5">
+              {PRESETS.map(p => (
+                <Button
+                  key={p.label}
+                  variant={dims.width === p.w && dims.height === p.h ? "default" : "outline"}
+                  size="sm"
+                  className="h-7 text-xs px-2"
+                  onClick={() => applyPreset(p.w, p.h)}
+                >
+                  {p.label}
+                </Button>
+              ))}
             </div>
-            <div className="space-y-2">
-              <Label>Narxni ko'rsatish</Label>
-              <div className="flex items-center gap-2 h-10">
-                <input
-                  type="checkbox"
-                  checked={showPrice}
-                  onChange={(e) => setShowPrice(e.target.checked)}
-                  className="h-4 w-4 rounded border-gray-300"
-                  data-testid="checkbox-show-price"
+            <div className="grid grid-cols-3 gap-3">
+              <div className="space-y-1">
+                <Label className="text-xs text-muted-foreground">Eni (mm)</Label>
+                <Input
+                  type="number"
+                  min={15}
+                  max={100}
+                  value={dims.width}
+                  onChange={(e) => setDims(prev => ({ ...prev, width: Math.max(15, Math.min(100, parseInt(e.target.value) || 15)) }))}
+                  className="h-8 text-sm"
+                  data-testid="input-label-width"
                 />
-                <span className="text-sm">Narxni etiketkaga qo'shish</span>
               </div>
+              <div className="space-y-1">
+                <Label className="text-xs text-muted-foreground">Bo'yi (mm)</Label>
+                <Input
+                  type="number"
+                  min={10}
+                  max={80}
+                  value={dims.height}
+                  onChange={(e) => setDims(prev => ({ ...prev, height: Math.max(10, Math.min(80, parseInt(e.target.value) || 10)) }))}
+                  className="h-8 text-sm"
+                  data-testid="input-label-height"
+                />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs text-muted-foreground">Barcode balandligi</Label>
+                <Input
+                  type="number"
+                  min={15}
+                  max={80}
+                  value={dims.barcodeHeight}
+                  onChange={(e) => setDims(prev => ({ ...prev, barcodeHeight: Math.max(15, Math.min(80, parseInt(e.target.value) || 15)) }))}
+                  className="h-8 text-sm"
+                  data-testid="input-barcode-height"
+                />
+              </div>
+            </div>
+            <div className="space-y-1">
+              <div className="flex items-center justify-between">
+                <Label className="text-xs text-muted-foreground">Barcode balandligi: {dims.barcodeHeight}px</Label>
+              </div>
+              <Slider
+                value={[dims.barcodeHeight]}
+                onValueChange={(v) => setDims(prev => ({ ...prev, barcodeHeight: v[0] }))}
+                min={15}
+                max={80}
+                step={1}
+                className="w-full"
+                data-testid="slider-barcode-height"
+              />
+            </div>
+            <div className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                checked={showPrice}
+                onChange={(e) => setShowPrice(e.target.checked)}
+                className="h-4 w-4 rounded border-gray-300"
+                data-testid="checkbox-show-price"
+              />
+              <span className="text-sm">Narxni etiketkaga qo'shish</span>
             </div>
           </div>
 
@@ -280,7 +304,7 @@ export default function BarcodePrintDialog({ products, open, onClose }: BarcodeP
               <div className="flex items-center gap-2">
                 <span className="text-xs text-muted-foreground">{selectedProducts.length} ta tanlandi</span>
                 <Button variant="ghost" size="sm" className="h-6 text-xs px-2" onClick={toggleSelectAll} data-testid="button-toggle-select-all">
-                  {filteredProducts.every(p => selected[p.id]) ? "Bekor qilish" : "Hammasini tanlash"}
+                  {filteredProducts.length > 0 && filteredProducts.every(p => selected[p.id]) ? "Bekor qilish" : "Hammasini tanlash"}
                 </Button>
               </div>
             </div>
@@ -320,7 +344,6 @@ export default function BarcodePrintDialog({ products, open, onClose }: BarcodeP
                         size="icon"
                         className="h-7 w-7"
                         onClick={(e) => { e.stopPropagation(); updateCopies(p.id, -1); }}
-                        data-testid={`button-decrease-copies-${p.id}`}
                       >
                         <Minus className="h-3 w-3" />
                       </Button>
@@ -332,14 +355,12 @@ export default function BarcodePrintDialog({ products, open, onClose }: BarcodeP
                           setCopies(prev => ({ ...prev, [p.id]: Math.max(1, Math.min(100, val)) }));
                         }}
                         onClick={(e) => e.stopPropagation()}
-                        data-testid={`input-copies-${p.id}`}
                       />
                       <Button
                         variant="outline"
                         size="icon"
                         className="h-7 w-7"
                         onClick={(e) => { e.stopPropagation(); updateCopies(p.id, 1); }}
-                        data-testid={`button-increase-copies-${p.id}`}
                       >
                         <Plus className="h-3 w-3" />
                       </Button>
@@ -350,19 +371,21 @@ export default function BarcodePrintDialog({ products, open, onClose }: BarcodeP
             </div>
           </div>
 
-          <div className="border rounded-lg p-3 bg-gray-50">
-            <div className="text-sm font-medium mb-2">Ko'rinish ({totalLabels} ta etiketka)</div>
-            <div ref={printRef} className="flex flex-wrap gap-1 justify-center overflow-y-auto max-h-[250px]">
-              {labelsToRender.map((p, i) => (
-                <BarcodeLabel key={`${p.id}-${i}`} product={p} size={labelSize} showPrice={showPrice} />
-              ))}
+          {labelsToRender.length > 0 && (
+            <div className="border rounded-lg p-3 bg-gray-50">
+              <div className="text-sm font-medium mb-2">Ko'rinish ({totalLabels} ta etiketka)</div>
+              <div ref={printRef} className="flex flex-wrap gap-1 justify-center overflow-y-auto max-h-[250px]">
+                {labelsToRender.map((p, i) => (
+                  <BarcodeLabel key={`${p.id}-${i}`} product={p} dims={dims} showPrice={showPrice} />
+                ))}
+              </div>
             </div>
-          </div>
+          )}
         </div>
 
         <DialogFooter>
           <Button variant="outline" onClick={onClose}>Bekor qilish</Button>
-          <Button onClick={handlePrint} className="gap-2" data-testid="button-print-barcodes">
+          <Button onClick={handlePrint} className="gap-2" disabled={totalLabels === 0} data-testid="button-print-barcodes">
             <Printer className="h-4 w-4" />
             Chop etish ({totalLabels} ta)
           </Button>

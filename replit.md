@@ -96,6 +96,10 @@ Key backend files:
 - `receipt_logo`: URL for receipt logo (falls back to tenant logo, then initial letter)
 
 ### Recent Changes (Mar 2026)
+- Modern dark-themed landing page at `/` with 3D-style design, animated slogans, feature showcase
+- Matching dark-themed login (`/login`) and register (`/register`) pages
+- Landing page auto-redirects authenticated users to their dashboard
+- Stores list moved to `/stores` route
 - Added multi-tenant database schema (tenants table, tenant_id on all tables)
 - Implemented JWT authentication with bcrypt password hashing
 - Built tenant middleware with in-memory caching

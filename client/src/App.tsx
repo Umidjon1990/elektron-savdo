@@ -26,6 +26,7 @@ const importSettings = () => import("@/pages/settings");
 const importCategories = () => import("@/pages/categories");
 const importNotFound = () => import("@/pages/not-found");
 const importSuperAdmin = () => import("@/pages/super-admin");
+const importLanding = () => import("@/pages/landing");
 const importStoresList = () => import("@/pages/store/stores-list");
 const importSlugStore = () => import("@/pages/store/slug-store");
 const importSlugCart = () => import("@/pages/store/slug-cart");
@@ -33,6 +34,7 @@ const importSlugLogin = () => import("@/pages/store/slug-login");
 
 const NotFound = lazy(importNotFound);
 const SuperAdminPage = lazy(importSuperAdmin);
+const LandingPage = lazy(importLanding);
 const StoresListPage = lazy(importStoresList);
 const SlugStorePage = lazy(importSlugStore);
 const SlugCartPage = lazy(importSlugCart);
@@ -198,9 +200,8 @@ function Router() {
   return (
     <Switch>
       {/* Public Routes */}
-      <Route path="/">
-        {() => <HomeRedirect />}
-      </Route>
+      <Route path="/" component={LandingPage} />
+      <Route path="/stores" component={StoresListPage} />
       <Route path="/cart" component={CartPage} />
       <Route path="/login" component={LoginPage} />
       <Route path="/register" component={RegisterPage} />

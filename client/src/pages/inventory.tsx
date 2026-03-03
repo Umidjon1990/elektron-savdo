@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { SidebarNav } from "@/components/layout/sidebar-nav";
 import { useProducts } from "@/lib/product-context";
+import { useAuth } from "@/lib/auth-context";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Search, Plus, Filter, MoreHorizontal, ScanBarcode, ArrowRight, Check, X, RotateCcw, PackagePlus, ScanText, Upload, Image as ImageIcon, Loader2, Youtube, Trash2, ChevronUp, ChevronDown, GripVertical, Printer } from "lucide-react";
@@ -49,6 +50,7 @@ import { cn } from "@/lib/utils";
 
 export default function Inventory() {
   const { products, addProduct, updateStock, updateProduct, deleteProduct } = useProducts();
+  const { token } = useAuth();
   const [searchQuery, setSearchQuery] = useState("");
   
   const { data: categories = [] } = useQuery<Category[]>({
@@ -59,6 +61,24 @@ export default function Inventory() {
       return res.json();
     },
   });
+
+  const { data: tenantSettings } = useQuery<any>({
+    queryKey: ["tenant-settings"],
+    queryFn: async () => {
+      const res = await fetch("/api/tenant-settings", {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) return null;
+      return res.json();
+    },
+    enabled: !!token,
+    staleTime: 5 * 60 * 1000,
+  });
+
+  const productFields = tenantSettings?.productFields || [
+    { key: "name", label: "Tovar nomi", required: true },
+    { key: "author", label: "Muallif", required: false },
+  ];
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   
   // Scanner States
@@ -73,7 +93,7 @@ export default function Inventory() {
   const [restockAmount, setRestockAmount] = useState<string>("10");
   
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [printProducts, setPrintProducts] = useState<Array<{ id: string; name: string; barcode: string; price: number }>>([]);
+  const [printProducts, setPrintProducts] = useState<Array<{ id: string; name: string; barcode: string; price: number; barcodePrice?: number }>>([]);
   const [isPrintDialogOpen, setIsPrintDialogOpen] = useState(false);
 
   const [newProduct, setNewProduct] = useState({
@@ -81,6 +101,8 @@ export default function Inventory() {
     author: "",
     price: "",
     costPrice: "",
+    barcodePrice: "",
+    wholesalePrice: "",
     stock: "",
     category: "",
     barcode: "",
@@ -115,7 +137,7 @@ export default function Inventory() {
     if (!isAddDialogOpen) {
       setStep(1);
       setEditingId(null);
-      setNewProduct({ name: "", author: "", price: "", costPrice: "", stock: "", category: "", barcode: "", image: "", videoUrl: "", isNew: false });
+      setNewProduct({ name: "", author: "", price: "", costPrice: "", barcodePrice: "", wholesalePrice: "", stock: "", category: "", barcode: "", image: "", videoUrl: "", isNew: false });
     }
   }, [isAddDialogOpen]);
   
@@ -126,6 +148,8 @@ export default function Inventory() {
       author: product.author,
       price: product.price.toString(),
       costPrice: (product.costPrice || 0).toString(),
+      barcodePrice: ((product as any).barcodePrice || "").toString(),
+      wholesalePrice: ((product as any).wholesalePrice || "").toString(),
       stock: product.stock.toString(),
       category: product.category,
       barcode: product.barcode,
@@ -262,6 +286,8 @@ export default function Inventory() {
           author: newProduct.author,
           price: Number(newProduct.price),
           costPrice: Number(newProduct.costPrice) || 0,
+          barcodePrice: newProduct.barcodePrice ? Number(newProduct.barcodePrice) : undefined,
+          wholesalePrice: newProduct.wholesalePrice ? Number(newProduct.wholesalePrice) : undefined,
           stock: Number(newProduct.stock),
           category: newProduct.category || categories[0]?.name || "Boshqa",
           barcode: newProduct.barcode.trim(),
@@ -280,6 +306,8 @@ export default function Inventory() {
           author: newProduct.author,
           price: Number(newProduct.price),
           costPrice: Number(newProduct.costPrice) || 0,
+          barcodePrice: newProduct.barcodePrice ? Number(newProduct.barcodePrice) : undefined,
+          wholesalePrice: newProduct.wholesalePrice ? Number(newProduct.wholesalePrice) : undefined,
           stock: Number(newProduct.stock),
           category: newProduct.category || categories[0]?.name || "Boshqa",
           barcode: newProduct.barcode.trim(),
@@ -394,7 +422,7 @@ export default function Inventory() {
                 variant="outline" 
                 className="gap-2 flex-1 md:flex-none justify-center"
                 onClick={() => {
-                  setPrintProducts(filteredProducts.map(p => ({ id: p.id, name: p.name, barcode: p.barcode, price: p.price })));
+                  setPrintProducts(filteredProducts.map(p => ({ id: p.id, name: p.name, barcode: p.barcode, price: p.price, barcodePrice: (p as any).barcodePrice })));
                   setIsPrintDialogOpen(true);
                 }}
                 data-testid="button-print-all-barcodes"
@@ -522,51 +550,37 @@ export default function Inventory() {
                         </div>
 
                         <div className="grid grid-cols-2 gap-4">
-                          <div className="space-y-2 col-span-2">
-                            <Label htmlFor="name">Kitob nomi</Label>
-                            <div className="flex gap-2">
-                              <Input 
-                                id="name" 
-                                required 
-                                value={newProduct.name}
-                                onChange={(e) => setNewProduct({...newProduct, name: e.target.value})}
-                                placeholder="Masalan: Atomic Habits"
-                                className="font-medium"
-                              />
-                              <Button 
-                                type="button" 
-                                variant="outline" 
-                                size="icon"
-                                title="Kamera orqali o'qish"
-                                onClick={() => openScanner("text", "name")}
-                              >
-                                <ScanText className="h-4 w-4" />
-                              </Button>
-                            </div>
-                          </div>
-                          <div className="space-y-2 col-span-2 sm:col-span-1">
-                            <Label htmlFor="author">Muallif</Label>
-                            <div className="flex gap-2">
+                          {productFields.map((field: any, idx: number) => (
+                            <div key={field.key} className={`space-y-2 ${idx === 0 ? 'col-span-2' : 'col-span-2 sm:col-span-1'}`}>
+                              <Label htmlFor={field.key}>{field.label}</Label>
+                              <div className="flex gap-2">
                                 <Input 
-                                id="author" 
-                                required
-                                value={newProduct.author}
-                                onChange={(e) => setNewProduct({...newProduct, author: e.target.value})}
-                                placeholder="Masalan: James Clear"
+                                  id={field.key} 
+                                  required={field.required !== false}
+                                  value={field.key === "name" ? newProduct.name : field.key === "author" ? newProduct.author : ""}
+                                  onChange={(e) => {
+                                    if (field.key === "name") setNewProduct({...newProduct, name: e.target.value});
+                                    else if (field.key === "author") setNewProduct({...newProduct, author: e.target.value});
+                                  }}
+                                  placeholder={field.label}
+                                  className={idx === 0 ? "font-medium" : ""}
                                 />
-                                <Button 
+                                {(field.key === "name" || field.key === "author") && (
+                                  <Button 
                                     type="button" 
                                     variant="outline" 
                                     size="icon"
                                     title="Kamera orqali o'qish"
-                                    onClick={() => openScanner("text", "author")}
-                                >
+                                    onClick={() => openScanner("text", field.key as "name" | "author")}
+                                  >
                                     <ScanText className="h-4 w-4" />
-                                </Button>
+                                  </Button>
+                                )}
+                              </div>
                             </div>
-                          </div>
+                          ))}
                           <div className="space-y-2 col-span-2 sm:col-span-1">
-                            <Label htmlFor="category">Janr</Label>
+                            <Label htmlFor="category">Kategoriya</Label>
                             <Select 
                               value={newProduct.category} 
                               onValueChange={(val) => setNewProduct({...newProduct, category: val})}
@@ -583,39 +597,64 @@ export default function Inventory() {
                           </div>
                         </div>
 
-                        <div className="grid grid-cols-3 gap-4 bg-gray-50 p-4 rounded-lg">
-                          <div className="space-y-2">
-                             <Label htmlFor="costPrice">Tan narxi (so'm)</Label>
-                            <Input 
-                              id="costPrice" 
-                              type="number" 
-                              required
-                              placeholder="Kelish narxi"
-                              value={newProduct.costPrice}
-                              onChange={(e) => setNewProduct({...newProduct, costPrice: e.target.value})}
-                              className="bg-white"
-                            />
+                        <div className="bg-gray-50 p-4 rounded-lg space-y-3">
+                          <Label className="text-sm font-semibold text-gray-700">Narxlar</Label>
+                          <div className="grid grid-cols-2 gap-3">
+                            <div className="space-y-1">
+                              <Label htmlFor="costPrice" className="text-xs text-muted-foreground">Tan narxi (so'm)</Label>
+                              <Input 
+                                id="costPrice" 
+                                type="number" 
+                                required
+                                placeholder="Kelish narxi"
+                                value={newProduct.costPrice}
+                                onChange={(e) => setNewProduct({...newProduct, costPrice: e.target.value})}
+                                className="bg-white h-9"
+                              />
+                            </div>
+                            <div className="space-y-1">
+                              <Label htmlFor="price" className="text-xs text-muted-foreground">Sotish narxi (so'm)</Label>
+                              <Input 
+                                id="price" 
+                                type="number" 
+                                required
+                                value={newProduct.price}
+                                onChange={(e) => setNewProduct({...newProduct, price: e.target.value})}
+                                className="bg-white h-9"
+                              />
+                            </div>
+                            <div className="space-y-1">
+                              <Label htmlFor="barcodePrice" className="text-xs text-muted-foreground">Barkod narxi (so'm)</Label>
+                              <Input 
+                                id="barcodePrice" 
+                                type="number" 
+                                placeholder="Faqat etiketkada"
+                                value={newProduct.barcodePrice}
+                                onChange={(e) => setNewProduct({...newProduct, barcodePrice: e.target.value})}
+                                className="bg-white h-9"
+                              />
+                            </div>
+                            <div className="space-y-1">
+                              <Label htmlFor="wholesalePrice" className="text-xs text-muted-foreground">Ulgurchi narx (so'm)</Label>
+                              <Input 
+                                id="wholesalePrice" 
+                                type="number" 
+                                placeholder="Ulgurchi narx"
+                                value={newProduct.wholesalePrice}
+                                onChange={(e) => setNewProduct({...newProduct, wholesalePrice: e.target.value})}
+                                className="bg-white h-9"
+                              />
+                            </div>
                           </div>
-                          <div className="space-y-2">
-                             <Label htmlFor="price">Sotish narxi (so'm)</Label>
-                            <Input 
-                              id="price" 
-                              type="number" 
-                              required
-                              value={newProduct.price}
-                              onChange={(e) => setNewProduct({...newProduct, price: e.target.value})}
-                              className="bg-white"
-                            />
-                          </div>
-                          <div className="space-y-2">
-                            <Label htmlFor="stock">Soni (dona)</Label>
+                          <div className="space-y-1">
+                            <Label htmlFor="stock" className="text-xs text-muted-foreground">Soni (dona)</Label>
                             <Input 
                               id="stock" 
                               type="number" 
                               required
                               value={newProduct.stock}
                               onChange={(e) => setNewProduct({...newProduct, stock: e.target.value})}
-                              className="bg-white"
+                              className="bg-white h-9"
                             />
                           </div>
                         </div>
@@ -765,7 +804,7 @@ export default function Inventory() {
                               Tahrirlash
                             </DropdownMenuItem>
                             <DropdownMenuItem onClick={() => {
-                              setPrintProducts([{ id: product.id, name: product.name, barcode: product.barcode, price: product.price }]);
+                              setPrintProducts([{ id: product.id, name: product.name, barcode: product.barcode, price: product.price, barcodePrice: (product as any).barcodePrice }]);
                               setIsPrintDialogOpen(true);
                             }}>
                               <Printer className="mr-2 h-4 w-4" />
@@ -827,7 +866,7 @@ export default function Inventory() {
                               Tahrirlash
                             </DropdownMenuItem>
                             <DropdownMenuItem onClick={() => {
-                              setPrintProducts([{ id: product.id, name: product.name, barcode: product.barcode, price: product.price }]);
+                              setPrintProducts([{ id: product.id, name: product.name, barcode: product.barcode, price: product.price, barcodePrice: (product as any).barcodePrice }]);
                               setIsPrintDialogOpen(true);
                             }}>
                               <Printer className="mr-2 h-4 w-4" />

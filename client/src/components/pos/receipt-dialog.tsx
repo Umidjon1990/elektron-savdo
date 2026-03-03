@@ -4,6 +4,8 @@ import { type Transaction } from "@/lib/transaction-context";
 import { Printer } from "lucide-react";
 import { useEffect } from "react";
 import { useSettings } from "@/lib/settings-context";
+import { useAuth } from "@/lib/auth-context";
+import { useQuery } from "@tanstack/react-query";
 
 interface ReceiptDialogProps {
   transaction: Transaction | null;
@@ -11,15 +13,35 @@ interface ReceiptDialogProps {
   onClose: () => void;
 }
 
-function ReceiptContent({ transaction, settings }: { transaction: Transaction; settings: { storeName: string; storeAddress: string; storePhone: string; telegramUsername: string; receiptFooter: string } }) {
+const PAYMENT_LABELS: Record<string, string> = {
+  cash: "Naqd",
+  card: "Karta",
+  nasiya: "Nasiya",
+};
+
+function ReceiptContent({ transaction, settings, receiptLogo, paymentMethods }: { transaction: Transaction; settings: { storeName: string; storeAddress: string; storePhone: string; telegramUsername: string; receiptFooter: string }; receiptLogo?: string; paymentMethods?: Array<{id: string, name: string}> }) {
+  const getPaymentLabel = (method: string) => {
+    if (paymentMethods) {
+      const found = paymentMethods.find(m => m.id === method);
+      if (found) return found.name;
+    }
+    return PAYMENT_LABELS[method] || method;
+  };
+
   return (
     <>
       <div className="mb-4 space-y-1 text-center">
-        <img 
-          src="/assets/image_1768471627048.png" 
-          alt={settings.storeName} 
-          className="w-14 h-14 object-contain mx-auto mb-2"
-        />
+        {receiptLogo ? (
+          <img 
+            src={receiptLogo} 
+            alt={settings.storeName} 
+            className="w-14 h-14 object-contain mx-auto mb-2"
+          />
+        ) : (
+          <div className="w-14 h-14 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-2">
+            <span className="text-2xl font-black text-primary">{settings.storeName.charAt(0).toUpperCase()}</span>
+          </div>
+        )}
         <h2 className="text-lg font-black uppercase tracking-wide text-black">{settings.storeName}</h2>
         <p className="text-xs text-black font-semibold">{settings.storeAddress}</p>
         <p className="text-xs text-black font-semibold">{settings.storePhone}</p>
@@ -31,6 +53,19 @@ function ReceiptContent({ transaction, settings }: { transaction: Transaction; s
         <p>Chek №: {transaction.id.slice(0, 8)}</p>
         <p>Sana: {new Date(transaction.date).toLocaleDateString()}</p>
       </div>
+
+      {(transaction.customerName || transaction.customerPhone) && (
+        <>
+          <div className="border-t border-dashed border-gray-400 my-2" />
+          <div className="text-xs text-black mb-2">
+            {transaction.customerName && <p className="font-semibold">Mijoz: {transaction.customerName}</p>}
+            {transaction.customerPhone && <p className="font-semibold">Tel: {transaction.customerPhone}</p>}
+            {transaction.customerInfo && Object.entries(transaction.customerInfo).map(([key, val]) => (
+              <p key={key} className="font-semibold">{val}</p>
+            ))}
+          </div>
+        </>
+      )}
 
       <div className="space-y-2 mb-3">
         {(transaction.items || []).filter(item => item && item.product).map((item, idx) => (
@@ -60,21 +95,25 @@ function ReceiptContent({ transaction, settings }: { transaction: Transaction; s
           <span className="font-mono">{transaction.totalAmount.toLocaleString()} so'm</span>
         </div>
         <div className="text-xs text-right text-black font-semibold uppercase">
-          To'lov: {transaction.paymentMethod === 'card' ? 'Karta' : 'Naqd'}
+          To'lov: {getPaymentLabel(transaction.paymentMethod)}
         </div>
       </div>
 
-      <div className="flex flex-col items-center my-4">
-        <img 
-          src={`https://api.qrserver.com/v1/create-qr-code/?size=100x100&data=https://t.me/${settings.telegramUsername}&color=000000`} 
-          alt="Telegram QR" 
-          className="w-20 h-20"
-        />
-      </div>
+      {settings.telegramUsername && (
+        <div className="flex flex-col items-center my-4">
+          <img 
+            src={`https://api.qrserver.com/v1/create-qr-code/?size=100x100&data=https://t.me/${settings.telegramUsername}&color=000000`} 
+            alt="Telegram QR" 
+            className="w-20 h-20"
+          />
+        </div>
+      )}
       
       <div className="text-center">
         <p className="text-xs text-black font-bold">{settings.receiptFooter}</p>
-        <p className="text-xs text-black font-semibold">Telegram: @{settings.telegramUsername}</p>
+        {settings.telegramUsername && (
+          <p className="text-xs text-black font-semibold">Telegram: @{settings.telegramUsername}</p>
+        )}
       </div>
     </>
   );
@@ -82,8 +121,32 @@ function ReceiptContent({ transaction, settings }: { transaction: Transaction; s
 
 export function ReceiptDialog({ transaction, isOpen, onClose }: ReceiptDialogProps) {
   const { settings } = useSettings();
+  const { token } = useAuth();
+  
+  const { data: tenantSettings } = useQuery<any>({
+    queryKey: ["tenant-settings"],
+    queryFn: async () => {
+      const res = await fetch("/api/tenant-settings", {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) return null;
+      return res.json();
+    },
+    enabled: !!token,
+    staleTime: 5 * 60 * 1000,
+  });
+
+  const receiptLogo = tenantSettings?.receiptLogo || tenantSettings?.logo;
   
   if (!transaction) return null;
+
+  const getPaymentLabel = (method: string) => {
+    if (tenantSettings?.paymentMethods) {
+      const found = tenantSettings.paymentMethods.find((m: any) => m.id === method);
+      if (found) return found.name;
+    }
+    return PAYMENT_LABELS[method] || method;
+  };
 
   const handlePrint = async () => {
     const printContainer = document.getElementById('receipt-print-container');
@@ -108,12 +171,16 @@ export function ReceiptDialog({ transaction, isOpen, onClose }: ReceiptDialogPro
   };
 
   useEffect(() => {
-    const logoImg = new Image();
-    logoImg.src = '/assets/image_1768471627048.png';
+    if (receiptLogo) {
+      const logoImg = new Image();
+      logoImg.src = receiptLogo;
+    }
     
-    const qrImg = new Image();
-    qrImg.src = `https://api.qrserver.com/v1/create-qr-code/?size=100x100&data=https://t.me/${settings.telegramUsername}&color=000000`;
-  }, [settings.telegramUsername]);
+    if (settings.telegramUsername) {
+      const qrImg = new Image();
+      qrImg.src = `https://api.qrserver.com/v1/create-qr-code/?size=100x100&data=https://t.me/${settings.telegramUsername}&color=000000`;
+    }
+  }, [settings.telegramUsername, receiptLogo]);
 
   useEffect(() => {
     let printContainer = document.getElementById('receipt-print-container');
@@ -125,9 +192,22 @@ export function ReceiptDialog({ transaction, isOpen, onClose }: ReceiptDialogPro
     }
     
     if (isOpen && transaction) {
+      const logoHtml = receiptLogo
+        ? `<img src="${receiptLogo}" alt="Logo" style="width:45px;height:45px;display:block;margin:0 auto 4px;object-fit:contain;">`
+        : `<div style="width:45px;height:45px;border-radius:50%;background:#eef2ff;display:flex;align-items:center;justify-content:center;margin:0 auto 4px;"><span style="font-size:24px;font-weight:900;color:#4f46e5;">${settings.storeName.charAt(0).toUpperCase()}</span></div>`;
+
+      const customerHtml = (transaction.customerName || transaction.customerPhone) ? `
+        <div style="border-top:1px dashed #666;margin:4px 0;"></div>
+        <div style="font-size:10px;color:#000;margin-bottom:4px;">
+          ${transaction.customerName ? `<p style="margin:0;font-weight:600;">Mijoz: ${transaction.customerName}</p>` : ''}
+          ${transaction.customerPhone ? `<p style="margin:0;font-weight:600;">Tel: ${transaction.customerPhone}</p>` : ''}
+          ${transaction.customerInfo ? Object.values(transaction.customerInfo).map(v => `<p style="margin:0;font-weight:600;">${v}</p>`).join('') : ''}
+        </div>
+      ` : '';
+
       printContainer.innerHTML = `
         <div style="text-align:center;margin-bottom:8px;">
-          <img src="/assets/image_1768471627048.png" alt="Logo" style="width:45px;height:45px;display:block;margin:0 auto 4px;">
+          ${logoHtml}
           <h2 style="font-size:14px;font-weight:900;margin:0;color:#000;">${settings.storeName.toUpperCase()}</h2>
           <p style="font-size:10px;color:#000;margin:2px 0;font-weight:600;">${settings.storeAddress}</p>
           <p style="font-size:10px;color:#000;margin:0;font-weight:600;">${settings.storePhone}</p>
@@ -137,6 +217,7 @@ export function ReceiptDialog({ transaction, isOpen, onClose }: ReceiptDialogPro
           <p style="margin:0;">Chek: ${transaction.id.slice(0, 8)}</p>
           <p style="margin:2px 0 0;">Sana: ${new Date(transaction.date).toLocaleDateString()}</p>
         </div>
+        ${customerHtml}
         <div style="border-top:1px dashed #000;margin:6px 0;"></div>
         <div style="margin-bottom:6px;">
           ${transaction.items.map(item => `
@@ -160,25 +241,26 @@ export function ReceiptDialog({ transaction, isOpen, onClose }: ReceiptDialogPro
             <td style="text-align:right;font-family:monospace;font-size:13px;font-weight:900;">${transaction.totalAmount.toLocaleString()} so'm</td>
           </tr>
           <tr>
-            <td colspan="2" style="text-align:right;font-size:9px;font-weight:600;">To'lov: ${transaction.paymentMethod === 'card' ? 'Karta' : 'Naqd'}</td>
+            <td colspan="2" style="text-align:right;font-size:9px;font-weight:600;">To'lov: ${getPaymentLabel(transaction.paymentMethod)}</td>
           </tr>
         </table>
+        ${settings.telegramUsername ? `
         <div style="text-align:center;margin:10px 0;">
           <img src="https://api.qrserver.com/v1/create-qr-code/?size=100x100&data=https://t.me/${settings.telegramUsername}&color=000000" alt="QR" style="width:60px;height:60px;display:block;margin:0 auto;">
-        </div>
+        </div>` : ''}
         <div style="text-align:center;">
           <p style="font-size:10px;color:#000;margin:0;font-weight:700;">${settings.receiptFooter}</p>
-          <p style="font-size:9px;color:#000;margin:2px 0 0;font-weight:600;">Telegram: @${settings.telegramUsername}</p>
+          ${settings.telegramUsername ? `<p style="font-size:9px;color:#000;margin:2px 0 0;font-weight:600;">Telegram: @${settings.telegramUsername}</p>` : ''}
         </div>
       `;
     }
-  }, [isOpen, transaction, settings]);
+  }, [isOpen, transaction, settings, receiptLogo, tenantSettings]);
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="sm:max-w-[380px] p-0 overflow-hidden bg-white gap-0 no-print">
         <div className="p-6 flex flex-col items-center text-center bg-white" id="receipt-area">
-          <ReceiptContent transaction={transaction} settings={settings} />
+          <ReceiptContent transaction={transaction} settings={settings} receiptLogo={receiptLogo} paymentMethods={tenantSettings?.paymentMethods} />
         </div>
 
         <div className="p-4 bg-gray-50 border-t flex gap-2 no-print">

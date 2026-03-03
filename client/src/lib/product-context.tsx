@@ -10,6 +10,8 @@ interface Product {
   author: string;
   price: number;
   costPrice: number;
+  barcodePrice?: number;
+  wholesalePrice?: number;
   stock: number;
   category: string;
   barcode: string;

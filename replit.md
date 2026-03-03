@@ -82,8 +82,20 @@ Key backend files:
 6. **Image Storage**: Cloudflare R2 with presigned URL uploads
 7. **Telegram**: Per-tenant bot token/chat ID for order notifications
 8. **Profit Tracking**: Cost price tracking with profit calculations
+9. **Configurable Payment Methods**: Per-tenant custom payment methods (add/edit/remove)
+10. **Configurable Product Fields**: Per-tenant custom product form fields
+11. **Customer Data on Transactions**: Optional customer info (name, phone, custom fields) attached to each sale
+12. **Multiple Price Types**: Regular price, barcode price (for labels), wholesale price
+13. **Barcode Label Printing**: JsBarcode with configurable label dimensions, font zoom slider (50-200%), barcodePrice support
+14. **Receipt Logo**: Per-tenant receipt logo upload with fallback to store initial
 
-### Recent Changes (Feb 2026)
+### Tenant Configuration (JSON columns on tenants table)
+- `payment_methods`: Array of `{id, name}` - custom payment methods for POS
+- `product_fields`: Array of `{key, label, required}` - custom product form fields
+- `customer_fields`: Array of `{key, label}` - optional customer info fields at checkout
+- `receipt_logo`: URL for receipt logo (falls back to tenant logo, then initial letter)
+
+### Recent Changes (Mar 2026)
 - Added multi-tenant database schema (tenants table, tenant_id on all tables)
 - Implemented JWT authentication with bcrypt password hashing
 - Built tenant middleware with in-memory caching

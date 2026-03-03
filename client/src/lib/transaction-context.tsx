@@ -9,16 +9,19 @@ export interface Transaction {
   items: CartItem[];
   totalAmount: number;
   totalProfit: number;
-  paymentMethod: "cash" | "card";
+  paymentMethod: string;
   synced?: boolean;
   status: "completed" | "voided" | "refunded";
+  customerName?: string;
+  customerPhone?: string;
+  customerInfo?: Record<string, string>;
 }
 
 interface TransactionContextType {
   transactions: Transaction[];
   pendingCount: number;
   isOffline: boolean;
-  addTransaction: (items: CartItem[], total: number, method: "cash" | "card") => Promise<Transaction>;
+  addTransaction: (items: CartItem[], total: number, method: string, customerData?: { customerName?: string; customerPhone?: string; customerInfo?: Record<string, string> }) => Promise<Transaction>;
   voidTransaction: (id: string) => Promise<void>;
   getStats: () => {
     todayTotal: number;
@@ -81,7 +84,7 @@ export function TransactionProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
-  const addTransaction = async (items: CartItem[], total: number, method: "cash" | "card"): Promise<Transaction> => {
+  const addTransaction = async (items: CartItem[], total: number, method: string, customerData?: { customerName?: string; customerPhone?: string; customerInfo?: Record<string, string> }): Promise<Transaction> => {
     const profit = items.reduce((acc, item) => {
       const costPrice = item.product.costPrice || 0;
       const discount = item.discount || 0;
@@ -101,7 +104,10 @@ export function TransactionProvider({ children }: { children: ReactNode }) {
       totalProfit: profit,
       paymentMethod: method,
       synced: false,
-      status: "completed"
+      status: "completed",
+      customerName: customerData?.customerName,
+      customerPhone: customerData?.customerPhone,
+      customerInfo: customerData?.customerInfo
     };
     
     await saveTransactionLocally(newTransaction);
@@ -125,7 +131,10 @@ export function TransactionProvider({ children }: { children: ReactNode }) {
       totalProfit: profit,
       paymentMethod: method,
       synced: newTransaction.synced,
-      status: "completed" as const
+      status: "completed" as const,
+      customerName: customerData?.customerName,
+      customerPhone: customerData?.customerPhone,
+      customerInfo: customerData?.customerInfo
     };
   };
 

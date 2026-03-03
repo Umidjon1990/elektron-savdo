@@ -103,7 +103,10 @@ export async function syncTransactionsFromServer(): Promise<CachedTransaction[]>
           totalProfit: txn.totalProfit || 0,
           paymentMethod: txn.paymentMethod,
           synced: true,
-          status: txn.status || 'completed'
+          status: txn.status || 'completed',
+          customerName: txn.customerName,
+          customerPhone: txn.customerPhone,
+          customerInfo: txn.customerInfo
         });
       }
     }
@@ -151,7 +154,10 @@ export async function syncPendingTransactions(): Promise<void> {
             price: item.product.price
           })),
           totalAmount: txn.totalAmount,
-          paymentMethod: txn.paymentMethod
+          paymentMethod: txn.paymentMethod,
+          customerName: txn.customerName,
+          customerPhone: txn.customerPhone,
+          customerInfo: txn.customerInfo
         })
       });
       

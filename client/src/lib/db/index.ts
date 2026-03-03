@@ -6,6 +6,8 @@ export interface CachedProduct {
   author: string;
   price: number;
   costPrice: number;
+  barcodePrice?: number;
+  wholesalePrice?: number;
   stock: number;
   category: string;
   barcode: string;
@@ -31,9 +33,12 @@ export interface CachedTransaction {
   }>;
   totalAmount: number;
   totalProfit: number;
-  paymentMethod: 'cash' | 'card';
+  paymentMethod: string;
   synced: boolean;
   status: 'completed' | 'voided' | 'refunded';
+  customerName?: string;
+  customerPhone?: string;
+  customerInfo?: Record<string, string>;
 }
 
 export interface SyncMeta {

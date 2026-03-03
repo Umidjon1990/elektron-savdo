@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import { SidebarNav } from "@/components/layout/sidebar-nav";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -9,8 +9,43 @@ import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
 import { useSettings } from "@/lib/settings-context";
 import { useAuth } from "@/lib/auth-context";
+import { useUpload } from "@/hooks/use-upload";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Store, Bell, Printer, Database, Shield, Palette, Receipt, Link2, Copy, Check, ExternalLink, Bot, Send } from "lucide-react";
+import { Store, Bell, Printer, Database, Shield, Palette, Receipt, Link2, Copy, Check, ExternalLink, Bot, Send, CreditCard, Plus, Trash2, Edit2, X, Package, Users, Image as ImageIcon, Upload, Loader2 } from "lucide-react";
+
+interface PaymentMethod {
+  id: string;
+  name: string;
+}
+
+interface ProductField {
+  key: string;
+  label: string;
+  required?: boolean;
+}
+
+interface CustomerField {
+  key: string;
+  label: string;
+}
+
+const DEFAULT_PAYMENT_METHODS: PaymentMethod[] = [
+  { id: "cash", name: "Naqd" },
+  { id: "card", name: "Karta" },
+  { id: "nasiya", name: "Nasiya" },
+];
+
+const DEFAULT_PRODUCT_FIELDS: ProductField[] = [
+  { key: "name", label: "Tovar nomi", required: true },
+  { key: "author", label: "Muallif", required: false },
+];
+
+const DEFAULT_CUSTOMER_FIELDS: CustomerField[] = [
+  { key: "name", label: "Ism familiya" },
+  { key: "phone", label: "Tel raqam" },
+  { key: "address", label: "MFY (Manzil)" },
+  { key: "note", label: "Izoh" },
+];
 
 export default function SettingsPage() {
   const { toast } = useToast();
@@ -22,6 +57,33 @@ export default function SettingsPage() {
   const [telegramBotToken, setTelegramBotToken] = useState("");
   const [telegramChatId, setTelegramChatId] = useState("");
 
+  const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>(DEFAULT_PAYMENT_METHODS);
+  const [newPaymentName, setNewPaymentName] = useState("");
+  const [editingPaymentId, setEditingPaymentId] = useState<string | null>(null);
+  const [editingPaymentName, setEditingPaymentName] = useState("");
+
+  const [productFields, setProductFields] = useState<ProductField[]>(DEFAULT_PRODUCT_FIELDS);
+  const [newFieldLabel, setNewFieldLabel] = useState("");
+  const [editingFieldKey, setEditingFieldKey] = useState<string | null>(null);
+  const [editingFieldLabel, setEditingFieldLabel] = useState("");
+
+  const [customerFields, setCustomerFields] = useState<CustomerField[]>(DEFAULT_CUSTOMER_FIELDS);
+  const [newCustomerFieldLabel, setNewCustomerFieldLabel] = useState("");
+
+  const [receiptLogo, setReceiptLogo] = useState<string>("");
+
+  const logoInputRef = useRef<HTMLInputElement>(null);
+
+  const { uploadFile, isUploading } = useUpload({
+    onSuccess: (response) => {
+      setReceiptLogo(response.objectPath);
+      toast({ title: "Logo saqlandi ✓", duration: 2000, className: "bg-green-500 text-white border-none" });
+    },
+    onError: () => {
+      toast({ title: "Logo yuklanmadi", variant: "destructive" });
+    }
+  });
+
   const { data: tenantSettings } = useQuery({
     queryKey: ["tenant-settings"],
     queryFn: async () => {
@@ -32,6 +94,10 @@ export default function SettingsPage() {
       const data = await res.json();
       if (data.telegramBotToken) setTelegramBotToken(data.telegramBotToken);
       if (data.telegramChatId) setTelegramChatId(data.telegramChatId);
+      if (data.paymentMethods) setPaymentMethods(data.paymentMethods);
+      if (data.productFields) setProductFields(data.productFields);
+      if (data.customerFields) setCustomerFields(data.customerFields);
+      if (data.receiptLogo) setReceiptLogo(data.receiptLogo);
       return data;
     },
     enabled: !!token,
@@ -55,6 +121,102 @@ export default function SettingsPage() {
       toast({ title: "Xatolik", description: "Telegram sozlamalarini saqlashda xatolik", variant: "destructive" });
     },
   });
+
+  const saveConfigMutation = useMutation({
+    mutationFn: async (data: Record<string, any>) => {
+      const res = await fetch("/api/tenant-settings", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify(data),
+      });
+      if (!res.ok) throw new Error("Failed to save");
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["tenant-settings"] });
+      toast({ title: "Saqlandi ✓", className: "bg-green-500 text-white border-none", duration: 2000 });
+    },
+    onError: () => {
+      toast({ title: "Xatolik", variant: "destructive" });
+    },
+  });
+
+  const addPaymentMethod = () => {
+    if (!newPaymentName.trim()) return;
+    const id = newPaymentName.trim().toLowerCase().replace(/\s+/g, "_") + "_" + Date.now();
+    const updated = [...paymentMethods, { id, name: newPaymentName.trim() }];
+    setPaymentMethods(updated);
+    setNewPaymentName("");
+    saveConfigMutation.mutate({ paymentMethods: updated });
+  };
+
+  const removePaymentMethod = (id: string) => {
+    const updated = paymentMethods.filter(m => m.id !== id);
+    setPaymentMethods(updated);
+    saveConfigMutation.mutate({ paymentMethods: updated });
+  };
+
+  const saveEditingPayment = () => {
+    if (!editingPaymentId || !editingPaymentName.trim()) return;
+    const updated = paymentMethods.map(m => m.id === editingPaymentId ? { ...m, name: editingPaymentName.trim() } : m);
+    setPaymentMethods(updated);
+    setEditingPaymentId(null);
+    saveConfigMutation.mutate({ paymentMethods: updated });
+  };
+
+  const addProductField = () => {
+    if (!newFieldLabel.trim()) return;
+    const key = "custom_" + Date.now();
+    const updated = [...productFields, { key, label: newFieldLabel.trim(), required: false }];
+    setProductFields(updated);
+    setNewFieldLabel("");
+    saveConfigMutation.mutate({ productFields: updated });
+  };
+
+  const removeProductField = (key: string) => {
+    if (key === "name") return;
+    const updated = productFields.filter(f => f.key !== key);
+    setProductFields(updated);
+    saveConfigMutation.mutate({ productFields: updated });
+  };
+
+  const saveEditingField = () => {
+    if (!editingFieldKey || !editingFieldLabel.trim()) return;
+    const updated = productFields.map(f => f.key === editingFieldKey ? { ...f, label: editingFieldLabel.trim() } : f);
+    setProductFields(updated);
+    setEditingFieldKey(null);
+    saveConfigMutation.mutate({ productFields: updated });
+  };
+
+  const addCustomerField = () => {
+    if (!newCustomerFieldLabel.trim()) return;
+    const key = "custom_" + Date.now();
+    const updated = [...customerFields, { key, label: newCustomerFieldLabel.trim() }];
+    setCustomerFields(updated);
+    setNewCustomerFieldLabel("");
+    saveConfigMutation.mutate({ customerFields: updated });
+  };
+
+  const removeCustomerField = (key: string) => {
+    const updated = customerFields.filter(f => f.key !== key);
+    setCustomerFields(updated);
+    saveConfigMutation.mutate({ customerFields: updated });
+  };
+
+  const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      if (file.size > 5 * 1024 * 1024) {
+        toast({ title: "Rasm hajmi juda katta", description: "5MB dan kichik rasm yuklang", variant: "destructive" });
+        return;
+      }
+      await uploadFile(file);
+    }
+  };
+
+  const saveReceiptLogo = () => {
+    saveConfigMutation.mutate({ receiptLogo });
+  };
 
   const handleSave = () => {
     toast({
@@ -122,6 +284,248 @@ export default function SettingsPage() {
                 </CardContent>
               </Card>
             )}
+
+            <Card className="border-green-200">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-green-800">
+                  <CreditCard className="h-5 w-5" />
+                  To'lov usullari
+                </CardTitle>
+                <CardDescription>Kassada ko'rinadigan to'lov usullarini sozlang</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <div className="space-y-2">
+                  {paymentMethods.map(method => (
+                    <div key={method.id} className="flex items-center gap-2 p-2 bg-gray-50 rounded-lg" data-testid={`payment-method-${method.id}`}>
+                      {editingPaymentId === method.id ? (
+                        <>
+                          <Input
+                            value={editingPaymentName}
+                            onChange={(e) => setEditingPaymentName(e.target.value)}
+                            className="h-8 flex-1"
+                            autoFocus
+                            onKeyDown={(e) => e.key === "Enter" && saveEditingPayment()}
+                          />
+                          <Button size="icon" variant="ghost" className="h-8 w-8 text-green-600" onClick={saveEditingPayment}>
+                            <Check className="h-4 w-4" />
+                          </Button>
+                          <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => setEditingPaymentId(null)}>
+                            <X className="h-4 w-4" />
+                          </Button>
+                        </>
+                      ) : (
+                        <>
+                          <span className="flex-1 font-medium text-sm">{method.name}</span>
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            className="h-8 w-8 text-muted-foreground hover:text-blue-600"
+                            onClick={() => { setEditingPaymentId(method.id); setEditingPaymentName(method.name); }}
+                          >
+                            <Edit2 className="h-3.5 w-3.5" />
+                          </Button>
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            className="h-8 w-8 text-muted-foreground hover:text-red-600"
+                            onClick={() => removePaymentMethod(method.id)}
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </Button>
+                        </>
+                      )}
+                    </div>
+                  ))}
+                </div>
+                <div className="flex gap-2">
+                  <Input
+                    placeholder="Yangi to'lov usuli nomi..."
+                    value={newPaymentName}
+                    onChange={(e) => setNewPaymentName(e.target.value)}
+                    className="h-9"
+                    onKeyDown={(e) => e.key === "Enter" && addPaymentMethod()}
+                    data-testid="input-new-payment-method"
+                  />
+                  <Button size="sm" className="h-9 gap-1" onClick={addPaymentMethod} disabled={!newPaymentName.trim()}>
+                    <Plus className="h-4 w-4" />
+                    Qo'shish
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="border-purple-200">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-purple-800">
+                  <Package className="h-5 w-5" />
+                  Mahsulot maydonlari
+                </CardTitle>
+                <CardDescription>Mahsulot qo'shish formasidagi maydonlarni sozlang. Birinchi maydon (nomi) o'chirilmaydi.</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <div className="space-y-2">
+                  {productFields.map(field => (
+                    <div key={field.key} className="flex items-center gap-2 p-2 bg-gray-50 rounded-lg" data-testid={`product-field-${field.key}`}>
+                      {editingFieldKey === field.key ? (
+                        <>
+                          <Input
+                            value={editingFieldLabel}
+                            onChange={(e) => setEditingFieldLabel(e.target.value)}
+                            className="h-8 flex-1"
+                            autoFocus
+                            onKeyDown={(e) => e.key === "Enter" && saveEditingField()}
+                          />
+                          <Button size="icon" variant="ghost" className="h-8 w-8 text-green-600" onClick={saveEditingField}>
+                            <Check className="h-4 w-4" />
+                          </Button>
+                          <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => setEditingFieldKey(null)}>
+                            <X className="h-4 w-4" />
+                          </Button>
+                        </>
+                      ) : (
+                        <>
+                          <span className="flex-1 font-medium text-sm">{field.label}</span>
+                          {field.required && <span className="text-xs text-orange-500 px-1.5 py-0.5 bg-orange-50 rounded">majburiy</span>}
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            className="h-8 w-8 text-muted-foreground hover:text-blue-600"
+                            onClick={() => { setEditingFieldKey(field.key); setEditingFieldLabel(field.label); }}
+                          >
+                            <Edit2 className="h-3.5 w-3.5" />
+                          </Button>
+                          {field.key !== "name" && (
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              className="h-8 w-8 text-muted-foreground hover:text-red-600"
+                              onClick={() => removeProductField(field.key)}
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </Button>
+                          )}
+                        </>
+                      )}
+                    </div>
+                  ))}
+                </div>
+                <div className="flex gap-2">
+                  <Input
+                    placeholder="Yangi maydon nomi..."
+                    value={newFieldLabel}
+                    onChange={(e) => setNewFieldLabel(e.target.value)}
+                    className="h-9"
+                    onKeyDown={(e) => e.key === "Enter" && addProductField()}
+                    data-testid="input-new-product-field"
+                  />
+                  <Button size="sm" className="h-9 gap-1" onClick={addProductField} disabled={!newFieldLabel.trim()}>
+                    <Plus className="h-4 w-4" />
+                    Qo'shish
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="border-orange-200">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-orange-800">
+                  <Users className="h-5 w-5" />
+                  Mijoz maydonlari
+                </CardTitle>
+                <CardDescription>Har bir haridda ixtiyoriy to'ldiriladigan mijoz ma'lumotlari</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <div className="space-y-2">
+                  {customerFields.map(field => (
+                    <div key={field.key} className="flex items-center gap-2 p-2 bg-gray-50 rounded-lg" data-testid={`customer-field-${field.key}`}>
+                      <span className="flex-1 font-medium text-sm">{field.label}</span>
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        className="h-8 w-8 text-muted-foreground hover:text-red-600"
+                        onClick={() => removeCustomerField(field.key)}
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+                <div className="flex gap-2">
+                  <Input
+                    placeholder="Yangi maydon nomi..."
+                    value={newCustomerFieldLabel}
+                    onChange={(e) => setNewCustomerFieldLabel(e.target.value)}
+                    className="h-9"
+                    onKeyDown={(e) => e.key === "Enter" && addCustomerField()}
+                    data-testid="input-new-customer-field"
+                  />
+                  <Button size="sm" className="h-9 gap-1" onClick={addCustomerField} disabled={!newCustomerFieldLabel.trim()}>
+                    <Plus className="h-4 w-4" />
+                    Qo'shish
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="border-pink-200">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-pink-800">
+                  <ImageIcon className="h-5 w-5" />
+                  Chek logotipi
+                </CardTitle>
+                <CardDescription>Sotuv chekida ko'rinadigan logotipni yuklang</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="flex items-center gap-4">
+                  <div
+                    className="w-20 h-20 bg-gray-100 rounded-lg border-2 border-dashed border-gray-300 flex items-center justify-center overflow-hidden cursor-pointer hover:bg-gray-50 transition-colors relative group"
+                    onClick={() => !isUploading && logoInputRef.current?.click()}
+                  >
+                    {isUploading ? (
+                      <div className="flex flex-col items-center text-blue-500">
+                        <Loader2 className="h-6 w-6 animate-spin" />
+                        <span className="text-[9px] mt-1">Yuklanmoqda</span>
+                      </div>
+                    ) : receiptLogo ? (
+                      <img src={receiptLogo} alt="Logo" className="w-full h-full object-contain" />
+                    ) : (
+                      <div className="flex flex-col items-center text-gray-400">
+                        <ImageIcon className="h-6 w-6" />
+                        <span className="text-[9px] mt-1">Logo yuklash</span>
+                      </div>
+                    )}
+                    {!isUploading && (
+                      <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity rounded-lg">
+                        <Upload className="h-5 w-5 text-white" />
+                      </div>
+                    )}
+                  </div>
+                  <input
+                    type="file"
+                    ref={logoInputRef}
+                    className="hidden"
+                    accept="image/*"
+                    onChange={handleLogoUpload}
+                    disabled={isUploading}
+                  />
+                  <div className="flex-1">
+                    <p className="text-sm text-muted-foreground">PNG yoki JPEG, 5MB gacha</p>
+                    {receiptLogo && (
+                      <div className="flex gap-2 mt-2">
+                        <Button size="sm" variant="outline" className="h-8 text-xs" onClick={saveReceiptLogo}>
+                          <Check className="h-3 w-3 mr-1" />
+                          Saqlash
+                        </Button>
+                        <Button size="sm" variant="ghost" className="h-8 text-xs text-red-600" onClick={() => { setReceiptLogo(""); saveConfigMutation.mutate({ receiptLogo: "" }); }}>
+                          <Trash2 className="h-3 w-3 mr-1" />
+                          O'chirish
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
 
             <Card>
               <CardHeader>

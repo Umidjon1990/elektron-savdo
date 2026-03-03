@@ -11,6 +11,7 @@ import type { Category } from "@shared/schema";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Search, ScanBarcode, Wifi, WifiOff, Bluetooth, RefreshCw, BookOpen, ShoppingCart, Filter, ChevronDown, Check, TrendingUp, DollarSign, CreditCard, Package, Pin } from "lucide-react";
+import { useAuth } from "@/lib/auth-context";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -40,7 +41,21 @@ export default function Dashboard() {
   const { products, updateStock, isOffline, refreshProducts } = useProducts();
   const { addTransaction, getStats, pendingCount, syncTransactions } = useTransactions();
   const { settings } = useSettings();
+  const { token } = useAuth();
   const stats = getStats();
+
+  const { data: tenantSettings } = useQuery<any>({
+    queryKey: ["tenant-settings"],
+    queryFn: async () => {
+      const res = await fetch("/api/tenant-settings", {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) return null;
+      return res.json();
+    },
+    enabled: !!token,
+    staleTime: 5 * 60 * 1000,
+  });
   
   const { data: categories = [] } = useQuery<Category[]>({
     queryKey: ["/api/categories"],
@@ -226,7 +241,7 @@ export default function Dashboard() {
 
   const clearCart = () => setCart([]);
 
-  const handleCheckout = async () => {
+  const handleCheckout = async (method: string = "cash", customerData?: { customerName?: string; customerPhone?: string; customerInfo?: Record<string, string> }) => {
     const total = cart.reduce((acc, item) => {
       const itemTotal = item.product.price * item.quantity;
       const discount = item.discount || 0;
@@ -234,10 +249,8 @@ export default function Dashboard() {
     }, 0);
     
     try {
-      // Process transaction (async)
-      const transaction = await addTransaction(cart, total, "cash");
+      const transaction = await addTransaction(cart, total, method, customerData);
       
-      // Update stock
       cart.forEach(item => {
         updateStock(item.product.id, -item.quantity);
       });
@@ -426,6 +439,8 @@ export default function Dashboard() {
                   onRemove={removeFromCart}
                   onClear={clearCart}
                   onCheckout={handleCheckout}
+                  paymentMethods={tenantSettings?.paymentMethods}
+                  customerFields={tenantSettings?.customerFields}
                 />
               </SheetContent>
             </Sheet>
@@ -607,6 +622,8 @@ export default function Dashboard() {
               onRemove={removeFromCart}
               onClear={clearCart}
               onCheckout={handleCheckout}
+              paymentMethods={tenantSettings?.paymentMethods}
+              customerFields={tenantSettings?.customerFields}
             />
           </div>
         </div>

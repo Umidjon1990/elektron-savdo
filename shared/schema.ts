@@ -19,6 +19,10 @@ export const tenants = pgTable("tenants", {
   maxUsers: integer("max_users").notNull().default(1),
   ownerUsername: text("owner_username"),
   ownerPassword: text("owner_password"),
+  paymentMethods: json("payment_methods").$type<Array<{id: string, name: string}>>(),
+  productFields: json("product_fields").$type<Array<{key: string, label: string, required?: boolean}>>(),
+  customerFields: json("customer_fields").$type<Array<{key: string, label: string}>>(),
+  receiptLogo: text("receipt_logo"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
@@ -40,6 +44,8 @@ export const products = pgTable("products", {
   author: text("author").notNull(),
   price: integer("price").notNull(),
   costPrice: integer("cost_price").notNull().default(0),
+  barcodePrice: integer("barcode_price"),
+  wholesalePrice: integer("wholesale_price"),
   stock: integer("stock").notNull(),
   category: text("category").notNull(),
   barcode: text("barcode").notNull(),
@@ -84,6 +90,9 @@ export const transactions = pgTable("transactions", {
   totalProfit: integer("total_profit").notNull().default(0),
   paymentMethod: text("payment_method").notNull(),
   status: text("status").notNull().default("completed"),
+  customerName: text("customer_name"),
+  customerPhone: text("customer_phone"),
+  customerInfo: json("customer_info").$type<Record<string, string>>(),
 });
 
 // Insert schemas

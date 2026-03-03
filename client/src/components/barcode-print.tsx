@@ -5,13 +5,14 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Slider } from "@/components/ui/slider";
-import { Printer, Minus, Plus, Search } from "lucide-react";
+import { Printer, Minus, Plus, Search, Type } from "lucide-react";
 
 interface ProductForPrint {
   id: string;
   name: string;
   barcode: string;
   price: number;
+  barcodePrice?: number;
 }
 
 interface BarcodePrintProps {
@@ -34,17 +35,18 @@ const PRESETS = [
   { label: "58×40", w: 58, h: 40 },
 ];
 
-function BarcodeLabel({ product, dims, showPrice }: { product: ProductForPrint; dims: LabelDims; showPrice: boolean }) {
+function BarcodeLabel({ product, dims, showPrice, fontScale }: { product: ProductForPrint; dims: LabelDims; showPrice: boolean; fontScale: number }) {
   const svgRef = useRef<SVGSVGElement>(null);
 
   useEffect(() => {
     if (!svgRef.current) return;
+    const baseFontSize = Math.max(7, Math.min(12, dims.width / 5));
     const barcodeOpts = {
       format: "CODE128" as string,
       width: Math.max(0.8, Math.min(2, dims.width / 40)),
       height: dims.barcodeHeight,
       displayValue: true,
-      fontSize: Math.max(7, Math.min(12, dims.width / 5)),
+      fontSize: baseFontSize * fontScale,
       margin: 0,
       textMargin: 1,
       font: "monospace",
@@ -58,10 +60,14 @@ function BarcodeLabel({ product, dims, showPrice }: { product: ProductForPrint; 
       barcodeOpts.format = "CODE128";
       JsBarcode(svgRef.current, product.barcode, barcodeOpts);
     }
-  }, [product.barcode, dims]);
+  }, [product.barcode, dims, fontScale]);
 
-  const nameFontSize = Math.max(5, Math.min(10, dims.width / 6));
-  const priceFontSize = Math.max(6, Math.min(11, dims.width / 5.5));
+  const baseNameFontSize = Math.max(5, Math.min(10, dims.width / 6));
+  const basePriceFontSize = Math.max(6, Math.min(11, dims.width / 5.5));
+  const nameFontSize = baseNameFontSize * fontScale;
+  const priceFontSize = basePriceFontSize * fontScale;
+
+  const displayPrice = product.barcodePrice || product.price;
 
   return (
     <div
@@ -88,7 +94,7 @@ function BarcodeLabel({ product, dims, showPrice }: { product: ProductForPrint; 
       <svg ref={svgRef} style={{ maxWidth: "100%", flex: "0 0 auto" }} />
       {showPrice && (
         <div className="font-bold text-center" style={{ fontSize: `${priceFontSize}px` }}>
-          {product.price.toLocaleString()} so'm
+          {displayPrice.toLocaleString()} so'm
         </div>
       )}
     </div>
@@ -98,6 +104,7 @@ function BarcodeLabel({ product, dims, showPrice }: { product: ProductForPrint; 
 export default function BarcodePrintDialog({ products, open, onClose }: BarcodePrintProps) {
   const [dims, setDims] = useState<LabelDims>({ width: 50, height: 30, barcodeHeight: 30 });
   const [showPrice, setShowPrice] = useState(true);
+  const [fontScale, setFontScale] = useState(1);
   const [copies, setCopies] = useState<Record<string, number>>({});
   const [selected, setSelected] = useState<Record<string, boolean>>({});
   const [searchQuery, setSearchQuery] = useState("");
@@ -287,6 +294,23 @@ export default function BarcodePrintDialog({ products, open, onClose }: BarcodeP
                 data-testid="slider-barcode-height"
               />
             </div>
+            <div className="space-y-1">
+              <div className="flex items-center justify-between">
+                <Label className="text-xs text-muted-foreground flex items-center gap-1.5">
+                  <Type className="h-3.5 w-3.5" />
+                  Matn o'lchami: {Math.round(fontScale * 100)}%
+                </Label>
+              </div>
+              <Slider
+                value={[fontScale * 100]}
+                onValueChange={(v) => setFontScale(v[0] / 100)}
+                min={50}
+                max={200}
+                step={5}
+                className="w-full"
+                data-testid="slider-font-scale"
+              />
+            </div>
             <div className="flex items-center gap-2">
               <input
                 type="checkbox"
@@ -296,6 +320,7 @@ export default function BarcodePrintDialog({ products, open, onClose }: BarcodeP
                 data-testid="checkbox-show-price"
               />
               <span className="text-sm">Narxni etiketkaga qo'shish</span>
+              <span className="text-xs text-muted-foreground">(barkod narxi mavjud bo'lsa, u ko'rinadi)</span>
             </div>
           </div>
 
@@ -338,6 +363,9 @@ export default function BarcodePrintDialog({ products, open, onClose }: BarcodeP
                     <div className="text-sm font-medium truncate">{p.name}</div>
                     <div className="text-xs text-muted-foreground font-mono">{p.barcode}</div>
                   </div>
+                  <div className="text-xs text-muted-foreground shrink-0">
+                    {(p.barcodePrice || p.price).toLocaleString()} so'm
+                  </div>
                   {selected[p.id] && (
                     <div className="flex items-center gap-1 shrink-0">
                       <Button
@@ -377,7 +405,7 @@ export default function BarcodePrintDialog({ products, open, onClose }: BarcodeP
               <div className="text-sm font-medium mb-2">Ko'rinish ({totalLabels} ta etiketka)</div>
               <div ref={printRef} className="flex flex-wrap gap-1 justify-center overflow-y-auto max-h-[250px]">
                 {labelsToRender.map((p, i) => (
-                  <BarcodeLabel key={`${p.id}-${i}`} product={p} dims={dims} showPrice={showPrice} />
+                  <BarcodeLabel key={`${p.id}-${i}`} product={p} dims={dims} showPrice={showPrice} fontScale={fontScale} />
                 ))}
               </div>
             </div>

@@ -1,8 +1,8 @@
-# Kitoblar Olami - Multi-Tenant SaaS POS System
+# E-Savdo Platform - Multi-Tenant SaaS POS System
 
 ## Overview
 
-Multi-tenant SaaS Point of Sale system for bookstores in Uzbekistan. Each bookstore subscriber gets their own subdomain, branding (logo, colors), and isolated data. Built as a full-stack TypeScript application with React frontend and Express backend using PostgreSQL.
+Multi-tenant SaaS Point of Sale system for general stores in Uzbekistan. Each store subscriber gets their own branded storefront, admin panel, and isolated data. Built as a full-stack TypeScript application with React frontend and Express backend using PostgreSQL. The platform is fully generic (not book-specific) and supports any type of product/goods.
 
 The system supports:
 - Multi-tenant architecture with shared database and tenant_id isolation

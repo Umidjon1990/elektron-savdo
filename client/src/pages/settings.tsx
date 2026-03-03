@@ -37,7 +37,7 @@ const DEFAULT_PAYMENT_METHODS: PaymentMethod[] = [
 
 const DEFAULT_PRODUCT_FIELDS: ProductField[] = [
   { key: "name", label: "Tovar nomi", required: true },
-  { key: "author", label: "Muallif", required: false },
+  { key: "description", label: "Tavsif", required: false },
 ];
 
 const DEFAULT_CUSTOMER_FIELDS: CustomerField[] = [

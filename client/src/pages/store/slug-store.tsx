@@ -4,7 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Search, ShoppingCart, ArrowRight, BookOpen, Truck, ShieldCheck, Phone, Play } from "lucide-react";
+import { Search, ShoppingCart, ArrowRight, Store, Truck, ShieldCheck, Phone, Play } from "lucide-react";
 import { VideoPopup } from "@/components/ui/video-popup";
 import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
@@ -20,7 +20,7 @@ interface TenantInfo {
 interface Product {
   id: string;
   name: string;
-  author: string;
+  author?: string;
   price: number;
   stock: number;
   category: string;
@@ -162,7 +162,7 @@ export default function SlugStorePage() {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-slate-50 p-4 text-center">
         <div className="w-20 h-20 bg-red-50 rounded-full flex items-center justify-center mb-4">
-          <BookOpen className="h-10 w-10 text-red-400" />
+          <Store className="h-10 w-10 text-red-400" />
         </div>
         <h1 className="text-2xl font-bold text-slate-900 mb-2">Do'kon topilmadi</h1>
         <p className="text-slate-500 mb-6">"{slug}" nomli do'kon mavjud emas</p>
@@ -177,7 +177,7 @@ export default function SlugStorePage() {
 
   const filteredProducts = products.filter(p =>
     (activeCategory === "Barchasi" || p.category === activeCategory) &&
-    (p.name.toLowerCase().includes(searchQuery.toLowerCase()) || p.author.toLowerCase().includes(searchQuery.toLowerCase()))
+    (p.name.toLowerCase().includes(searchQuery.toLowerCase()) || (p.author || "").toLowerCase().includes(searchQuery.toLowerCase()))
   );
 
   const newProducts = products.filter(p => p.isNew);
@@ -191,7 +191,7 @@ export default function SlugStorePage() {
               <img src={tenant.logo} alt={tenant.name} className="w-10 h-10 rounded-xl object-cover shadow-lg" />
             ) : (
               <div className="w-10 h-10 rounded-xl flex items-center justify-center text-white shadow-lg" style={{ backgroundColor: brandColor }}>
-                <BookOpen className="h-6 w-6" />
+                <Store className="h-6 w-6" />
               </div>
             )}
             <span className="text-xl font-bold hidden sm:block" style={{ color: brandColor }} data-testid="text-store-name">
@@ -202,7 +202,7 @@ export default function SlugStorePage() {
           <div className="hidden md:flex flex-1 max-w-md mx-8 relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
             <Input
-              placeholder="Kitob yoki muallifni qidiring..."
+              placeholder="Tovar qidiring..."
               className="pl-10 bg-slate-100 border-transparent focus:bg-white transition-all rounded-full"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
@@ -368,7 +368,7 @@ export default function SlugStorePage() {
                     <div className="flex-1 flex flex-col">
                       <div className="text-xs font-medium mb-1 text-amber-600">{product.category}</div>
                       <h3 className="font-bold leading-tight mb-1 line-clamp-2 text-amber-900">{product.name}</h3>
-                      <p className="text-sm text-slate-500 mb-3">{product.author}</p>
+                      {product.author && <p className="text-sm text-slate-500 mb-3">{product.author}</p>}
                       <div className="mt-auto flex items-center justify-between">
                         <div className="font-bold text-lg text-amber-700">
                           {product.price.toLocaleString()} <span className="text-xs text-slate-500 font-normal">so'm</span>
@@ -454,7 +454,7 @@ export default function SlugStorePage() {
                       "font-bold leading-tight mb-1 line-clamp-2",
                       product.isNew ? "text-amber-900" : "text-slate-900"
                     )}>{product.name}</h3>
-                    <p className="text-sm text-slate-500 mb-3">{product.author}</p>
+                    {product.author && <p className="text-sm text-slate-500 mb-3">{product.author}</p>}
                     <div className="mt-auto flex items-center justify-between">
                       <div className={cn(
                         "font-bold text-lg",

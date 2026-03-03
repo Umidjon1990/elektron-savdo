@@ -193,7 +193,7 @@ function HomeRedirect() {
     return <Redirect to={`/store/${defaultSlug}`} />;
   }
 
-  return <Redirect to="/store/kitoblar-olami" />;
+  return <Redirect to="/stores" />;
 }
 
 function Router() {

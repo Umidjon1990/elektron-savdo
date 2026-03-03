@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
-import { Lock, BookOpen } from "lucide-react";
+import { Lock, Store } from "lucide-react";
 import { useLocation, useParams } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 
@@ -107,7 +107,7 @@ export default function SlugLoginPage() {
         </CardContent>
         <CardFooter className="flex justify-center">
           <Button variant="link" onClick={() => setLocation(`/store/${slug}`)} style={{ color: brandColor }} data-testid="link-back-store">
-            <BookOpen className="h-4 w-4 mr-1" /> Do'konga qaytish
+            <Store className="h-4 w-4 mr-1" /> Do'konga qaytish
           </Button>
         </CardFooter>
       </Card>

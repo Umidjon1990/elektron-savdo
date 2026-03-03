@@ -93,7 +93,7 @@ export default function CartPage() {
         </div>
         <h1 className="text-2xl font-bold text-slate-900 mb-2">Savatchangiz bo'sh</h1>
         <p className="text-slate-500 mb-8 max-w-sm">
-          Siz hali hech qanday kitob tanlamadingiz. Katalogga qaytib, o'zingizga yoqqan kitoblarni tanlang.
+          Siz hali hech qanday tovar tanlamadingiz. Katalogga qaytib, o'zingizga yoqqan tovarlarni tanlang.
         </p>
         <Button onClick={() => setLocation("/")} className="bg-indigo-600 hover:bg-indigo-700">
           <ArrowLeft className="mr-2 h-4 w-4" /> Katalogga qaytish
@@ -125,7 +125,7 @@ export default function CartPage() {
                 <div className="flex-1 flex flex-col justify-between">
                   <div>
                     <h3 className="font-bold text-slate-900 line-clamp-2">{item.product.name}</h3>
-                    <p className="text-sm text-slate-500">{item.product.author}</p>
+                    {item.product.author && <p className="text-sm text-slate-500">{item.product.author}</p>}
                     <div className="text-indigo-600 font-bold mt-1">
                       {item.product.price.toLocaleString()} so'm
                     </div>

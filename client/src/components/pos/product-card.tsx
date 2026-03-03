@@ -2,7 +2,7 @@ import { useState } from "react";
 import { type Product } from "@/data/mock-products";
 import { Card } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
-import { BookOpen, Plus, ShoppingCart, Play } from "lucide-react";
+import { Package, Plus, ShoppingCart, Play } from "lucide-react";
 import { VideoPopup } from "@/components/ui/video-popup";
 
 interface ProductCardProps {
@@ -45,7 +45,7 @@ export function ProductCard({ product, onClick, size = "default" }: ProductCardP
         )}
         {(!imgLoaded || imgError) && (
           <div className="absolute inset-0 flex flex-col items-center justify-center bg-gradient-to-b from-blue-50 to-slate-100 p-4">
-            <BookOpen className={cn("text-blue-300 mb-2", isLarge ? "w-12 h-12" : "w-8 h-8")} />
+            <Package className={cn("text-blue-300 mb-2", isLarge ? "w-12 h-12" : "w-8 h-8")} />
             <p className={cn("text-slate-600 font-medium text-center line-clamp-2", isLarge ? "text-sm" : "text-xs")}>
               {product.name}
             </p>

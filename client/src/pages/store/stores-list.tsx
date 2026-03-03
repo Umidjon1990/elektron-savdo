@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
-import { BookOpen, Store, ArrowRight, Search } from "lucide-react";
+import { Store, ArrowRight, Search } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { useState } from "react";
 import { motion } from "framer-motion";
@@ -39,10 +39,10 @@ export default function StoresListPage() {
         <div className="container mx-auto px-4 h-16 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <div className="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center text-white shadow-lg shadow-indigo-200">
-              <BookOpen className="h-6 w-6" />
+              <Store className="h-6 w-6" />
             </div>
             <span className="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-indigo-600 to-violet-600 hidden sm:block">
-              Kitoblar Olami
+              E-Savdo Platform
             </span>
           </div>
           <Button className="bg-indigo-600 hover:bg-indigo-700 text-white rounded-full px-6" onClick={() => setLocation("/login")} data-testid="button-admin-login">

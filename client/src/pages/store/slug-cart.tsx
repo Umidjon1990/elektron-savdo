@@ -8,13 +8,13 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Separator } from "@/components/ui/separator";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Trash2, Plus, Minus, ArrowLeft, ShoppingBag, Send, BookOpen } from "lucide-react";
+import { Trash2, Plus, Minus, ArrowLeft, ShoppingBag, Send, Store } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 interface Product {
   id: string;
   name: string;
-  author: string;
+  author?: string;
   price: number;
   stock: number;
   category: string;
@@ -157,7 +157,7 @@ export default function SlugCartPage() {
               <img src={tenant.logo} alt={tenant.name} className="w-8 h-8 rounded-lg object-cover" />
             ) : (
               <div className="w-8 h-8 rounded-lg flex items-center justify-center text-white" style={{ backgroundColor: brandColor }}>
-                <BookOpen className="h-4 w-4" />
+                <Store className="h-4 w-4" />
               </div>
             )}
             <h1 className="text-xl font-bold">Savatcha</h1>
@@ -176,7 +176,7 @@ export default function SlugCartPage() {
                 <div className="flex-1 flex flex-col justify-between">
                   <div>
                     <h3 className="font-bold text-slate-900 line-clamp-2">{item.product.name}</h3>
-                    <p className="text-sm text-slate-500">{item.product.author}</p>
+                    {item.product.author && <p className="text-sm text-slate-500">{item.product.author}</p>}
                     <div className="font-bold mt-1" style={{ color: brandColor }}>{item.product.price.toLocaleString()} so'm</div>
                   </div>
                   <div className="flex items-center justify-between mt-4">

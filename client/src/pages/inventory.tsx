@@ -77,7 +77,7 @@ export default function Inventory() {
 
   const productFields = tenantSettings?.productFields || [
     { key: "name", label: "Tovar nomi", required: true },
-    { key: "author", label: "Muallif", required: false },
+    { key: "description", label: "Tavsif", required: false },
   ];
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   
@@ -214,7 +214,7 @@ export default function Inventory() {
     
     if (existing) {
       toast({
-        title: "Kitob mavjud!",
+        title: "Tovar mavjud!",
         description: `"${existing.name}" allaqachon bazada bor.`,
       });
       // Automatically open restock dialog for existing item
@@ -235,7 +235,7 @@ export default function Inventory() {
         image: knownBook.image
       }));
       toast({
-        title: "Kitob topildi!",
+        title: "Tovar topildi!",
         description: "Ma'lumotlar avtomatik to'ldirildi",
       });
     } else {
@@ -722,7 +722,7 @@ export default function Inventory() {
                   <TableRow>
                     <TableHead className="w-[60px]">Tartib</TableHead>
                     <TableHead className="w-[80px]">Rasm</TableHead>
-                    <TableHead>Nomi / Muallif</TableHead>
+                    <TableHead>Nomi</TableHead>
                     <TableHead>Kategoriya</TableHead>
                     <TableHead>Shtrix kod</TableHead>
                     <TableHead className="text-right">Narxi</TableHead>
@@ -930,7 +930,7 @@ export default function Inventory() {
           </DialogHeader>
           <div className="grid gap-4 py-4">
             <div className="space-y-2">
-              <Label>Kitob</Label>
+              <Label>Tovar</Label>
               <div className="font-medium">{restockProduct?.name}</div>
             </div>
             <div className="space-y-2">

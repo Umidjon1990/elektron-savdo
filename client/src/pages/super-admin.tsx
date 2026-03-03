@@ -225,7 +225,7 @@ export default function SuperAdminPage() {
                   <div>
                     <label className="text-sm font-medium text-slate-700 mb-1 block">Do'kon nomi</label>
                     <Input
-                      placeholder="Masalan: Kitob Dunyosi"
+                      placeholder="Masalan: Mening Do'konim"
                       value={newStore.storeName}
                       onChange={(e) => {
                         const name = e.target.value;
@@ -237,7 +237,7 @@ export default function SuperAdminPage() {
                   <div>
                     <label className="text-sm font-medium text-slate-700 mb-1 block">Slug (URL manzili)</label>
                     <Input
-                      placeholder="kitob-dunyosi"
+                      placeholder="mening-dokonim"
                       value={newStore.slug}
                       onChange={(e) => setNewStore((s) => ({ ...s, slug: e.target.value }))}
                       data-testid="input-store-slug"

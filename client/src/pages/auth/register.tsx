@@ -100,7 +100,7 @@ export default function RegisterPage() {
   ];
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-[#0a0a1a] p-4 relative overflow-hidden">
+    <div className="dark-form min-h-screen flex items-center justify-center bg-[#0a0a1a] p-4 relative overflow-hidden">
       <div className="absolute inset-0 overflow-hidden">
         <div className="absolute top-1/4 right-1/4 w-[400px] h-[400px] bg-emerald-600/10 rounded-full blur-[100px]" />
         <div className="absolute bottom-1/4 left-1/4 w-[300px] h-[300px] bg-indigo-600/15 rounded-full blur-[80px]" />
@@ -158,7 +158,7 @@ export default function RegisterPage() {
                   id="storeName"
                   data-testid="input-store-name"
                   type="text"
-                  placeholder="Masalan: Oltin Kitob"
+                  placeholder="Masalan: Mening Do'konim"
                   value={storeName}
                   onChange={(e) => handleStoreNameChange(e.target.value)}
                   required
@@ -174,7 +174,7 @@ export default function RegisterPage() {
                     id="slug"
                     data-testid="input-slug"
                     type="text"
-                    placeholder="oltin-kitob"
+                    placeholder="mening-dokonim"
                     value={slug}
                     onChange={(e) => setSlug(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ""))}
                     required

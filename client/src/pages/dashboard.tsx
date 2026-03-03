@@ -10,7 +10,7 @@ import type { Product } from "@/data/mock-products";
 import type { Category } from "@shared/schema";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Search, ScanBarcode, Wifi, WifiOff, Bluetooth, RefreshCw, BookOpen, ShoppingCart, Filter, ChevronDown, Check, TrendingUp, DollarSign, CreditCard, Package, Pin } from "lucide-react";
+import { Search, ScanBarcode, Wifi, WifiOff, Bluetooth, RefreshCw, Package as PackageIcon, ShoppingCart, Filter, ChevronDown, Check, TrendingUp, DollarSign, CreditCard, Package, Pin } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
 import {
   DropdownMenu,
@@ -316,7 +316,7 @@ export default function Dashboard() {
     } else {
       toast({
         title: "Xatolik",
-        description: `Kitob topilmadi: ${code}`,
+        description: `Tovar topilmadi: ${code}`,
         variant: "destructive",
         action: (
            <Button variant="outline" size="sm" className="bg-white text-black border-none hover:bg-gray-100" onClick={() => {
@@ -589,7 +589,7 @@ export default function Dashboard() {
                   ))}
                 </DropdownMenuContent>
               </DropdownMenu>
-              <span style={{color: '#64748b', fontSize: '14px'}}>{filteredProducts.length} ta kitob</span>
+              <span style={{color: '#64748b', fontSize: '14px'}}>{filteredProducts.length} ta tovar</span>
             </div>
 
             {/* Product Grid */}
@@ -606,8 +606,8 @@ export default function Dashboard() {
               </div>
               {filteredProducts.length === 0 && (
                 <div className="h-64 flex flex-col items-center justify-center text-muted-foreground">
-                  <BookOpen className="h-12 w-12 mb-4 opacity-20" />
-                  <p>Kitoblar topilmadi</p>
+                  <PackageIcon className="h-12 w-12 mb-4 opacity-20" />
+                  <p>Tovarlar topilmadi</p>
                 </div>
               )}
             </div>

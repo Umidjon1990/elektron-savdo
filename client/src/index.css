@@ -62,6 +62,16 @@
     color: #1e293b !important;
     background-color: #ffffff !important;
   }
+  .dark-form input,
+  .dark-form textarea,
+  .dark-form select {
+    color: #ffffff !important;
+    background-color: rgba(255, 255, 255, 0.05) !important;
+  }
+  .dark-form input::placeholder,
+  .dark-form textarea::placeholder {
+    color: rgba(255, 255, 255, 0.3) !important;
+  }
   button {
     color: inherit;
   }

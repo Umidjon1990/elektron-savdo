@@ -3,7 +3,7 @@ import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Search, ShoppingCart, Menu, ArrowRight, Star, TrendingUp, BookOpen, Truck, ShieldCheck, Phone, Play } from "lucide-react";
+import { Search, ShoppingCart, Menu, ArrowRight, Star, TrendingUp, Store, Truck, ShieldCheck, Phone, Play } from "lucide-react";
 import { VideoPopup } from "@/components/ui/video-popup";
 import { motion, AnimatePresence } from "framer-motion";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
@@ -78,7 +78,7 @@ export default function StoreHome() {
   
   const filteredProducts = products.filter(p => 
     (activeCategory === "Barchasi" || p.category === activeCategory) &&
-    (p.name.toLowerCase().includes(searchQuery.toLowerCase()) || p.author.toLowerCase().includes(searchQuery.toLowerCase()))
+    (p.name.toLowerCase().includes(searchQuery.toLowerCase()) || (p.author || "").toLowerCase().includes(searchQuery.toLowerCase()))
   );
 
   const featuredProducts = products.slice(0, 4); // Just taking first 4 as featured for now
@@ -90,17 +90,17 @@ export default function StoreHome() {
         <div className="container mx-auto px-4 h-16 flex items-center justify-between">
           <div className="flex items-center gap-2 cursor-pointer" onClick={() => setLocation("/")}>
             <div className="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center text-white shadow-lg shadow-indigo-200">
-              <BookOpen className="h-6 w-6" />
+              <Store className="h-6 w-6" />
             </div>
             <span className="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-indigo-600 to-violet-600 hidden sm:block">
-              Kitoblar Olami
+              E-Savdo
             </span>
           </div>
 
           <div className="hidden md:flex flex-1 max-w-md mx-8 relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
             <Input 
-              placeholder="Kitob yoki muallifni qidiring..." 
+              placeholder="Tovar qidiring..." 
               className="pl-10 bg-slate-100 border-transparent focus:bg-white transition-all rounded-full"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
@@ -146,7 +146,7 @@ export default function StoreHome() {
                 <span className="text-indigo-600">zamonaviy usuli</span>
               </h1>
               <p className="text-lg text-slate-600 mb-8 leading-relaxed">
-                Minglab kitoblar orasidan o'zingizga mosini toping. Bizda badiiy adabiyotdan tortib, biznes va IT sohasigacha barcha turdagi qo'llanmalar mavjud.
+                Minglab tovarlar orasidan o'zingizga mosini toping. Bizda barcha turdagi mahsulotlar mavjud.
               </p>
               <div className="flex items-center justify-center gap-4">
                 <Button size="lg" className="h-12 px-8 bg-indigo-600 hover:bg-indigo-700 text-white rounded-full shadow-xl shadow-indigo-200 transition-transform hover:scale-105" onClick={() => {
@@ -279,7 +279,7 @@ export default function StoreHome() {
                 <div className="flex-1 flex flex-col">
                   <div className="text-xs text-indigo-600 font-medium mb-1">{product.category}</div>
                   <h3 className="font-bold text-slate-900 leading-tight mb-1 line-clamp-2">{product.name}</h3>
-                  <p className="text-sm text-slate-500 mb-3">{product.author}</p>
+                  {product.author && <p className="text-sm text-slate-500 mb-3">{product.author}</p>}
                   
                   <div className="mt-auto flex items-center justify-between">
                     <div className="font-bold text-lg text-slate-900">

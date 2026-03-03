@@ -39,7 +39,7 @@ export default function History() {
       setVoidingId(id);
       await voidTransaction(id);
       toast.success("Chek bekor qilindi", {
-        description: "Kitoblar zaxiraga qaytarildi"
+        description: "Tovarlar zaxiraga qaytarildi"
       });
     } catch (error) {
       toast.error("Xatolik yuz berdi", {
@@ -182,7 +182,7 @@ export default function History() {
                     8%
                   </div>
                 </div>
-                <p className="text-xs opacity-80 mb-0.5">Sotilgan kitob</p>
+                <p className="text-xs opacity-80 mb-0.5">Sotilgan tovar</p>
                 <p className="text-xl md:text-2xl font-bold">{stats.totalItemsSold}</p>
                 <p className="text-[10px] opacity-60 mt-1">dona jami</p>
               </CardContent>
@@ -456,7 +456,7 @@ export default function History() {
                                   <AlertDialogHeader>
                                     <AlertDialogTitle>Chekni bekor qilish</AlertDialogTitle>
                                     <AlertDialogDescription>
-                                      Bu chekni bekor qilmoqchimisiz? Kitoblar zaxiraga qaytariladi. Bu amalni ortga qaytarib bo'lmaydi.
+                                      Bu chekni bekor qilmoqchimisiz? Tovarlar zaxiraga qaytariladi. Bu amalni ortga qaytarib bo'lmaydi.
                                     </AlertDialogDescription>
                                   </AlertDialogHeader>
                                   <AlertDialogFooter>
@@ -493,7 +493,7 @@ export default function History() {
                 <div className="flex items-center gap-6">
                   <div className="text-center">
                     <p className="text-2xl font-bold">{stats.totalItemsSold}</p>
-                    <p className="text-xs opacity-70">Kitoblar</p>
+                    <p className="text-xs opacity-70">Tovarlar</p>
                   </div>
                   <div className="w-px h-12 bg-white/20" />
                   <div className="text-center">

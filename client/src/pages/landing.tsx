@@ -39,6 +39,30 @@ export default function LandingPage() {
   const [, setLocation] = useLocation();
   const { isAuthenticated, tenant } = useAuth();
   const [currentSlogan, setCurrentSlogan] = useState(0);
+  const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
+  const [isInstalled, setIsInstalled] = useState(false);
+
+  useEffect(() => {
+    const handler = (e: Event) => {
+      e.preventDefault();
+      setDeferredPrompt(e);
+    };
+    window.addEventListener("beforeinstallprompt", handler);
+    if (window.matchMedia("(display-mode: standalone)").matches) {
+      setIsInstalled(true);
+    }
+    return () => window.removeEventListener("beforeinstallprompt", handler);
+  }, []);
+
+  const handleInstall = async () => {
+    if (!deferredPrompt) return;
+    deferredPrompt.prompt();
+    const { outcome } = await deferredPrompt.userChoice;
+    if (outcome === "accepted") {
+      setIsInstalled(true);
+    }
+    setDeferredPrompt(null);
+  };
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -184,6 +208,23 @@ export default function LandingPage() {
               <LayoutDashboard className="mr-2 h-5 w-5" />
               Kabinetga kirish
             </Button>
+            {deferredPrompt && !isInstalled && (
+              <Button
+                size="lg"
+                className="bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white rounded-full px-8 py-6 text-lg shadow-2xl shadow-emerald-500/30 w-full sm:w-auto animate-pulse"
+                onClick={handleInstall}
+                data-testid="button-pwa-install"
+              >
+                <Smartphone className="mr-2 h-5 w-5" />
+                Dasturni o'rnatish
+              </Button>
+            )}
+            {isInstalled && (
+              <div className="flex items-center gap-2 px-4 py-3 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400">
+                <CheckCircle2 className="h-5 w-5" />
+                <span className="text-sm font-medium">Dastur o'rnatilgan</span>
+              </div>
+            )}
           </motion.div>
 
           <motion.div

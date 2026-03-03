@@ -1,7 +1,7 @@
 {
-  "name": "Kitoblar Olami POS",
-  "short_name": "Kitoblar POS",
-  "description": "Kitob do'koni uchun POS tizimi",
+  "name": "E-Savdo Platform",
+  "short_name": "E-Savdo",
+  "description": "Zamonaviy elektron savdo va POS tizimi",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#ffffff",

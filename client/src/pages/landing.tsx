@@ -208,11 +208,17 @@ export default function LandingPage() {
               <LayoutDashboard className="mr-2 h-5 w-5" />
               Kabinetga kirish
             </Button>
-            {deferredPrompt && !isInstalled && (
+            {!isInstalled && (
               <Button
                 size="lg"
-                className="bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white rounded-full px-8 py-6 text-lg shadow-2xl shadow-emerald-500/30 w-full sm:w-auto animate-pulse"
-                onClick={handleInstall}
+                className="bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white rounded-full px-8 py-6 text-lg shadow-2xl shadow-emerald-500/30 w-full sm:w-auto"
+                onClick={deferredPrompt ? handleInstall : () => {
+                  const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+                  const msg = isIOS
+                    ? "Safari brauzerida pastdagi «Share» tugmasini bosib, «Add to Home Screen» ni tanlang"
+                    : "Brauzer menyusidan «O'rnatish» yoki «Add to Home Screen» tugmasini bosing";
+                  alert(msg);
+                }}
                 data-testid="button-pwa-install"
               >
                 <Smartphone className="mr-2 h-5 w-5" />

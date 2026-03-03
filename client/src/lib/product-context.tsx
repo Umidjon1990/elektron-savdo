@@ -2,7 +2,7 @@ import { createContext, useContext, useState, useEffect, type ReactNode } from "
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { db, type CachedProduct } from "./db";
 import { getOnlineStatus, syncProductsFromServer, getProductsFromCache, addProductToCache, updateProductInCache } from "./db/sync";
-import { getAuthHeaders } from "./auth-context";
+import { getAuthHeaders, useAuth } from "./auth-context";
 
 interface Product {
   id: string;
@@ -36,6 +36,7 @@ const ProductContext = createContext<ProductContextType | undefined>(undefined);
 
 export function ProductProvider({ children }: { children: ReactNode }) {
   const queryClient = useQueryClient();
+  const { token } = useAuth();
   const [isOffline, setIsOffline] = useState(!getOnlineStatus());
   const [cachedProducts, setCachedProducts] = useState<Product[]>([]);
   const [cacheLoaded, setCacheLoaded] = useState(false);
@@ -62,6 +63,15 @@ export function ProductProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
+  useEffect(() => {
+    if (token && cacheLoaded && !isOffline) {
+      queryClient.invalidateQueries({ queryKey: ["products"] });
+    }
+    if (!token) {
+      setCachedProducts([]);
+    }
+  }, [token]);
+
   const { data: serverProducts = [], isLoading: serverLoading } = useQuery({
     queryKey: ["products"],
     queryFn: async () => {
@@ -76,7 +86,7 @@ export function ProductProvider({ children }: { children: ReactNode }) {
       
       return products;
     },
-    enabled: !isOffline && cacheLoaded && !!getAuthHeaders().Authorization,
+    enabled: !isOffline && cacheLoaded && !!token,
     staleTime: 0,
     refetchOnWindowFocus: true,
     refetchOnMount: 'always',

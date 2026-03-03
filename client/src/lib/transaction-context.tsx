@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useEffect, type ReactNode }
 import { type CartItem } from "@/pages/dashboard";
 import { db, type CachedTransaction } from "./db";
 import { getOnlineStatus, saveTransactionLocally, getTransactionsFromCache, syncPendingTransactions } from "./db/sync";
+import { useAuth } from "./auth-context";
 
 export interface Transaction {
   id: string;
@@ -37,10 +38,20 @@ interface TransactionContextType {
 const TransactionContext = createContext<TransactionContextType | undefined>(undefined);
 
 export function TransactionProvider({ children }: { children: ReactNode }) {
+  const { token } = useAuth();
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [pendingCount, setPendingCount] = useState(0);
   const [isOffline, setIsOffline] = useState(!getOnlineStatus());
   const [isLoaded, setIsLoaded] = useState(false);
+
+  useEffect(() => {
+    if (token) {
+      loadTransactions();
+    } else {
+      setTransactions([]);
+      setPendingCount(0);
+    }
+  }, [token]);
 
   const loadTransactions = async () => {
     try {

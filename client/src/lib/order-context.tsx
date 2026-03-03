@@ -1,7 +1,7 @@
-import { createContext, useContext, type ReactNode } from "react";
+import { createContext, useContext, useEffect, type ReactNode } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import type { CartItem } from "./cart-context";
-import { getAuthHeaders } from "./auth-context";
+import { getAuthHeaders, useAuth } from "./auth-context";
 
 export interface Order {
   id: string;
@@ -32,6 +32,13 @@ const OrderContext = createContext<OrderContextType | undefined>(undefined);
 
 export function OrderProvider({ children }: { children: ReactNode }) {
   const queryClient = useQueryClient();
+  const { token } = useAuth();
+
+  useEffect(() => {
+    if (token) {
+      queryClient.invalidateQueries({ queryKey: ["orders"] });
+    }
+  }, [token]);
 
   const { data: orders = [], isLoading } = useQuery({
     queryKey: ["orders"],
@@ -40,7 +47,7 @@ export function OrderProvider({ children }: { children: ReactNode }) {
       if (!res.ok) throw new Error("Failed to fetch orders");
       return res.json() as Promise<Order[]>;
     },
-    enabled: !!getAuthHeaders().Authorization,
+    enabled: !!token,
   });
 
   const addOrderMutation = useMutation({

@@ -1,6 +1,6 @@
 import { Link, useLocation } from "wouter";
 import { cn } from "@/lib/utils";
-import { LayoutDashboard, Package, History, Settings, LogOut, Store, ShoppingCart, Users, Download, MoreHorizontal, Layers, Crown } from "lucide-react";
+import { LayoutDashboard, Package, History, Settings, LogOut, Store, ShoppingCart, Users, Download, MoreHorizontal, Layers, Crown, Wallet } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useState, useEffect } from "react";
 import { useAuth } from "@/lib/auth-context";
@@ -19,6 +19,7 @@ function getNavItems(slug?: string) {
     { href: `${prefix}/orders`, icon: ShoppingCart, label: "Buyurtmalar", primary: true },
     { href: `${prefix}/inventory`, icon: Package, label: "Ombor", primary: true },
     { href: `${prefix}/history`, icon: History, label: "Tarix", primary: true },
+    { href: `${prefix}/finance`, icon: Wallet, label: "Moliya", primary: true },
     { href: `${prefix}/categories`, icon: Layers, label: "Kategoriyalar", primary: false },
     { href: `${prefix}/customers`, icon: Users, label: "Mijozlar", primary: false },
     { href: storeLink, icon: Store, label: "Do'kon", primary: false },

@@ -31,6 +31,7 @@ const importStoresList = () => import("@/pages/store/stores-list");
 const importSlugStore = () => import("@/pages/store/slug-store");
 const importSlugCart = () => import("@/pages/store/slug-cart");
 const importSlugLogin = () => import("@/pages/store/slug-login");
+const importFinance = () => import("@/pages/finance");
 
 const NotFound = lazy(importNotFound);
 const SuperAdminPage = lazy(importSuperAdmin);
@@ -50,6 +51,7 @@ const LoginPage = lazy(importLogin);
 const RegisterPage = lazy(importRegister);
 const SettingsPage = lazy(importSettings);
 const CategoriesPage = lazy(importCategories);
+const FinancePage = lazy(importFinance);
 
 function preloadAdminPages() {
   importDashboard();
@@ -270,6 +272,9 @@ function Router() {
       <Route path="/store/:slug/admin/categories">
         {(params) => <SlugProtectedRoute component={CategoriesPage} slug={params.slug} />}
       </Route>
+      <Route path="/store/:slug/admin/finance">
+        {(params) => <SlugProtectedRoute component={FinancePage} slug={params.slug} />}
+      </Route>
       <Route path="/store/:slug/admin/super">
         {(params) => <SlugProtectedRoute component={SuperAdminPage} slug={params.slug} />}
       </Route>
@@ -303,6 +308,9 @@ function Router() {
       </Route>
       <Route path="/admin/categories">
         {() => <LegacyAdminRedirect component={CategoriesPage} subPath="categories" />}
+      </Route>
+      <Route path="/admin/finance">
+        {() => <LegacyAdminRedirect component={FinancePage} subPath="finance" />}
       </Route>
       <Route path="/admin/super">
         {() => <LegacyAdminRedirect component={SuperAdminPage} subPath="super" />}

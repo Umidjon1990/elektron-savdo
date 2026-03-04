@@ -1,7 +1,7 @@
 import { db } from "@db";
-import { users, products, orders, categories, transactions, tenants } from "@shared/schema";
-import type { User, InsertUser, Product, InsertProduct, Order, InsertOrder, Category, InsertCategory, Transaction, InsertTransaction, Tenant, InsertTenant } from "@shared/schema";
-import { eq, desc, sql, and, inArray } from "drizzle-orm";
+import { users, products, orders, categories, transactions, tenants, expenses, expenseCategories } from "@shared/schema";
+import type { User, InsertUser, Product, InsertProduct, Order, InsertOrder, Category, InsertCategory, Transaction, InsertTransaction, Tenant, InsertTenant, Expense, InsertExpense, ExpenseCategory, InsertExpenseCategory } from "@shared/schema";
+import { eq, desc, sql, and, inArray, gte, lte } from "drizzle-orm";
 
 export interface IStorage {
   // Tenants
@@ -51,6 +51,22 @@ export interface IStorage {
   getTransaction(id: string, tenantId?: string): Promise<Transaction | undefined>;
   createTransaction(transaction: InsertTransaction): Promise<Transaction>;
   voidTransaction(id: string, tenantId?: string): Promise<{transaction: Transaction, alreadyVoided: boolean} | undefined>;
+
+  // Expense Categories (tenant-scoped)
+  getExpenseCategories(tenantId: string): Promise<ExpenseCategory[]>;
+  createExpenseCategory(cat: InsertExpenseCategory): Promise<ExpenseCategory>;
+  updateExpenseCategory(id: string, data: Partial<InsertExpenseCategory>, tenantId?: string): Promise<ExpenseCategory | undefined>;
+  deleteExpenseCategory(id: string, tenantId?: string): Promise<boolean>;
+
+  // Expenses (tenant-scoped)
+  getExpenses(tenantId: string, dateFrom?: Date, dateTo?: Date, categoryId?: string): Promise<Expense[]>;
+  getExpense(id: string, tenantId?: string): Promise<Expense | undefined>;
+  createExpense(expense: InsertExpense): Promise<Expense>;
+  updateExpense(id: string, data: Partial<InsertExpense>, tenantId?: string): Promise<Expense | undefined>;
+  deleteExpense(id: string, tenantId?: string): Promise<boolean>;
+
+  // Financial summary
+  getFinancialSummary(tenantId: string, dateFrom: Date, dateTo: Date): Promise<{ revenue: number; expensesTotal: number; profit: number }>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -348,6 +364,102 @@ export class DatabaseStorage implements IStorage {
       .where(eq(transactions.id, id))
       .returning();
     return { transaction: updated, alreadyVoided: false };
+  }
+
+  // Expense Categories (tenant-scoped)
+  async getExpenseCategories(tenantId: string): Promise<ExpenseCategory[]> {
+    return await db.select().from(expenseCategories)
+      .where(eq(expenseCategories.tenantId, tenantId))
+      .orderBy(expenseCategories.sortOrder);
+  }
+
+  async createExpenseCategory(cat: InsertExpenseCategory): Promise<ExpenseCategory> {
+    const [newCat] = await db.insert(expenseCategories).values(cat).returning();
+    return newCat;
+  }
+
+  async updateExpenseCategory(id: string, data: Partial<InsertExpenseCategory>, tenantId?: string): Promise<ExpenseCategory | undefined> {
+    const condition = tenantId
+      ? and(eq(expenseCategories.id, id), eq(expenseCategories.tenantId, tenantId))
+      : eq(expenseCategories.id, id);
+    const [updated] = await db.update(expenseCategories).set(data).where(condition).returning();
+    return updated;
+  }
+
+  async deleteExpenseCategory(id: string, tenantId?: string): Promise<boolean> {
+    const condition = tenantId
+      ? and(eq(expenseCategories.id, id), eq(expenseCategories.tenantId, tenantId))
+      : eq(expenseCategories.id, id);
+    const result = await db.delete(expenseCategories).where(condition);
+    return (result.rowCount ?? 0) > 0;
+  }
+
+  // Expenses (tenant-scoped)
+  async getExpenses(tenantId: string, dateFrom?: Date, dateTo?: Date, categoryId?: string): Promise<Expense[]> {
+    const conditions = [eq(expenses.tenantId, tenantId)];
+    if (dateFrom) conditions.push(gte(expenses.date, dateFrom));
+    if (dateTo) conditions.push(lte(expenses.date, dateTo));
+    if (categoryId) conditions.push(eq(expenses.categoryId, categoryId));
+    return await db.select().from(expenses)
+      .where(and(...conditions))
+      .orderBy(desc(expenses.date));
+  }
+
+  async getExpense(id: string, tenantId?: string): Promise<Expense | undefined> {
+    const condition = tenantId
+      ? and(eq(expenses.id, id), eq(expenses.tenantId, tenantId))
+      : eq(expenses.id, id);
+    const [expense] = await db.select().from(expenses).where(condition);
+    return expense;
+  }
+
+  async createExpense(expense: InsertExpense): Promise<Expense> {
+    const [newExpense] = await db.insert(expenses).values(expense).returning();
+    return newExpense;
+  }
+
+  async updateExpense(id: string, data: Partial<InsertExpense>, tenantId?: string): Promise<Expense | undefined> {
+    const condition = tenantId
+      ? and(eq(expenses.id, id), eq(expenses.tenantId, tenantId))
+      : eq(expenses.id, id);
+    const [updated] = await db.update(expenses).set(data).where(condition).returning();
+    return updated;
+  }
+
+  async deleteExpense(id: string, tenantId?: string): Promise<boolean> {
+    const condition = tenantId
+      ? and(eq(expenses.id, id), eq(expenses.tenantId, tenantId))
+      : eq(expenses.id, id);
+    const result = await db.delete(expenses).where(condition);
+    return (result.rowCount ?? 0) > 0;
+  }
+
+  // Financial summary
+  async getFinancialSummary(tenantId: string, dateFrom: Date, dateTo: Date): Promise<{ revenue: number; expensesTotal: number; profit: number }> {
+    const [revResult] = await db.select({
+      total: sql<number>`COALESCE(SUM(${transactions.totalAmount}), 0)::int`
+    }).from(transactions).where(
+      and(
+        eq(transactions.tenantId, tenantId),
+        gte(transactions.date, dateFrom),
+        lte(transactions.date, dateTo),
+        sql`${transactions.status} != 'voided'`
+      )
+    );
+
+    const [expResult] = await db.select({
+      total: sql<number>`COALESCE(SUM(${expenses.amount}), 0)::int`
+    }).from(expenses).where(
+      and(
+        eq(expenses.tenantId, tenantId),
+        gte(expenses.date, dateFrom),
+        lte(expenses.date, dateTo)
+      )
+    );
+
+    const revenue = revResult?.total || 0;
+    const expensesTotal = expResult?.total || 0;
+    return { revenue, expensesTotal, profit: revenue - expensesTotal };
   }
 }
 

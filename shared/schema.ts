@@ -97,6 +97,25 @@ export const transactions = pgTable("transactions", {
   customerInfo: json("customer_info").$type<Record<string, string>>(),
 });
 
+export const expenseCategories = pgTable("expense_categories", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  tenantId: varchar("tenant_id").references(() => tenants.id),
+  name: text("name").notNull(),
+  icon: text("icon").notNull().default("Receipt"),
+  color: text("color").notNull().default("#6b7280"),
+  sortOrder: integer("sort_order").notNull().default(0),
+});
+
+export const expenses = pgTable("expenses", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  tenantId: varchar("tenant_id").references(() => tenants.id),
+  amount: integer("amount").notNull(),
+  categoryId: varchar("category_id").references(() => expenseCategories.id),
+  description: text("description").default(""),
+  date: timestamp("date").notNull(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
 // Insert schemas
 export const insertTenantSchema = createInsertSchema(tenants).omit({
   id: true,
@@ -122,6 +141,15 @@ export const insertCategorySchema = createInsertSchema(categories).omit({
 });
 
 export const insertTransactionSchema = createInsertSchema(transactions);
+
+export const insertExpenseCategorySchema = createInsertSchema(expenseCategories).omit({
+  id: true,
+});
+
+export const insertExpenseSchema = createInsertSchema(expenses).omit({
+  id: true,
+  createdAt: true,
+});
 
 // Register schema for onboarding
 export const registerTenantSchema = z.object({
@@ -157,3 +185,9 @@ export type Category = typeof categories.$inferSelect;
 
 export type InsertTransaction = z.infer<typeof insertTransactionSchema>;
 export type Transaction = typeof transactions.$inferSelect;
+
+export type InsertExpenseCategory = z.infer<typeof insertExpenseCategorySchema>;
+export type ExpenseCategory = typeof expenseCategories.$inferSelect;
+
+export type InsertExpense = z.infer<typeof insertExpenseSchema>;
+export type Expense = typeof expenses.$inferSelect;

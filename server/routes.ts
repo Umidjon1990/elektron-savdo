@@ -1,7 +1,7 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { insertProductSchema, insertOrderSchema, insertCategorySchema, insertTransactionSchema, registerTenantSchema, loginSchema } from "@shared/schema";
+import { insertProductSchema, insertOrderSchema, insertCategorySchema, insertTransactionSchema, registerTenantSchema, loginSchema, insertExpenseSchema, insertExpenseCategorySchema } from "@shared/schema";
 import { registerR2Routes } from "./integrations/r2-routes";
 import { sendTelegramNotification } from "./telegram";
 import { authMiddleware, optionalAuth, superAdminOnly, hashPassword, comparePassword, generateToken } from "./auth";
@@ -794,6 +794,194 @@ export async function registerRoutes(
       res.json(result.transaction);
     } catch (error) {
       res.status(500).json({ error: "Failed to void transaction" });
+    }
+  });
+
+  // ============ EXPENSE CATEGORIES ============
+
+  app.get("/api/expense-categories", authMiddleware, async (req, res) => {
+    try {
+      const cats = await storage.getExpenseCategories(req.tenantId!);
+      res.json(cats);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch expense categories" });
+    }
+  });
+
+  app.post("/api/expense-categories", authMiddleware, async (req, res) => {
+    try {
+      const data = insertExpenseCategorySchema.parse({ ...req.body, tenantId: req.tenantId });
+      const cat = await storage.createExpenseCategory(data);
+      res.json(cat);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to create expense category" });
+    }
+  });
+
+  app.patch("/api/expense-categories/:id", authMiddleware, async (req, res) => {
+    try {
+      const updated = await storage.updateExpenseCategory(req.params.id, req.body, req.tenantId);
+      if (!updated) return res.status(404).json({ error: "Category not found" });
+      res.json(updated);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to update expense category" });
+    }
+  });
+
+  app.delete("/api/expense-categories/:id", authMiddleware, async (req, res) => {
+    try {
+      const deleted = await storage.deleteExpenseCategory(req.params.id, req.tenantId);
+      if (!deleted) return res.status(404).json({ error: "Category not found" });
+      res.json({ success: true });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to delete expense category" });
+    }
+  });
+
+  // ============ EXPENSES ============
+
+  app.get("/api/expenses", authMiddleware, async (req, res) => {
+    try {
+      const { from, to, category } = req.query;
+      const dateFrom = from ? new Date(from as string) : undefined;
+      const dateTo = to ? new Date(to as string) : undefined;
+      const categoryId = category as string | undefined;
+      const exps = await storage.getExpenses(req.tenantId!, dateFrom, dateTo, categoryId);
+      res.json(exps);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch expenses" });
+    }
+  });
+
+  app.post("/api/expenses", authMiddleware, async (req, res) => {
+    try {
+      const data = insertExpenseSchema.parse({
+        ...req.body,
+        tenantId: req.tenantId,
+        date: new Date(req.body.date),
+      });
+      const expense = await storage.createExpense(data);
+      res.json(expense);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to create expense" });
+    }
+  });
+
+  app.patch("/api/expenses/:id", authMiddleware, async (req, res) => {
+    try {
+      const updateData: any = { ...req.body };
+      if (updateData.date) updateData.date = new Date(updateData.date);
+      const updated = await storage.updateExpense(req.params.id, updateData, req.tenantId);
+      if (!updated) return res.status(404).json({ error: "Expense not found" });
+      res.json(updated);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to update expense" });
+    }
+  });
+
+  app.delete("/api/expenses/:id", authMiddleware, async (req, res) => {
+    try {
+      const deleted = await storage.deleteExpense(req.params.id, req.tenantId);
+      if (!deleted) return res.status(404).json({ error: "Expense not found" });
+      res.json({ success: true });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to delete expense" });
+    }
+  });
+
+  // ============ FINANCE SUMMARY ============
+
+  app.get("/api/finance/summary", authMiddleware, async (req, res) => {
+    try {
+      const period = (req.query.period as string) || "day";
+      const now = new Date();
+      let dateFrom: Date;
+      let prevFrom: Date;
+      let prevTo: Date;
+
+      if (period === "week") {
+        const dayOfWeek = now.getDay() || 7;
+        dateFrom = new Date(now);
+        dateFrom.setDate(now.getDate() - dayOfWeek + 1);
+        dateFrom.setHours(0, 0, 0, 0);
+        prevTo = new Date(dateFrom);
+        prevTo.setMilliseconds(-1);
+        prevFrom = new Date(prevTo);
+        prevFrom.setDate(prevTo.getDate() - 6);
+        prevFrom.setHours(0, 0, 0, 0);
+      } else if (period === "month") {
+        dateFrom = new Date(now.getFullYear(), now.getMonth(), 1);
+        prevTo = new Date(dateFrom);
+        prevTo.setMilliseconds(-1);
+        prevFrom = new Date(prevTo.getFullYear(), prevTo.getMonth(), 1);
+      } else {
+        dateFrom = new Date(now);
+        dateFrom.setHours(0, 0, 0, 0);
+        prevTo = new Date(dateFrom);
+        prevTo.setMilliseconds(-1);
+        prevFrom = new Date(prevTo);
+        prevFrom.setHours(0, 0, 0, 0);
+      }
+
+      const dateTo = new Date(now);
+      dateTo.setHours(23, 59, 59, 999);
+
+      const current = await storage.getFinancialSummary(req.tenantId!, dateFrom, dateTo);
+      const previous = await storage.getFinancialSummary(req.tenantId!, prevFrom, prevTo);
+
+      res.json({
+        ...current,
+        prevRevenue: previous.revenue,
+        prevExpenses: previous.expensesTotal,
+        prevProfit: previous.profit,
+        period,
+        dateFrom: dateFrom.toISOString(),
+        dateTo: dateTo.toISOString(),
+      });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to get financial summary" });
+    }
+  });
+
+  app.get("/api/finance/daily-breakdown", authMiddleware, async (req, res) => {
+    try {
+      const from = req.query.from ? new Date(req.query.from as string) : (() => { const d = new Date(); d.setDate(d.getDate() - 30); d.setHours(0,0,0,0); return d; })();
+      const to = req.query.to ? new Date(req.query.to as string) : new Date();
+
+      const allTransactions = await storage.getAllTransactions(req.tenantId!);
+      const allExpenses = await storage.getExpenses(req.tenantId!, from, to);
+
+      const days: Record<string, { date: string; revenue: number; expenses: number; profit: number }> = {};
+      const current = new Date(from);
+      while (current <= to) {
+        const key = current.toISOString().split("T")[0];
+        days[key] = { date: key, revenue: 0, expenses: 0, profit: 0 };
+        current.setDate(current.getDate() + 1);
+      }
+
+      for (const t of allTransactions) {
+        if (t.status === "voided") continue;
+        const key = new Date(t.date).toISOString().split("T")[0];
+        if (days[key]) {
+          days[key].revenue += t.totalAmount;
+        }
+      }
+
+      for (const e of allExpenses) {
+        const key = new Date(e.date).toISOString().split("T")[0];
+        if (days[key]) {
+          days[key].expenses += e.amount;
+        }
+      }
+
+      const result = Object.values(days).map(d => ({
+        ...d,
+        profit: d.revenue - d.expenses,
+      }));
+
+      res.json(result);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to get daily breakdown" });
     }
   });
 

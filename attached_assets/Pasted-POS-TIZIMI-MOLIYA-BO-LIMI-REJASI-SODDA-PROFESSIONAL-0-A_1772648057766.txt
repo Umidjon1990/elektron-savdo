@@ -1,0 +1,191 @@
+POS TIZIMI — MOLIYA BO‘LIMI REJASI (SODDA + PROFESSIONAL)
+0) Asosiy tamoyil (muammo chiqmasligi uchun)
+
+Barcha kirim/chiqim POS savdo, ombor va to‘lovlar bilan integratsiya bo‘ladi.
+
+Har bir operatsiya avtomatik sana/vaqt, kim kiritgani, filial/kassa, izoh bilan saqlanadi.
+
+Har bir bo‘limda: Kun / hafta / oy / sana oralig‘i / filter bo‘ladi.
+
+“Umumiy summa” har doim real holatni ko‘rsatadi:
+Mavjud summa = oldingi qoldiq + kirimlar – chiqimlar (naqd/karta/nasiya kesimida)
+
+1) KASSA (SUBMENU)
+
+Maqsad: “Hozir pul qancha va qayerda?”ni 1 ekranda ko‘rsatish.
+
+1.1 Ko‘rsatkichlar (dashboard)
+
+MAVJUD SUMMA (jami)
+
+NAQD
+
+KARTA
+
+NASIYADA (qarzga sotilgan / to‘lanmagan)
+
+CHIQARILGAN (kassadan olib chiqilgan)
+
+1.2 Filtrlar
+
+Kun / hafta / oy / sana oralig‘i
+
+Filial (agar bor bo‘lsa)
+
+Kassa (agar bir nechta bo‘lsa)
+
+Kassir / foydalanuvchi
+
+To‘lov turi (naqd/karta/nasiya)
+
+1.3 Kassa harakatlari (journal)
+
+Har bir tranzaksiya ro‘yxati:
+
+turi: savdo / refund / kirim / chiqim / inkassatsiya
+
+summa
+
+to‘lov turi
+
+sana-vaqt (avto)
+
+kim kiritdi (avto)
+
+izoh
+
+✅ Oddiy foydalanuvchi uchun: “KASSA”ga kirsa, bugungi holat va qoldiqni ko‘radi.
+
+2) KIRIM (SUBMENU)
+
+Maqsad: kassaga tushgan barcha pulni tartibli qayd qilish (savdodan tashqari ham).
+
+2.1 Kiritiladigan maydonlar
+
+NIMADAN (kategoriyasi)
+(masalan: inkassatsiya qaytimi, qarz qaytdi, investor pul kiritdi, boshqa)
+
+KIMDAN (kontragent / ism)
+
+QACHON — avtomatik sana-vaqt (manual o‘zgartirish admin huquqida)
+
+SUMMA
+
+TO‘LOV TURI: naqd / karta / bank / boshqa
+
+IZOH
+
+2.2 Qoidalar
+
+Har bir “Kirim” avtomatik:
+
+Kassa qoldig‘iga qo‘shiladi
+
+“Kim kiritdi” va “qaysi filial/kassa” yoziladi
+
+Xatoni tuzatish:
+
+“Bekor qilish” (audit log saqlanadi)
+
+“Tahrirlash” faqat ruxsat bilan
+
+3) CHIQIM (SUBMENU)
+
+Maqsad: kassadan ketgan pulni nazorat qilish (xarajatlar).
+
+3.1 Kiritiladigan maydonlar
+
+NIMAGA (xarajat kategoriyasi)
+(ijara, oylik, reklama, transport, ta’mirlash, ofis, soliq, spisanie, boshqalar)
+
+KIMGA (shaxs / kompaniya)
+
+QACHON — avtomatik sana-vaqt
+
+SUMMA
+
+TO‘LOV TURI: naqd / karta / bank
+
+IZOH
+
+(ixtiyoriy) chek/faktura fayl biriktirish
+
+3.2 Qoidalar
+
+Har bir “Chiqim” avtomatik:
+
+Kassa qoldig‘idan ayriladi
+
+Limitdan oshsa: tasdiq so‘rashi (oddiy nazorat)
+
+4) SOTUV BILAN INTEGRATSIYA (eng muhim)
+
+Maqsad: moliya bo‘limidagi raqamlar savdo bilan “bir xil” chiqishi.
+
+Har bir chek POS’dan o‘tishi bilan:
+
+naqd tushum → kassa naqdga qo‘shiladi
+
+karta tushum → karta tushumga qo‘shiladi
+
+nasiya → “Nasiyada”ga qo‘shiladi (qarzdorlik)
+
+Refund (qaytarish) bo‘lsa:
+
+tegishli to‘lov turidan ayriladi
+
+sabab/izoh majburiy bo‘ladi
+
+5) NASIYA (qarzlar) — qo‘shiladigan eng asosiy modul
+
+Maqsad: “Kim qancha qarz?”ni yo‘qotmaslik.
+
+Mijoz kartasi:
+
+ism/telefon
+
+limit (ixtiyoriy)
+
+Operatsiyalar:
+
+nasiya savdo
+
+qarz to‘lovi (qisman/to‘liq)
+
+Hisobot:
+
+umumiy nasiya
+
+muddati o‘tganlar
+
+top qarzdorlar
+
+6) HISOBOTLAR (oddiy va foydali)
+
+Kunlik
+
+Bugungi tushum: naqd/karta/nasiya
+
+Bugungi chiqimlar
+
+Qoldiq (naqd/karta)
+
+Haftalik/Oylik
+
+Tushum trend
+
+Xarajatlar kategoriyasi bo‘yicha
+
+Nasiyaning kamayishi/ko‘payishi
+
+Eng ko‘p refund/chegirma bo‘lgan nuqtalar
+
+7) RUXSATLAR (oddiy odam boshqarishi uchun)
+
+Kassir: savdo + smena yopish, kirim/chiqim qo‘sholmaydi (yoki limit bilan)
+
+Katta kassir/manager: kirim/chiqim kiritadi, smena nazorat qiladi
+
+Moliya: hammasini ko‘radi, hisobot oladi
+
+Admin: tahrirlash, o‘chirish, rol berish

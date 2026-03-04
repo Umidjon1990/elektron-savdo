@@ -95,6 +95,7 @@ Key backend files:
 17. **Nasiya (Credit/Debt) System**: When selecting "Nasiya" payment, customer name/phone required, due date picker, debt tracking with partial payments
 18. **Debt Payments**: `debt_payments` table tracks each payment against a nasiya transaction, `paidAmount`/`debtStatus` on transactions
 19. **Enhanced Customers Page**: Tabs (Hammasi/Qarzdorlar/To'lganlar/Muddati yaqin), debt cards with progress bars, inline payment dialog, search by name/phone
+20. **Professional Finance Module**: 5 submenu tabs (Kassa/Kirim/Chiqim/Nasiya/Hisobot), cash register balance tracking (naqd/karta/nasiya/chiqarilgan), income entries (cash_register_entries table), expense management with categories, debt overview, daily/weekly/monthly reports with print support
 
 ### Tenant Configuration (JSON columns on tenants table)
 - `payment_methods`: Array of `{id, name}` - custom payment methods for POS

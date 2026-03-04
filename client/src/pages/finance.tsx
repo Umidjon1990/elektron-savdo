@@ -16,15 +16,17 @@ import {
   DollarSign, ArrowDownCircle, ArrowUpCircle, Receipt,
   Home, Briefcase, Truck, Zap, ShoppingBag, Megaphone, MoreHorizontal,
   Users, Printer, Tag, Settings, ChevronDown, Banknote, CreditCard,
-  Clock, TrendingUp, ShoppingCart, HandCoins
+  Clock, TrendingUp, ShoppingCart, HandCoins, ArrowDown, ArrowUp,
+  AlertTriangle, Calendar, FileText, CircleDollarSign, Landmark,
+  UserCheck, Phone, ChevronRight, X, Building
 } from "lucide-react";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
-  PieChart, Pie, Cell, Legend, AreaChart, Area
+  PieChart, Pie, Cell, Legend
 } from "recharts";
 
 const ICON_MAP: Record<string, any> = {
-  Home, Briefcase, Truck, Zap, ShoppingBag, Megaphone, Receipt, Users, Tag, Settings, MoreHorizontal, Wallet
+  Home, Briefcase, Truck, Zap, ShoppingBag, Megaphone, Receipt, Users, Tag, Settings, MoreHorizontal, Wallet, Building
 };
 
 const DEFAULT_CATEGORIES = [
@@ -37,29 +39,23 @@ const DEFAULT_CATEGORIES = [
   { name: "Boshqa", icon: "MoreHorizontal", color: "#6b7280" },
 ];
 
-const PAYMENT_COLORS: Record<string, string> = {
-  "Naqd": "#22c55e",
-  "naqd": "#22c55e",
-  "cash": "#22c55e",
-  "Karta": "#3b82f6",
-  "karta": "#3b82f6",
-  "card": "#3b82f6",
-  "Nasiya": "#f59e0b",
-  "nasiya": "#f59e0b",
-};
+const INCOME_CATEGORIES = [
+  "Inkassatsiya qaytimi",
+  "Qarz qaytdi",
+  "Investor pul kiritdi",
+  "Bank o'tkazma",
+  "Boshqa kirim",
+];
 
-const PAYMENT_ICONS: Record<string, any> = {
-  "Naqd": Banknote,
-  "naqd": Banknote,
-  "cash": Banknote,
-  "Karta": CreditCard,
-  "karta": CreditCard,
-  "card": CreditCard,
-  "Nasiya": Clock,
-  "nasiya": Clock,
+const PAYMENT_COLORS: Record<string, string> = {
+  "Naqd": "#22c55e", "naqd": "#22c55e", "cash": "#22c55e",
+  "Karta": "#3b82f6", "karta": "#3b82f6", "card": "#3b82f6",
+  "Nasiya": "#f59e0b", "nasiya": "#f59e0b",
 };
 
 const PIE_COLORS = ["#ef4444", "#f59e0b", "#3b82f6", "#8b5cf6", "#10b981", "#ec4899", "#6b7280", "#14b8a6", "#f97316", "#06b6d4"];
+
+type SubMenu = "kassa" | "kirim" | "chiqim" | "nasiya" | "hisobot";
 
 function formatSum(val: number): string {
   if (val >= 1000000) return (val / 1000000).toFixed(1) + "M";
@@ -67,20 +63,82 @@ function formatSum(val: number): string {
   return val.toLocaleString();
 }
 
+function formatDate(d: string | Date): string {
+  return new Date(d).toLocaleDateString("uz-UZ", { day: "2-digit", month: "2-digit", year: "numeric" });
+}
+
+function formatDateTime(d: string | Date): string {
+  const date = new Date(d);
+  return `${date.toLocaleDateString("uz-UZ", { day: "2-digit", month: "2-digit" })} ${date.toLocaleTimeString("uz-UZ", { hour: "2-digit", minute: "2-digit" })}`;
+}
+
+function daysUntil(d: string | Date): number {
+  const target = new Date(d);
+  const now = new Date();
+  return Math.ceil((target.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+}
+
 export default function FinancePage() {
   const { token } = useAuth();
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  const { transactions: allTransactions } = useTransactions();
+  const { transactions: allTransactions, syncTransactions } = useTransactions();
+  const [activeMenu, setActiveMenu] = useState<SubMenu>("kassa");
   const [period, setPeriod] = useState<"day" | "week" | "month">("month");
+
   const [expenseDialogOpen, setExpenseDialogOpen] = useState(false);
   const [editingExpense, setEditingExpense] = useState<any>(null);
   const [catDialogOpen, setCatDialogOpen] = useState(false);
   const [editingCat, setEditingCat] = useState<any>(null);
   const [showCategories, setShowCategories] = useState(false);
-  const [activeTab, setActiveTab] = useState<"overview" | "expenses" | "report">("overview");
+  const [incomeDialogOpen, setIncomeDialogOpen] = useState(false);
+  const [payDialogOpen, setPayDialogOpen] = useState(false);
+  const [selectedDebt, setSelectedDebt] = useState<any>(null);
+  const [payAmount, setPayAmount] = useState("");
+  const [payNote, setPayNote] = useState("");
 
   const headers = { Authorization: `Bearer ${token}`, "Content-Type": "application/json" };
+
+  const getDateRange = () => {
+    const now = new Date();
+    let dateFrom: Date;
+    if (period === "week") {
+      const d = now.getDay() || 7;
+      dateFrom = new Date(now);
+      dateFrom.setDate(now.getDate() - d + 1);
+      dateFrom.setHours(0, 0, 0, 0);
+    } else if (period === "month") {
+      dateFrom = new Date(now.getFullYear(), now.getMonth(), 1);
+    } else {
+      dateFrom = new Date(now);
+      dateFrom.setHours(0, 0, 0, 0);
+    }
+    const dateTo = new Date(now);
+    dateTo.setHours(23, 59, 59, 999);
+    return { dateFrom, dateTo };
+  };
+
+  const { data: balance } = useQuery<any>({
+    queryKey: ["cash-balance", period],
+    queryFn: async () => {
+      const { dateFrom, dateTo } = getDateRange();
+      const res = await fetch(`/api/cash-register/balance?from=${dateFrom.toISOString()}&to=${dateTo.toISOString()}`, { headers });
+      if (!res.ok) throw new Error("Failed");
+      return res.json();
+    },
+    enabled: !!token,
+  });
+
+  const { data: cashEntries = [] } = useQuery<any[]>({
+    queryKey: ["cash-entries", period],
+    queryFn: async () => {
+      const { dateFrom, dateTo } = getDateRange();
+      const res = await fetch(`/api/cash-register/entries?from=${dateFrom.toISOString()}&to=${dateTo.toISOString()}`, { headers });
+      if (!res.ok) throw new Error("Failed");
+      return res.json();
+    },
+    enabled: !!token,
+  });
 
   const { data: serverSummary } = useQuery<any>({
     queryKey: ["finance-summary", period],
@@ -93,38 +151,10 @@ export default function FinancePage() {
   });
 
   const summary = useMemo(() => {
+    const { dateFrom } = getDateRange();
     const now = new Date();
-    let dateFrom: Date;
-    let prevFrom: Date;
-    let prevTo: Date;
-
-    if (period === "week") {
-      const d = now.getDay() || 7;
-      dateFrom = new Date(now);
-      dateFrom.setDate(now.getDate() - d + 1);
-      dateFrom.setHours(0, 0, 0, 0);
-      prevTo = new Date(dateFrom);
-      prevTo.setMilliseconds(-1);
-      prevFrom = new Date(prevTo);
-      prevFrom.setDate(prevTo.getDate() - 6);
-      prevFrom.setHours(0, 0, 0, 0);
-    } else if (period === "month") {
-      dateFrom = new Date(now.getFullYear(), now.getMonth(), 1);
-      prevTo = new Date(dateFrom);
-      prevTo.setMilliseconds(-1);
-      prevFrom = new Date(prevTo.getFullYear(), prevTo.getMonth(), 1);
-    } else {
-      dateFrom = new Date(now);
-      dateFrom.setHours(0, 0, 0, 0);
-      prevTo = new Date(dateFrom);
-      prevTo.setMilliseconds(-1);
-      prevFrom = new Date(prevTo);
-      prevFrom.setHours(0, 0, 0, 0);
-    }
-
     const active = (allTransactions || []).filter(t => t.status !== "voided");
     const currentTxns = active.filter(t => new Date(t.date) >= dateFrom && new Date(t.date) <= now);
-    const prevTxns = active.filter(t => new Date(t.date) >= prevFrom && new Date(t.date) <= prevTo);
 
     let clientRevenue = 0;
     let clientProfit = 0;
@@ -136,11 +166,6 @@ export default function FinancePage() {
       clientPaymentBreakdown[method] = (clientPaymentBreakdown[method] || 0) + t.totalAmount;
     }
 
-    let prevRevenue = 0;
-    for (const t of prevTxns) {
-      prevRevenue += t.totalAmount;
-    }
-
     const srvRevenue = serverSummary?.revenue || 0;
     const srvProfit = serverSummary?.totalProfit || 0;
     const srvExpenses = serverSummary?.expensesTotal || 0;
@@ -148,49 +173,22 @@ export default function FinancePage() {
     const revenue = Math.max(clientRevenue, srvRevenue);
     const totalProfit = Math.max(clientProfit, srvProfit);
     const expensesTotal = srvExpenses;
-
     const paymentBreakdown = { ...clientPaymentBreakdown };
     if (serverSummary?.paymentBreakdown) {
       for (const [k, v] of Object.entries(serverSummary.paymentBreakdown as Record<string, number>)) {
-        if (!paymentBreakdown[k] || (v as number) > paymentBreakdown[k]) {
-          paymentBreakdown[k] = v as number;
-        }
+        if (!paymentBreakdown[k] || (v as number) > paymentBreakdown[k]) paymentBreakdown[k] = v as number;
       }
     }
-
     const transactionCount = Math.max(currentTxns.length, serverSummary?.transactionCount || 0);
-    const finalPrevRevenue = Math.max(prevRevenue, serverSummary?.prevRevenue || 0);
 
-    return {
-      revenue,
-      expensesTotal,
-      profit: revenue - expensesTotal,
-      totalProfit,
-      paymentBreakdown,
-      transactionCount,
-      prevRevenue: finalPrevRevenue,
-      prevExpenses: serverSummary?.prevExpenses || 0,
-      prevProfit: finalPrevRevenue - (serverSummary?.prevExpenses || 0),
-    };
+    return { revenue, expensesTotal, profit: revenue - expensesTotal, totalProfit, paymentBreakdown, transactionCount, prevRevenue: serverSummary?.prevRevenue || 0, prevExpenses: serverSummary?.prevExpenses || 0 };
   }, [allTransactions, serverSummary, period]);
 
   const { data: serverDailyData = [] } = useQuery<any[]>({
     queryKey: ["finance-daily", period],
     queryFn: async () => {
-      const now = new Date();
-      let from: Date;
-      if (period === "month") {
-        from = new Date(now.getFullYear(), now.getMonth(), 1);
-      } else if (period === "week") {
-        const d = now.getDay() || 7;
-        from = new Date(now);
-        from.setDate(now.getDate() - d + 1);
-        from.setHours(0, 0, 0, 0);
-      } else {
-        from = new Date(now);
-        from.setHours(0, 0, 0, 0);
-      }
-      const res = await fetch(`/api/finance/daily-breakdown?from=${from.toISOString()}&to=${now.toISOString()}`, { headers });
+      const { dateFrom, dateTo } = getDateRange();
+      const res = await fetch(`/api/finance/daily-breakdown?from=${dateFrom.toISOString()}&to=${dateTo.toISOString()}`, { headers });
       if (!res.ok) throw new Error("Failed");
       return res.json();
     },
@@ -198,38 +196,21 @@ export default function FinancePage() {
   });
 
   const dailyData = useMemo(() => {
+    const { dateFrom } = getDateRange();
     const now = new Date();
-    let from: Date;
-    if (period === "month") {
-      from = new Date(now.getFullYear(), now.getMonth(), 1);
-    } else if (period === "week") {
-      const d = now.getDay() || 7;
-      from = new Date(now);
-      from.setDate(now.getDate() - d + 1);
-      from.setHours(0, 0, 0, 0);
-    } else {
-      from = new Date(now);
-      from.setHours(0, 0, 0, 0);
-    }
-
     const active = (allTransactions || []).filter(t => t.status !== "voided");
     const dayMap: Record<string, { revenue: number; profit: number }> = {};
-
     for (const t of active) {
       const tDate = new Date(t.date);
-      if (tDate >= from && tDate <= now) {
+      if (tDate >= dateFrom && tDate <= now) {
         const dayKey = tDate.toISOString().split("T")[0];
         if (!dayMap[dayKey]) dayMap[dayKey] = { revenue: 0, profit: 0 };
         dayMap[dayKey].revenue += t.totalAmount;
         dayMap[dayKey].profit += t.totalProfit || 0;
       }
     }
-
     const srvMap: Record<string, any> = {};
-    for (const d of serverDailyData) {
-      srvMap[d.date] = d;
-    }
-
+    for (const d of serverDailyData) srvMap[d.date] = d;
     const allDates = new Set([...Object.keys(dayMap), ...Object.keys(srvMap)]);
     return Array.from(allDates).sort().map(date => {
       const client = dayMap[date] || { revenue: 0, profit: 0 };
@@ -239,6 +220,7 @@ export default function FinancePage() {
         revenue: Math.max(client.revenue, srv.revenue || 0),
         expenses: srv.expenses || 0,
         profit: Math.max(client.revenue, srv.revenue || 0) - (srv.expenses || 0),
+        payments: srv.payments || {},
       };
     });
   }, [allTransactions, serverDailyData, period]);
@@ -263,6 +245,16 @@ export default function FinancePage() {
     enabled: !!token,
   });
 
+  const { data: debtTransactions = [] } = useQuery<any[]>({
+    queryKey: ["debts"],
+    queryFn: async () => {
+      const res = await fetch("/api/debts", { headers });
+      if (!res.ok) throw new Error("Failed");
+      return res.json();
+    },
+    enabled: !!token,
+  });
+
   useEffect(() => {
     if (token && categories.length === 0) {
       const initDefaults = async () => {
@@ -270,11 +262,7 @@ export default function FinancePage() {
         const existing = await res.json();
         if (existing.length === 0) {
           for (const cat of DEFAULT_CATEGORIES) {
-            await fetch("/api/expense-categories", {
-              method: "POST",
-              headers,
-              body: JSON.stringify(cat),
-            });
+            await fetch("/api/expense-categories", { method: "POST", headers, body: JSON.stringify(cat) });
           }
           queryClient.invalidateQueries({ queryKey: ["expense-categories"] });
         }
@@ -283,20 +271,22 @@ export default function FinancePage() {
     }
   }, [token, categories.length]);
 
+  const invalidateAll = () => {
+    queryClient.invalidateQueries({ queryKey: ["expenses"] });
+    queryClient.invalidateQueries({ queryKey: ["finance-summary"] });
+    queryClient.invalidateQueries({ queryKey: ["finance-daily"] });
+    queryClient.invalidateQueries({ queryKey: ["cash-balance"] });
+    queryClient.invalidateQueries({ queryKey: ["cash-entries"] });
+    queryClient.invalidateQueries({ queryKey: ["debts"] });
+  };
+
   const createExpense = useMutation({
     mutationFn: async (data: any) => {
       const res = await fetch("/api/expenses", { method: "POST", headers, body: JSON.stringify(data) });
       if (!res.ok) throw new Error("Failed");
       return res.json();
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["expenses"] });
-      queryClient.invalidateQueries({ queryKey: ["finance-summary"] });
-      queryClient.invalidateQueries({ queryKey: ["finance-daily"] });
-      setExpenseDialogOpen(false);
-      setEditingExpense(null);
-      toast({ title: "Xarajat qo'shildi" });
-    },
+    onSuccess: () => { invalidateAll(); setExpenseDialogOpen(false); setEditingExpense(null); toast({ title: "Xarajat qo'shildi" }); },
   });
 
   const updateExpense = useMutation({
@@ -305,14 +295,7 @@ export default function FinancePage() {
       if (!res.ok) throw new Error("Failed");
       return res.json();
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["expenses"] });
-      queryClient.invalidateQueries({ queryKey: ["finance-summary"] });
-      queryClient.invalidateQueries({ queryKey: ["finance-daily"] });
-      setExpenseDialogOpen(false);
-      setEditingExpense(null);
-      toast({ title: "Xarajat yangilandi" });
-    },
+    onSuccess: () => { invalidateAll(); setExpenseDialogOpen(false); setEditingExpense(null); toast({ title: "Xarajat yangilandi" }); },
   });
 
   const deleteExpense = useMutation({
@@ -320,12 +303,7 @@ export default function FinancePage() {
       const res = await fetch(`/api/expenses/${id}`, { method: "DELETE", headers });
       if (!res.ok) throw new Error("Failed");
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["expenses"] });
-      queryClient.invalidateQueries({ queryKey: ["finance-summary"] });
-      queryClient.invalidateQueries({ queryKey: ["finance-daily"] });
-      toast({ title: "Xarajat o'chirildi" });
-    },
+    onSuccess: () => { invalidateAll(); toast({ title: "Xarajat o'chirildi" }); },
   });
 
   const createCat = useMutation({
@@ -334,12 +312,7 @@ export default function FinancePage() {
       if (!res.ok) throw new Error("Failed");
       return res.json();
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["expense-categories"] });
-      setCatDialogOpen(false);
-      setEditingCat(null);
-      toast({ title: "Kategoriya qo'shildi" });
-    },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["expense-categories"] }); setCatDialogOpen(false); setEditingCat(null); toast({ title: "Kategoriya qo'shildi" }); },
   });
 
   const updateCat = useMutation({
@@ -348,12 +321,7 @@ export default function FinancePage() {
       if (!res.ok) throw new Error("Failed");
       return res.json();
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["expense-categories"] });
-      setCatDialogOpen(false);
-      setEditingCat(null);
-      toast({ title: "Kategoriya yangilandi" });
-    },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["expense-categories"] }); setCatDialogOpen(false); setEditingCat(null); toast({ title: "Kategoriya yangilandi" }); },
   });
 
   const deleteCat = useMutation({
@@ -361,50 +329,122 @@ export default function FinancePage() {
       const res = await fetch(`/api/expense-categories/${id}`, { method: "DELETE", headers });
       if (!res.ok) throw new Error("Failed");
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["expense-categories"] });
-      toast({ title: "Kategoriya o'chirildi" });
-    },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["expense-categories"] }); toast({ title: "Kategoriya o'chirildi" }); },
   });
+
+  const createIncome = useMutation({
+    mutationFn: async (data: any) => {
+      const res = await fetch("/api/cash-register/entries", { method: "POST", headers, body: JSON.stringify({ ...data, type: "income" }) });
+      if (!res.ok) throw new Error("Failed");
+      return res.json();
+    },
+    onSuccess: () => { invalidateAll(); setIncomeDialogOpen(false); toast({ title: "Kirim qo'shildi" }); },
+  });
+
+  const deleteEntry = useMutation({
+    mutationFn: async (id: string) => {
+      const res = await fetch(`/api/cash-register/entries/${id}`, { method: "DELETE", headers });
+      if (!res.ok) throw new Error("Failed");
+    },
+    onSuccess: () => { invalidateAll(); toast({ title: "Yozuv o'chirildi" }); },
+  });
+
+  const handleDebtPay = async () => {
+    if (!selectedDebt || !payAmount) return;
+    const amount = parseInt(payAmount);
+    if (!amount || amount <= 0) return;
+    try {
+      const res = await fetch(`/api/debts/${selectedDebt.id}/pay`, {
+        method: "POST", headers,
+        body: JSON.stringify({ amount, note: payNote }),
+      });
+      if (res.ok) {
+        toast({ title: "To'lov qabul qilindi!", description: `${amount.toLocaleString()} so'm`, className: "bg-green-500 text-white border-none" });
+        setPayDialogOpen(false);
+        setPayAmount("");
+        setPayNote("");
+        setSelectedDebt(null);
+        invalidateAll();
+        await syncTransactions();
+      } else {
+        toast({ title: "Xatolik", variant: "destructive" });
+      }
+    } catch { toast({ title: "Xatolik", variant: "destructive" }); }
+  };
 
   const revenue = summary?.revenue || 0;
   const expTotal = summary?.expensesTotal || 0;
   const profit = summary?.profit || 0;
-  const totalProfit = summary?.totalProfit || 0;
-  const txnCount = summary?.transactionCount || 0;
-  const paymentBreakdown: Record<string, number> = summary?.paymentBreakdown || {};
-  const prevRevenue = summary?.prevRevenue || 0;
-  const prevExpenses = summary?.prevExpenses || 0;
+  const paymentBreakdown = summary?.paymentBreakdown || {};
+  const periodLabel = period === "day" ? "Bugun" : period === "week" ? "Hafta" : "Oy";
+  const getCatById = (id: string) => categories.find((c: any) => c.id === id);
 
-  const pctChange = (curr: number, prev: number) => {
-    if (prev === 0) return curr > 0 ? 100 : 0;
-    return Math.round(((curr - prev) / prev) * 100);
-  };
+  const kassaJournal = useMemo(() => {
+    const { dateFrom, dateTo } = getDateRange();
+    const active = (allTransactions || []).filter(t => t.status !== "voided");
+    const txns = active.filter(t => {
+      const d = new Date(t.date);
+      return d >= dateFrom && d <= dateTo;
+    }).map(t => ({
+      id: t.id,
+      type: "savdo" as const,
+      amount: t.totalAmount,
+      paymentMethod: t.paymentMethod || "Naqd",
+      date: t.date,
+      note: t.customerName || "",
+      customerName: t.customerName,
+    }));
 
-  const revChange = pctChange(revenue, prevRevenue);
-  const expChange = pctChange(expTotal, prevExpenses);
+    const entries = (cashEntries || []).map((e: any) => ({
+      id: e.id,
+      type: e.type as string,
+      amount: e.amount,
+      paymentMethod: e.paymentType || "cash",
+      date: e.date,
+      note: e.note || e.categoryName || "",
+      counterparty: e.counterparty,
+    }));
 
-  const paymentData = Object.entries(paymentBreakdown).map(([name, value]) => ({
-    name,
-    value,
-    color: PAYMENT_COLORS[name] || "#6b7280",
-  }));
+    const expItems = (expensesList || []).filter((e: any) => {
+      const d = new Date(e.date);
+      return d >= dateFrom && d <= dateTo;
+    }).map((e: any) => {
+      const cat = getCatById(e.categoryId);
+      return {
+        id: "exp-" + e.id,
+        type: "expense" as const,
+        amount: e.amount,
+        paymentMethod: "naqd",
+        date: e.date,
+        note: (cat?.name || "Xarajat") + (e.description ? ": " + e.description : ""),
+      };
+    });
+
+    return [...txns, ...entries, ...expItems].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  }, [allTransactions, cashEntries, expensesList, categories, period]);
+
+  const debtStats = useMemo(() => {
+    const debts = debtTransactions || [];
+    const totalDebt = debts.reduce((s: number, d: any) => s + d.totalAmount, 0);
+    const totalPaid = debts.reduce((s: number, d: any) => s + (d.paidAmount || 0), 0);
+    const remaining = totalDebt - totalPaid;
+    const overdue = debts.filter((d: any) => d.dueDate && daysUntil(d.dueDate) < 0 && d.debtStatus !== "paid").length;
+    const pending = debts.filter((d: any) => d.debtStatus === "pending" || d.debtStatus === "partial").length;
+    return { totalDebt, totalPaid, remaining, overdue, pending };
+  }, [debtTransactions]);
 
   const catExpenses = categories.map((cat: any) => {
-    const total = expensesList
-      .filter((e: any) => e.categoryId === cat.id)
-      .reduce((sum: number, e: any) => sum + e.amount, 0);
+    const total = expensesList.filter((e: any) => e.categoryId === cat.id).reduce((sum: number, e: any) => sum + e.amount, 0);
     return { name: cat.name, value: total, color: cat.color };
   }).filter((c: any) => c.value > 0);
 
-  const chartData = dailyData.map((d: any) => ({
-    ...d,
-    date: d.date.slice(5),
-  }));
-
-  const periodLabel = period === "day" ? "Bugun" : period === "week" ? "Hafta" : "Oy";
-
-  const getCatById = (id: string) => categories.find((c: any) => c.id === id);
+  const subMenuItems: { key: SubMenu; label: string; icon: any }[] = [
+    { key: "kassa", label: "Kassa", icon: Wallet },
+    { key: "kirim", label: "Kirim", icon: ArrowDownCircle },
+    { key: "chiqim", label: "Chiqim", icon: ArrowUpCircle },
+    { key: "nasiya", label: "Nasiya", icon: HandCoins },
+    { key: "hisobot", label: "Hisobot", icon: FileText },
+  ];
 
   return (
     <div className="flex flex-col md:flex-row min-h-screen font-sans bg-gray-50">
@@ -417,15 +457,10 @@ export default function FinancePage() {
           </div>
           <div className="flex items-center gap-2">
             <div className="flex bg-gray-100 rounded-lg p-0.5">
-              {(["day", "week", "month"] as const).map((p) => (
-                <button
-                  key={p}
-                  onClick={() => setPeriod(p)}
-                  className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${
-                    period === p ? "bg-white shadow text-primary" : "text-gray-500 hover:text-gray-700"
-                  }`}
-                  data-testid={`button-period-${p}`}
-                >
+              {(["day", "week", "month"] as const).map(p => (
+                <button key={p} onClick={() => setPeriod(p)}
+                  className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${period === p ? "bg-white shadow text-primary" : "text-gray-500 hover:text-gray-700"}`}
+                  data-testid={`button-period-${p}`}>
                   {p === "day" ? "Bugun" : p === "week" ? "Hafta" : "Oy"}
                 </button>
               ))}
@@ -433,225 +468,211 @@ export default function FinancePage() {
           </div>
         </header>
 
+        <div className="border-b bg-white px-4 md:px-6 overflow-x-auto">
+          <div className="flex gap-1 py-1">
+            {subMenuItems.map(item => {
+              const Icon = item.icon;
+              return (
+                <button key={item.key} onClick={() => setActiveMenu(item.key)}
+                  className={`flex items-center gap-1.5 px-3 py-2 text-xs font-medium rounded-lg transition-all whitespace-nowrap ${
+                    activeMenu === item.key ? "bg-primary text-white shadow-sm" : "text-gray-600 hover:bg-gray-100"
+                  }`}
+                  data-testid={`submenu-${item.key}`}>
+                  <Icon className="h-3.5 w-3.5" />
+                  {item.label}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
         <div className="flex-1 overflow-y-auto p-4 md:p-6 space-y-4">
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-            <Card className="border-0 shadow-sm bg-gradient-to-br from-green-500 to-emerald-600 text-white">
-              <CardContent className="p-3 md:p-4">
-                <div className="flex items-center justify-between mb-1">
-                  <ArrowDownCircle className="h-4 w-4 opacity-80" />
-                  {revChange !== 0 && (
-                    <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded ${revChange > 0 ? "bg-white/20" : "bg-red-500/30"}`}>
-                      {revChange > 0 ? "+" : ""}{revChange}%
-                    </span>
-                  )}
-                </div>
-                <p className="text-[10px] opacity-80 font-medium">Tushum</p>
-                <p className="text-lg font-bold" data-testid="text-revenue">{revenue.toLocaleString()}</p>
-                <p className="text-[10px] opacity-70 mt-0.5">{txnCount} ta sotuv</p>
-              </CardContent>
-            </Card>
-            <Card className="border-0 shadow-sm bg-gradient-to-br from-red-500 to-rose-600 text-white">
-              <CardContent className="p-3 md:p-4">
-                <div className="flex items-center justify-between mb-1">
-                  <ArrowUpCircle className="h-4 w-4 opacity-80" />
-                  {expChange !== 0 && (
-                    <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded ${expChange > 0 ? "bg-red-300/30" : "bg-white/20"}`}>
-                      {expChange > 0 ? "+" : ""}{expChange}%
-                    </span>
-                  )}
-                </div>
-                <p className="text-[10px] opacity-80 font-medium">Xarajat</p>
-                <p className="text-lg font-bold" data-testid="text-expenses">{expTotal.toLocaleString()}</p>
-              </CardContent>
-            </Card>
-            <Card className={`border-0 shadow-sm text-white ${profit >= 0 ? "bg-gradient-to-br from-blue-500 to-indigo-600" : "bg-gradient-to-br from-orange-500 to-red-600"}`}>
-              <CardContent className="p-3 md:p-4">
-                <div className="flex items-center justify-between mb-1">
-                  <DollarSign className="h-4 w-4 opacity-80" />
-                </div>
-                <p className="text-[10px] opacity-80 font-medium">Sof foyda</p>
-                <p className="text-lg font-bold" data-testid="text-profit">{profit.toLocaleString()}</p>
-                {totalProfit > 0 && (
-                  <p className="text-[10px] opacity-70 mt-0.5">Tovar foydasi: {totalProfit.toLocaleString()}</p>
-                )}
-              </CardContent>
-            </Card>
-            <Card className="border-0 shadow-sm bg-gradient-to-br from-violet-500 to-purple-600 text-white">
-              <CardContent className="p-3 md:p-4">
-                <div className="flex items-center justify-between mb-1">
-                  <ShoppingCart className="h-4 w-4 opacity-80" />
-                </div>
-                <p className="text-[10px] opacity-80 font-medium">O'rtacha chek</p>
-                <p className="text-lg font-bold" data-testid="text-avg-check">
-                  {txnCount > 0 ? Math.round(revenue / txnCount).toLocaleString() : "0"}
-                </p>
-                <p className="text-[10px] opacity-70 mt-0.5">{txnCount} ta chek</p>
-              </CardContent>
-            </Card>
-          </div>
 
-          {Object.keys(paymentBreakdown).length > 0 && (
-            <Card className="border-0 shadow-sm">
-              <CardHeader className="pb-2 pt-3 px-4">
-                <CardTitle className="text-sm font-semibold flex items-center gap-2">
-                  <HandCoins className="h-4 w-4 text-gray-500" />
-                  To'lov usullari bo'yicha taqsimot
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="px-4 pb-3">
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-                  {paymentData.map((p) => {
-                    const IconComp = PAYMENT_ICONS[p.name] || Banknote;
-                    const pct = revenue > 0 ? Math.round((p.value / revenue) * 100) : 0;
-                    return (
-                      <div
-                        key={p.name}
-                        className="flex items-center gap-3 p-3 rounded-lg border bg-white"
-                        data-testid={`payment-${p.name}`}
-                      >
-                        <div className="w-10 h-10 rounded-lg flex items-center justify-center shrink-0" style={{ backgroundColor: p.color + "15" }}>
-                          <IconComp className="h-5 w-5" style={{ color: p.color }} />
-                        </div>
-                        <div className="min-w-0">
-                          <p className="text-xs text-gray-500 font-medium">{p.name}</p>
-                          <p className="text-sm font-bold">{p.value.toLocaleString()}</p>
-                          <div className="flex items-center gap-1.5 mt-0.5">
-                            <div className="flex-1 h-1.5 bg-gray-100 rounded-full overflow-hidden" style={{ maxWidth: 60 }}>
-                              <div className="h-full rounded-full" style={{ width: `${pct}%`, backgroundColor: p.color }} />
-                            </div>
-                            <span className="text-[10px] text-gray-400 font-medium">{pct}%</span>
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </CardContent>
-            </Card>
-          )}
-
-          <div className="flex bg-gray-100 rounded-lg p-0.5 w-fit">
-            {([
-              { key: "overview" as const, label: "Umumiy" },
-              { key: "expenses" as const, label: "Xarajatlar" },
-              { key: "report" as const, label: "Hisobot" },
-            ]).map(tab => (
-              <button
-                key={tab.key}
-                onClick={() => setActiveTab(tab.key)}
-                className={`px-4 py-1.5 text-xs font-medium rounded-md transition-all ${
-                  activeTab === tab.key ? "bg-white shadow text-primary" : "text-gray-500 hover:text-gray-700"
-                }`}
-                data-testid={`tab-${tab.key}`}
-              >
-                {tab.label}
-              </button>
-            ))}
-          </div>
-
-          {activeTab === "overview" && (
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-              <Card className="lg:col-span-2 border-0 shadow-sm">
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm font-semibold">Tushum vs Xarajat ({periodLabel})</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="h-56">
-                    {chartData.length > 1 ? (
-                      <ResponsiveContainer width="100%" height="100%">
-                        <BarChart data={chartData}>
-                          <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-                          <XAxis dataKey="date" tick={{ fontSize: 10 }} />
-                          <YAxis tick={{ fontSize: 10 }} tickFormatter={formatSum} />
-                          <Tooltip formatter={(value: number) => value.toLocaleString() + " so'm"} />
-                          <Bar dataKey="revenue" name="Tushum" fill="#22c55e" radius={[4, 4, 0, 0]} />
-                          <Bar dataKey="expenses" name="Xarajat" fill="#ef4444" radius={[4, 4, 0, 0]} />
-                        </BarChart>
-                      </ResponsiveContainer>
-                    ) : (
-                      <div className="h-full flex items-center justify-center">
-                        <div className="text-center space-y-3">
-                          <div className="grid grid-cols-2 gap-6">
-                            <div>
-                              <p className="text-xs text-gray-400 mb-1">Tushum</p>
-                              <p className="text-2xl font-bold text-green-600">{revenue.toLocaleString()}</p>
-                            </div>
-                            <div>
-                              <p className="text-xs text-gray-400 mb-1">Xarajat</p>
-                              <p className="text-2xl font-bold text-red-500">{expTotal.toLocaleString()}</p>
-                            </div>
-                          </div>
-                          <div className="pt-2 border-t">
-                            <p className="text-xs text-gray-400 mb-1">Sof foyda</p>
-                            <p className={`text-2xl font-bold ${profit >= 0 ? "text-blue-600" : "text-orange-600"}`}>{profit.toLocaleString()}</p>
-                          </div>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                </CardContent>
-              </Card>
+          {activeMenu === "kassa" && (
+            <>
+              <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
+                <Card className="border-0 shadow-sm bg-gradient-to-br from-emerald-500 to-green-600 text-white">
+                  <CardContent className="p-3 md:p-4">
+                    <div className="flex items-center gap-1.5 mb-1 opacity-80"><Wallet className="h-3.5 w-3.5" /><span className="text-[10px] font-medium">MAVJUD SUMMA</span></div>
+                    <p className="text-xl font-bold" data-testid="text-total-balance">{(balance?.total || 0).toLocaleString()}</p>
+                  </CardContent>
+                </Card>
+                <Card className="border-0 shadow-sm bg-gradient-to-br from-green-400 to-emerald-500 text-white">
+                  <CardContent className="p-3 md:p-4">
+                    <div className="flex items-center gap-1.5 mb-1 opacity-80"><Banknote className="h-3.5 w-3.5" /><span className="text-[10px] font-medium">NAQD</span></div>
+                    <p className="text-xl font-bold">{(balance?.cash || 0).toLocaleString()}</p>
+                  </CardContent>
+                </Card>
+                <Card className="border-0 shadow-sm bg-gradient-to-br from-blue-500 to-indigo-600 text-white">
+                  <CardContent className="p-3 md:p-4">
+                    <div className="flex items-center gap-1.5 mb-1 opacity-80"><CreditCard className="h-3.5 w-3.5" /><span className="text-[10px] font-medium">KARTA</span></div>
+                    <p className="text-xl font-bold">{(balance?.card || 0).toLocaleString()}</p>
+                  </CardContent>
+                </Card>
+                <Card className="border-0 shadow-sm bg-gradient-to-br from-amber-500 to-orange-600 text-white">
+                  <CardContent className="p-3 md:p-4">
+                    <div className="flex items-center gap-1.5 mb-1 opacity-80"><Clock className="h-3.5 w-3.5" /><span className="text-[10px] font-medium">NASIYADA</span></div>
+                    <p className="text-xl font-bold">{(balance?.nasiya || 0).toLocaleString()}</p>
+                  </CardContent>
+                </Card>
+                <Card className="border-0 shadow-sm bg-gradient-to-br from-red-400 to-rose-500 text-white col-span-2 lg:col-span-1">
+                  <CardContent className="p-3 md:p-4">
+                    <div className="flex items-center gap-1.5 mb-1 opacity-80"><ArrowUp className="h-3.5 w-3.5" /><span className="text-[10px] font-medium">CHIQARILGAN</span></div>
+                    <p className="text-xl font-bold">{(balance?.withdrawn || 0).toLocaleString()}</p>
+                  </CardContent>
+                </Card>
+              </div>
 
               <Card className="border-0 shadow-sm">
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm font-semibold">Xarajat taqsimoti</CardTitle>
+                <CardHeader className="pb-2 pt-3 px-4">
+                  <CardTitle className="text-sm font-semibold flex items-center gap-2">
+                    <FileText className="h-4 w-4 text-gray-500" />
+                    Kassa harakatlari — {periodLabel}
+                  </CardTitle>
                 </CardHeader>
-                <CardContent>
-                  {catExpenses.length > 0 ? (
-                    <div className="h-56">
-                      <ResponsiveContainer width="100%" height="100%">
-                        <PieChart>
-                          <Pie data={catExpenses} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={70} innerRadius={35}>
-                            {catExpenses.map((entry: any, index: number) => (
-                              <Cell key={index} fill={entry.color || PIE_COLORS[index % PIE_COLORS.length]} />
-                            ))}
-                          </Pie>
-                          <Tooltip formatter={(value: number) => value.toLocaleString() + " so'm"} />
-                          <Legend wrapperStyle={{ fontSize: 10 }} />
-                        </PieChart>
-                      </ResponsiveContainer>
-                    </div>
+                <CardContent className="px-4 pb-3">
+                  {kassaJournal.length === 0 ? (
+                    <div className="text-center py-8 text-sm text-gray-400">Hali tranzaksiya yo'q</div>
                   ) : (
-                    <div className="h-56 flex items-center justify-center text-sm text-gray-400">
-                      Xarajat yo'q
+                    <div className="space-y-1 max-h-[400px] overflow-y-auto">
+                      {kassaJournal.map((item: any) => (
+                        <div key={item.id} className="flex items-center gap-3 p-2.5 rounded-lg hover:bg-gray-50 transition-colors" data-testid={`journal-${item.id}`}>
+                          <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${
+                            item.type === "savdo" ? "bg-green-50" : item.type === "income" ? "bg-blue-50" : "bg-red-50"
+                          }`}>
+                            {item.type === "savdo" ? <ShoppingCart className="h-4 w-4 text-green-600" /> :
+                             item.type === "income" ? <ArrowDown className="h-4 w-4 text-blue-600" /> :
+                             <ArrowUp className="h-4 w-4 text-red-600" />}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium capitalize">{item.type === "savdo" ? "Sotuv" : item.type === "income" ? "Kirim" : item.type === "withdrawal" ? "Chiqarilgan" : "Chiqim"}</p>
+                            <p className="text-[10px] text-gray-400 truncate">{item.note || item.counterparty || "-"}</p>
+                          </div>
+                          <div className="text-right shrink-0">
+                            <p className={`text-sm font-bold ${item.type === "savdo" || item.type === "income" ? "text-green-600" : "text-red-600"}`}>
+                              {item.type === "savdo" || item.type === "income" ? "+" : "-"}{item.amount.toLocaleString()}
+                            </p>
+                            <div className="flex items-center gap-1 justify-end">
+                              <span className={`text-[9px] px-1.5 py-0.5 rounded font-medium ${
+                                (item.paymentMethod || "").toLowerCase().includes("karta") || (item.paymentMethod || "").toLowerCase().includes("card") ? "bg-blue-50 text-blue-600" :
+                                (item.paymentMethod || "").toLowerCase().includes("nasiya") ? "bg-amber-50 text-amber-600" :
+                                "bg-green-50 text-green-600"
+                              }`}>{item.paymentMethod}</span>
+                              <span className="text-[10px] text-gray-400">{formatDateTime(item.date)}</span>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
                     </div>
                   )}
                 </CardContent>
               </Card>
-            </div>
+            </>
           )}
 
-          {activeTab === "expenses" && (
-            <Card className="border-0 shadow-sm">
-              <CardHeader className="pb-2 flex flex-row items-center justify-between">
-                <CardTitle className="text-sm font-semibold">Xarajatlar</CardTitle>
+          {activeMenu === "kirim" && (
+            <>
+              <div className="flex items-center justify-between">
+                <h2 className="text-base font-semibold flex items-center gap-2">
+                  <ArrowDownCircle className="h-5 w-5 text-green-600" />
+                  Kirimlar — {periodLabel}
+                </h2>
+                <Button size="sm" onClick={() => setIncomeDialogOpen(true)} className="gap-1" data-testid="button-add-income">
+                  <Plus className="h-4 w-4" /> Kirim qo'shish
+                </Button>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <Card className="border-0 shadow-sm bg-gradient-to-br from-green-500 to-emerald-600 text-white">
+                  <CardContent className="p-4">
+                    <p className="text-[10px] opacity-80 font-medium">Savdodan tushum</p>
+                    <p className="text-xl font-bold">{revenue.toLocaleString()}</p>
+                    <p className="text-[10px] opacity-70">{summary?.transactionCount || 0} ta sotuv</p>
+                  </CardContent>
+                </Card>
+                <Card className="border-0 shadow-sm bg-gradient-to-br from-blue-500 to-indigo-600 text-white">
+                  <CardContent className="p-4">
+                    <p className="text-[10px] opacity-80 font-medium">Qo'shimcha kirim</p>
+                    <p className="text-xl font-bold">{(balance?.totalIncome || 0).toLocaleString()}</p>
+                    <p className="text-[10px] opacity-70">{cashEntries.filter((e: any) => e.type === "income").length} ta kirim</p>
+                  </CardContent>
+                </Card>
+              </div>
+
+              <Card className="border-0 shadow-sm">
+                <CardContent className="p-0">
+                  {cashEntries.filter((e: any) => e.type === "income").length === 0 ? (
+                    <div className="text-center py-8 text-sm text-gray-400">Qo'shimcha kirim yo'q</div>
+                  ) : (
+                    <div className="divide-y">
+                      {cashEntries.filter((e: any) => e.type === "income").map((entry: any) => (
+                        <div key={entry.id} className="flex items-center gap-3 p-3 hover:bg-gray-50 group" data-testid={`income-${entry.id}`}>
+                          <div className="w-9 h-9 rounded-lg bg-green-50 flex items-center justify-center shrink-0">
+                            <ArrowDown className="h-4 w-4 text-green-600" />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium">{entry.categoryName || "Kirim"}</p>
+                            <p className="text-xs text-gray-500 truncate">{entry.counterparty && `${entry.counterparty} • `}{entry.note || ""}</p>
+                          </div>
+                          <div className="text-right">
+                            <p className="text-sm font-bold text-green-600">+{entry.amount.toLocaleString()}</p>
+                            <p className="text-[10px] text-gray-400">{formatDateTime(entry.date)}</p>
+                          </div>
+                          <button onClick={() => { if (confirm("Bekor qilishni tasdiqlaysizmi?")) deleteEntry.mutate(entry.id); }}
+                            className="opacity-0 group-hover:opacity-100 transition-opacity" data-testid={`button-delete-income-${entry.id}`}>
+                            <Trash2 className="h-3.5 w-3.5 text-gray-400 hover:text-red-500" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </>
+          )}
+
+          {activeMenu === "chiqim" && (
+            <>
+              <div className="flex items-center justify-between flex-wrap gap-2">
+                <h2 className="text-base font-semibold flex items-center gap-2">
+                  <ArrowUpCircle className="h-5 w-5 text-red-600" />
+                  Xarajatlar
+                </h2>
                 <div className="flex gap-2">
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => setShowCategories(!showCategories)}
-                    className="text-xs gap-1"
-                    data-testid="button-toggle-categories"
-                  >
-                    <Settings className="h-3 w-3" />
-                    Kategoriyalar
+                  <Button size="sm" variant="outline" onClick={() => setShowCategories(!showCategories)} className="text-xs gap-1" data-testid="button-toggle-categories">
+                    <Settings className="h-3 w-3" /> Kategoriyalar
                     <ChevronDown className={`h-3 w-3 transition-transform ${showCategories ? "rotate-180" : ""}`} />
                   </Button>
-                  <Button
-                    size="sm"
-                    onClick={() => { setEditingExpense(null); setExpenseDialogOpen(true); }}
-                    className="gap-1"
-                    data-testid="button-add-expense"
-                  >
-                    <Plus className="h-4 w-4" />
-                    Xarajat qo'shish
+                  <Button size="sm" onClick={() => { setEditingExpense(null); setExpenseDialogOpen(true); }} className="gap-1" data-testid="button-add-expense">
+                    <Plus className="h-4 w-4" /> Xarajat qo'shish
                   </Button>
                 </div>
-              </CardHeader>
-              <CardContent>
-                {showCategories && (
-                  <div className="mb-4 p-3 bg-gray-50 rounded-lg border">
-                    <div className="flex items-center justify-between mb-2">
+              </div>
+
+              <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
+                <Card className="border-0 shadow-sm bg-gradient-to-br from-red-500 to-rose-600 text-white">
+                  <CardContent className="p-4">
+                    <p className="text-[10px] opacity-80 font-medium">Jami xarajat</p>
+                    <p className="text-xl font-bold">{expTotal.toLocaleString()}</p>
+                  </CardContent>
+                </Card>
+                {catExpenses.slice(0, 2).map((c: any, i: number) => (
+                  <Card key={i} className="border-0 shadow-sm">
+                    <CardContent className="p-4">
+                      <p className="text-[10px] text-gray-500 font-medium">{c.name}</p>
+                      <p className="text-lg font-bold">{c.value.toLocaleString()}</p>
+                      <div className="h-1.5 bg-gray-100 rounded-full mt-2">
+                        <div className="h-full rounded-full" style={{ width: `${expTotal > 0 ? Math.round((c.value / expTotal) * 100) : 0}%`, backgroundColor: c.color }} />
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+
+              {showCategories && (
+                <Card className="border-0 shadow-sm">
+                  <CardContent className="p-4">
+                    <div className="flex items-center justify-between mb-3">
                       <p className="text-xs font-semibold text-gray-600">Xarajat kategoriyalari</p>
                       <Button size="sm" variant="outline" onClick={() => { setEditingCat(null); setCatDialogOpen(true); }} className="text-xs gap-1 h-7" data-testid="button-add-category">
                         <Plus className="h-3 w-3" /> Yangi
@@ -661,112 +682,336 @@ export default function FinancePage() {
                       {categories.map((cat: any) => {
                         const IconComp = ICON_MAP[cat.icon] || Receipt;
                         return (
-                          <div key={cat.id} className="flex items-center gap-1.5 bg-white border rounded-lg px-2.5 py-1.5 text-xs group" data-testid={`category-${cat.id}`}>
+                          <div key={cat.id} className="flex items-center gap-1.5 bg-gray-50 border rounded-lg px-2.5 py-1.5 text-xs group" data-testid={`category-${cat.id}`}>
                             <IconComp className="h-3.5 w-3.5" style={{ color: cat.color }} />
                             <span className="font-medium">{cat.name}</span>
                             <button onClick={() => { setEditingCat(cat); setCatDialogOpen(true); }} className="opacity-0 group-hover:opacity-100 transition-opacity" data-testid={`button-edit-category-${cat.id}`}>
                               <Pencil className="h-3 w-3 text-gray-400 hover:text-blue-500" />
                             </button>
-                            <button onClick={() => { if (confirm("Kategoriyani o'chirishni tasdiqlaysizmi?")) deleteCat.mutate(cat.id); }} className="opacity-0 group-hover:opacity-100 transition-opacity" data-testid={`button-delete-category-${cat.id}`}>
+                            <button onClick={() => { if (confirm("O'chirishni tasdiqlaysizmi?")) deleteCat.mutate(cat.id); }} className="opacity-0 group-hover:opacity-100 transition-opacity" data-testid={`button-delete-category-${cat.id}`}>
                               <Trash2 className="h-3 w-3 text-gray-400 hover:text-red-500" />
                             </button>
                           </div>
                         );
                       })}
                     </div>
-                  </div>
-                )}
+                  </CardContent>
+                </Card>
+              )}
 
-                <div className="space-y-2">
-                  {expensesList.length === 0 ? (
-                    <div className="text-center py-8 text-sm text-gray-400">
-                      Hali xarajat kiritilmagan
+              {catExpenses.length > 0 && (
+                <Card className="border-0 shadow-sm">
+                  <CardHeader className="pb-2"><CardTitle className="text-sm font-semibold">Xarajat taqsimoti</CardTitle></CardHeader>
+                  <CardContent>
+                    <div className="h-48">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <PieChart>
+                          <Pie data={catExpenses} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={65} innerRadius={32}>
+                            {catExpenses.map((entry: any, index: number) => (
+                              <Cell key={index} fill={entry.color || PIE_COLORS[index % PIE_COLORS.length]} />
+                            ))}
+                          </Pie>
+                          <Tooltip formatter={(value: number) => value.toLocaleString() + " so'm"} />
+                          <Legend wrapperStyle={{ fontSize: 10 }} />
+                        </PieChart>
+                      </ResponsiveContainer>
                     </div>
+                  </CardContent>
+                </Card>
+              )}
+
+              <Card className="border-0 shadow-sm">
+                <CardContent className="p-0">
+                  {expensesList.length === 0 ? (
+                    <div className="text-center py-8 text-sm text-gray-400">Hali xarajat kiritilmagan</div>
                   ) : (
-                    expensesList.map((exp: any) => {
-                      const cat = getCatById(exp.categoryId);
-                      const IconComp = cat ? (ICON_MAP[cat.icon] || Receipt) : Receipt;
-                      return (
-                        <div key={exp.id} className="flex items-center gap-3 p-2.5 rounded-lg hover:bg-gray-50 group transition-colors" data-testid={`expense-${exp.id}`}>
-                          <div className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0" style={{ backgroundColor: (cat?.color || "#6b7280") + "15" }}>
-                            <IconComp className="h-4 w-4" style={{ color: cat?.color || "#6b7280" }} />
+                    <div className="divide-y">
+                      {expensesList.map((exp: any) => {
+                        const cat = getCatById(exp.categoryId);
+                        const IconComp = cat ? (ICON_MAP[cat.icon] || Receipt) : Receipt;
+                        return (
+                          <div key={exp.id} className="flex items-center gap-3 p-3 hover:bg-gray-50 group transition-colors" data-testid={`expense-${exp.id}`}>
+                            <div className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0" style={{ backgroundColor: (cat?.color || "#6b7280") + "15" }}>
+                              <IconComp className="h-4 w-4" style={{ color: cat?.color || "#6b7280" }} />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-medium truncate">{cat?.name || "Boshqa"}</p>
+                              {exp.description && <p className="text-xs text-gray-500 truncate">{exp.description}</p>}
+                            </div>
+                            <div className="text-right">
+                              <p className="text-sm font-bold text-red-600">-{exp.amount.toLocaleString()}</p>
+                              <p className="text-[10px] text-gray-400">{formatDate(exp.date)}</p>
+                            </div>
+                            <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                              <button onClick={() => { setEditingExpense(exp); setExpenseDialogOpen(true); }} data-testid={`button-edit-expense-${exp.id}`}>
+                                <Pencil className="h-3.5 w-3.5 text-gray-400 hover:text-blue-500" />
+                              </button>
+                              <button onClick={() => { if (confirm("O'chirishni tasdiqlaysizmi?")) deleteExpense.mutate(exp.id); }} data-testid={`button-delete-expense-${exp.id}`}>
+                                <Trash2 className="h-3.5 w-3.5 text-gray-400 hover:text-red-500" />
+                              </button>
+                            </div>
                           </div>
-                          <div className="flex-1 min-w-0">
-                            <p className="text-sm font-medium truncate">{cat?.name || "Boshqa"}</p>
-                            {exp.description && <p className="text-xs text-gray-500 truncate">{exp.description}</p>}
-                          </div>
-                          <div className="text-right">
-                            <p className="text-sm font-bold text-red-600">-{exp.amount.toLocaleString()}</p>
-                            <p className="text-[10px] text-gray-400">{new Date(exp.date).toLocaleDateString()}</p>
-                          </div>
-                          <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                            <button onClick={() => { setEditingExpense(exp); setExpenseDialogOpen(true); }} data-testid={`button-edit-expense-${exp.id}`}>
-                              <Pencil className="h-3.5 w-3.5 text-gray-400 hover:text-blue-500" />
-                            </button>
-                            <button onClick={() => { if (confirm("Xarajatni o'chirishni tasdiqlaysizmi?")) deleteExpense.mutate(exp.id); }} data-testid={`button-delete-expense-${exp.id}`}>
-                              <Trash2 className="h-3.5 w-3.5 text-gray-400 hover:text-red-500" />
-                            </button>
-                          </div>
-                        </div>
-                      );
-                    })
+                        );
+                      })}
+                    </div>
                   )}
-                </div>
-              </CardContent>
-            </Card>
+                </CardContent>
+              </Card>
+            </>
           )}
 
-          {activeTab === "report" && (
-            <Card className="border-0 shadow-sm" id="finance-report">
-              <CardHeader className="pb-2 flex flex-row items-center justify-between">
-                <CardTitle className="text-sm font-semibold">Kunlik hisobot - {periodLabel}</CardTitle>
-                <Button size="sm" variant="outline" onClick={() => window.print()} className="gap-1 no-print" data-testid="button-print-report">
-                  <Printer className="h-4 w-4" />
-                  Chop etish
-                </Button>
-              </CardHeader>
-              <CardContent>
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="border-b">
-                        <th className="text-left py-2 px-2 font-semibold text-gray-600">Sana</th>
-                        <th className="text-right py-2 px-2 font-semibold text-green-600">Tushum</th>
-                        {Object.keys(paymentBreakdown).length > 0 && Object.keys(paymentBreakdown).map(pm => (
-                          <th key={pm} className="text-right py-2 px-2 font-semibold text-gray-500 text-xs">{pm}</th>
-                        ))}
-                        <th className="text-right py-2 px-2 font-semibold text-red-600">Xarajat</th>
-                        <th className="text-right py-2 px-2 font-semibold text-blue-600">Sof foyda</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {dailyData.map((d: any, i: number) => (
-                        <tr key={i} className="border-b border-gray-100 hover:bg-gray-50">
-                          <td className="py-2 px-2 font-medium">{d.date}</td>
-                          <td className="py-2 px-2 text-right text-green-600 font-medium">{d.revenue.toLocaleString()}</td>
-                          {Object.keys(paymentBreakdown).length > 0 && Object.keys(paymentBreakdown).map(pm => (
-                            <td key={pm} className="py-2 px-2 text-right text-gray-500 text-xs">{(d.payments?.[pm] || 0).toLocaleString()}</td>
+          {activeMenu === "nasiya" && (
+            <>
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                <Card className="border-0 shadow-sm bg-gradient-to-br from-amber-500 to-orange-600 text-white">
+                  <CardContent className="p-3 md:p-4">
+                    <div className="flex items-center gap-1.5 mb-1 opacity-80"><HandCoins className="h-3.5 w-3.5" /><span className="text-[10px] font-medium">JAMI QARZ</span></div>
+                    <p className="text-xl font-bold">{debtStats.remaining.toLocaleString()}</p>
+                  </CardContent>
+                </Card>
+                <Card className="border-0 shadow-sm bg-gradient-to-br from-green-500 to-emerald-600 text-white">
+                  <CardContent className="p-3 md:p-4">
+                    <div className="flex items-center gap-1.5 mb-1 opacity-80"><DollarSign className="h-3.5 w-3.5" /><span className="text-[10px] font-medium">TO'LANGAN</span></div>
+                    <p className="text-xl font-bold">{debtStats.totalPaid.toLocaleString()}</p>
+                  </CardContent>
+                </Card>
+                <Card className="border-0 shadow-sm bg-gradient-to-br from-red-500 to-rose-600 text-white">
+                  <CardContent className="p-3 md:p-4">
+                    <div className="flex items-center gap-1.5 mb-1 opacity-80"><AlertTriangle className="h-3.5 w-3.5" /><span className="text-[10px] font-medium">MUDDATI O'TGAN</span></div>
+                    <p className="text-xl font-bold">{debtStats.overdue}</p>
+                  </CardContent>
+                </Card>
+                <Card className="border-0 shadow-sm bg-gradient-to-br from-violet-500 to-purple-600 text-white">
+                  <CardContent className="p-3 md:p-4">
+                    <div className="flex items-center gap-1.5 mb-1 opacity-80"><Users className="h-3.5 w-3.5" /><span className="text-[10px] font-medium">QARZDORLAR</span></div>
+                    <p className="text-xl font-bold">{debtStats.pending}</p>
+                  </CardContent>
+                </Card>
+              </div>
+
+              <Card className="border-0 shadow-sm">
+                <CardHeader className="pb-2 pt-3 px-4">
+                  <CardTitle className="text-sm font-semibold">Qarzdorlar ro'yxati</CardTitle>
+                </CardHeader>
+                <CardContent className="px-4 pb-3">
+                  {debtTransactions.filter((d: any) => d.debtStatus !== "paid").length === 0 ? (
+                    <div className="text-center py-8 text-sm text-gray-400">Qarzdor yo'q</div>
+                  ) : (
+                    <div className="space-y-2">
+                      {debtTransactions.filter((d: any) => d.debtStatus !== "paid").sort((a: any, b: any) => {
+                        if (a.dueDate && b.dueDate) return new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime();
+                        return 0;
+                      }).map((debt: any) => {
+                        const remaining = debt.totalAmount - (debt.paidAmount || 0);
+                        const pct = debt.totalAmount > 0 ? Math.round(((debt.paidAmount || 0) / debt.totalAmount) * 100) : 0;
+                        const days = debt.dueDate ? daysUntil(debt.dueDate) : null;
+                        const isOverdue = days !== null && days < 0;
+                        return (
+                          <div key={debt.id} className={`p-3 rounded-lg border ${isOverdue ? "border-red-200 bg-red-50/50" : "border-gray-100 bg-white"}`} data-testid={`debt-${debt.id}`}>
+                            <div className="flex items-center justify-between mb-2">
+                              <div className="flex items-center gap-2">
+                                <div className={`w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold ${isOverdue ? "bg-red-500" : "bg-amber-500"}`}>
+                                  {(debt.customerName || "?")[0].toUpperCase()}
+                                </div>
+                                <div>
+                                  <p className="text-sm font-semibold">{debt.customerName || "Noma'lum"}</p>
+                                  {debt.customerPhone && <p className="text-[10px] text-gray-500 flex items-center gap-0.5"><Phone className="h-2.5 w-2.5" />{debt.customerPhone}</p>}
+                                </div>
+                              </div>
+                              <Button size="sm" variant={isOverdue ? "destructive" : "default"} onClick={() => { setSelectedDebt(debt); setPayAmount(""); setPayNote(""); setPayDialogOpen(true); }}
+                                className="text-xs h-7 gap-1" data-testid={`button-pay-${debt.id}`}>
+                                <Banknote className="h-3 w-3" /> To'lash
+                              </Button>
+                            </div>
+                            <div className="flex items-center justify-between text-xs mb-1.5">
+                              <span className="text-gray-500">Qoldiq: <span className="font-bold text-red-600">{remaining.toLocaleString()}</span> / {debt.totalAmount.toLocaleString()}</span>
+                              {days !== null && (
+                                <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${isOverdue ? "bg-red-100 text-red-700" : days <= 3 ? "bg-amber-100 text-amber-700" : "bg-gray-100 text-gray-600"}`}>
+                                  {isOverdue ? `${Math.abs(days)} kun o'tgan` : `${days} kun qoldi`}
+                                </span>
+                              )}
+                            </div>
+                            <div className="h-1.5 bg-gray-200 rounded-full overflow-hidden">
+                              <div className="h-full rounded-full transition-all bg-green-500" style={{ width: `${pct}%` }} />
+                            </div>
+                            <p className="text-[10px] text-gray-400 mt-1">{formatDate(debt.date)}{debt.dueDate && ` • Muddat: ${formatDate(debt.dueDate)}`}</p>
+                          </div>
+                        );
+                      })}
+
+                      {debtTransactions.filter((d: any) => d.debtStatus === "paid").length > 0 && (
+                        <div className="pt-3 border-t mt-3">
+                          <p className="text-xs font-semibold text-gray-500 mb-2">To'liq to'langan ({debtTransactions.filter((d: any) => d.debtStatus === "paid").length})</p>
+                          {debtTransactions.filter((d: any) => d.debtStatus === "paid").slice(0, 5).map((debt: any) => (
+                            <div key={debt.id} className="flex items-center gap-2 p-2 rounded-lg bg-green-50/50 mb-1">
+                              <UserCheck className="h-4 w-4 text-green-600" />
+                              <span className="text-xs font-medium flex-1">{debt.customerName || "Noma'lum"}</span>
+                              <span className="text-xs text-green-600 font-bold">{debt.totalAmount.toLocaleString()}</span>
+                            </div>
                           ))}
-                          <td className="py-2 px-2 text-right text-red-600 font-medium">{d.expenses.toLocaleString()}</td>
-                          <td className={`py-2 px-2 text-right font-bold ${d.profit >= 0 ? "text-blue-600" : "text-orange-600"}`}>{d.profit.toLocaleString()}</td>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </>
+          )}
+
+          {activeMenu === "hisobot" && (
+            <>
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                <Card className="border-0 shadow-sm bg-gradient-to-br from-green-500 to-emerald-600 text-white">
+                  <CardContent className="p-3">
+                    <p className="text-[10px] opacity-80 font-medium">Tushum</p>
+                    <p className="text-lg font-bold">{revenue.toLocaleString()}</p>
+                  </CardContent>
+                </Card>
+                <Card className="border-0 shadow-sm bg-gradient-to-br from-red-500 to-rose-600 text-white">
+                  <CardContent className="p-3">
+                    <p className="text-[10px] opacity-80 font-medium">Xarajat</p>
+                    <p className="text-lg font-bold">{expTotal.toLocaleString()}</p>
+                  </CardContent>
+                </Card>
+                <Card className={`border-0 shadow-sm text-white ${profit >= 0 ? "bg-gradient-to-br from-blue-500 to-indigo-600" : "bg-gradient-to-br from-orange-500 to-red-600"}`}>
+                  <CardContent className="p-3">
+                    <p className="text-[10px] opacity-80 font-medium">Sof foyda</p>
+                    <p className="text-lg font-bold">{profit.toLocaleString()}</p>
+                  </CardContent>
+                </Card>
+                <Card className="border-0 shadow-sm bg-gradient-to-br from-violet-500 to-purple-600 text-white">
+                  <CardContent className="p-3">
+                    <p className="text-[10px] opacity-80 font-medium">O'rtacha chek</p>
+                    <p className="text-lg font-bold">{(summary?.transactionCount || 0) > 0 ? Math.round(revenue / (summary?.transactionCount || 1)).toLocaleString() : "0"}</p>
+                  </CardContent>
+                </Card>
+              </div>
+
+              {Object.keys(paymentBreakdown).length > 0 && (
+                <Card className="border-0 shadow-sm">
+                  <CardHeader className="pb-2 pt-3 px-4">
+                    <CardTitle className="text-sm font-semibold flex items-center gap-2">
+                      <HandCoins className="h-4 w-4 text-gray-500" />To'lov usullari
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="px-4 pb-3">
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                      {Object.entries(paymentBreakdown).map(([name, value]) => {
+                        const pct = revenue > 0 ? Math.round(((value as number) / revenue) * 100) : 0;
+                        const color = PAYMENT_COLORS[name] || "#6b7280";
+                        return (
+                          <div key={name} className="flex items-center gap-3 p-3 rounded-lg border bg-white" data-testid={`payment-${name}`}>
+                            <div className="w-10 h-10 rounded-lg flex items-center justify-center shrink-0" style={{ backgroundColor: color + "15" }}>
+                              <Banknote className="h-5 w-5" style={{ color }} />
+                            </div>
+                            <div className="min-w-0">
+                              <p className="text-xs text-gray-500 font-medium">{name}</p>
+                              <p className="text-sm font-bold">{(value as number).toLocaleString()}</p>
+                              <div className="flex items-center gap-1.5 mt-0.5">
+                                <div className="flex-1 h-1.5 bg-gray-100 rounded-full overflow-hidden" style={{ maxWidth: 60 }}>
+                                  <div className="h-full rounded-full" style={{ width: `${pct}%`, backgroundColor: color }} />
+                                </div>
+                                <span className="text-[10px] text-gray-400 font-medium">{pct}%</span>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                <Card className="border-0 shadow-sm">
+                  <CardHeader className="pb-2"><CardTitle className="text-sm font-semibold">Tushum vs Xarajat</CardTitle></CardHeader>
+                  <CardContent>
+                    <div className="h-52">
+                      {dailyData.length > 1 ? (
+                        <ResponsiveContainer width="100%" height="100%">
+                          <BarChart data={dailyData.map((d: any) => ({ ...d, date: d.date.slice(5) }))}>
+                            <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                            <XAxis dataKey="date" tick={{ fontSize: 10 }} />
+                            <YAxis tick={{ fontSize: 10 }} tickFormatter={formatSum} />
+                            <Tooltip formatter={(value: number) => value.toLocaleString() + " so'm"} />
+                            <Bar dataKey="revenue" name="Tushum" fill="#22c55e" radius={[4, 4, 0, 0]} />
+                            <Bar dataKey="expenses" name="Xarajat" fill="#ef4444" radius={[4, 4, 0, 0]} />
+                          </BarChart>
+                        </ResponsiveContainer>
+                      ) : (
+                        <div className="h-full flex items-center justify-center">
+                          <div className="text-center">
+                            <p className="text-xs text-gray-400 mb-2">Tushum</p>
+                            <p className="text-2xl font-bold text-green-600">{revenue.toLocaleString()}</p>
+                            <p className="text-xs text-gray-400 mt-3 mb-2">Xarajat</p>
+                            <p className="text-2xl font-bold text-red-500">{expTotal.toLocaleString()}</p>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </CardContent>
+                </Card>
+                {catExpenses.length > 0 && (
+                  <Card className="border-0 shadow-sm">
+                    <CardHeader className="pb-2"><CardTitle className="text-sm font-semibold">Xarajat taqsimoti</CardTitle></CardHeader>
+                    <CardContent>
+                      <div className="h-52">
+                        <ResponsiveContainer width="100%" height="100%">
+                          <PieChart>
+                            <Pie data={catExpenses} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={65} innerRadius={32}>
+                              {catExpenses.map((_: any, i: number) => <Cell key={i} fill={catExpenses[i].color || PIE_COLORS[i % PIE_COLORS.length]} />)}
+                            </Pie>
+                            <Tooltip formatter={(value: number) => value.toLocaleString() + " so'm"} />
+                            <Legend wrapperStyle={{ fontSize: 10 }} />
+                          </PieChart>
+                        </ResponsiveContainer>
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
+              </div>
+
+              <Card className="border-0 shadow-sm" id="finance-report">
+                <CardHeader className="pb-2 flex flex-row items-center justify-between">
+                  <CardTitle className="text-sm font-semibold">Kunlik hisobot — {periodLabel}</CardTitle>
+                  <Button size="sm" variant="outline" onClick={() => window.print()} className="gap-1 no-print" data-testid="button-print-report">
+                    <Printer className="h-4 w-4" /> Chop etish
+                  </Button>
+                </CardHeader>
+                <CardContent>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b">
+                          <th className="text-left py-2 px-2 font-semibold text-gray-600">Sana</th>
+                          <th className="text-right py-2 px-2 font-semibold text-green-600">Tushum</th>
+                          <th className="text-right py-2 px-2 font-semibold text-red-600">Xarajat</th>
+                          <th className="text-right py-2 px-2 font-semibold text-blue-600">Sof foyda</th>
                         </tr>
-                      ))}
-                    </tbody>
-                    <tfoot>
-                      <tr className="border-t-2 font-bold">
-                        <td className="py-2 px-2">Jami</td>
-                        <td className="py-2 px-2 text-right text-green-600">{revenue.toLocaleString()}</td>
-                        {Object.keys(paymentBreakdown).length > 0 && Object.keys(paymentBreakdown).map(pm => (
-                          <td key={pm} className="py-2 px-2 text-right text-gray-500 text-xs">{(paymentBreakdown[pm] || 0).toLocaleString()}</td>
+                      </thead>
+                      <tbody>
+                        {dailyData.map((d: any, i: number) => (
+                          <tr key={i} className="border-b border-gray-100 hover:bg-gray-50">
+                            <td className="py-2 px-2 font-medium">{d.date}</td>
+                            <td className="py-2 px-2 text-right text-green-600 font-medium">{d.revenue.toLocaleString()}</td>
+                            <td className="py-2 px-2 text-right text-red-600 font-medium">{d.expenses.toLocaleString()}</td>
+                            <td className={`py-2 px-2 text-right font-bold ${d.profit >= 0 ? "text-blue-600" : "text-orange-600"}`}>{d.profit.toLocaleString()}</td>
+                          </tr>
                         ))}
-                        <td className="py-2 px-2 text-right text-red-600">{expTotal.toLocaleString()}</td>
-                        <td className={`py-2 px-2 text-right ${profit >= 0 ? "text-blue-600" : "text-orange-600"}`}>{profit.toLocaleString()}</td>
-                      </tr>
-                    </tfoot>
-                  </table>
-                </div>
-              </CardContent>
-            </Card>
+                      </tbody>
+                      <tfoot>
+                        <tr className="border-t-2 font-bold">
+                          <td className="py-2 px-2">Jami</td>
+                          <td className="py-2 px-2 text-right text-green-600">{revenue.toLocaleString()}</td>
+                          <td className="py-2 px-2 text-right text-red-600">{expTotal.toLocaleString()}</td>
+                          <td className={`py-2 px-2 text-right ${profit >= 0 ? "text-blue-600" : "text-orange-600"}`}>{profit.toLocaleString()}</td>
+                        </tr>
+                      </tfoot>
+                    </table>
+                  </div>
+                </CardContent>
+              </Card>
+            </>
           )}
         </div>
       </div>
@@ -776,13 +1021,7 @@ export default function FinancePage() {
         onClose={() => { setExpenseDialogOpen(false); setEditingExpense(null); }}
         expense={editingExpense}
         categories={categories}
-        onSave={(data: any) => {
-          if (editingExpense) {
-            updateExpense.mutate({ id: editingExpense.id, data });
-          } else {
-            createExpense.mutate(data);
-          }
-        }}
+        onSave={(data: any) => { editingExpense ? updateExpense.mutate({ id: editingExpense.id, data }) : createExpense.mutate(data); }}
         isLoading={createExpense.isPending || updateExpense.isPending}
       />
 
@@ -790,15 +1029,48 @@ export default function FinancePage() {
         isOpen={catDialogOpen}
         onClose={() => { setCatDialogOpen(false); setEditingCat(null); }}
         category={editingCat}
-        onSave={(data: any) => {
-          if (editingCat) {
-            updateCat.mutate({ id: editingCat.id, data });
-          } else {
-            createCat.mutate(data);
-          }
-        }}
+        onSave={(data: any) => { editingCat ? updateCat.mutate({ id: editingCat.id, data }) : createCat.mutate(data); }}
         isLoading={createCat.isPending || updateCat.isPending}
       />
+
+      <IncomeDialog
+        isOpen={incomeDialogOpen}
+        onClose={() => setIncomeDialogOpen(false)}
+        onSave={(data: any) => createIncome.mutate(data)}
+        isLoading={createIncome.isPending}
+      />
+
+      <Dialog open={payDialogOpen} onOpenChange={setPayDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Qarz to'lash</DialogTitle>
+          </DialogHeader>
+          {selectedDebt && (
+            <div className="space-y-4">
+              <div className="p-3 bg-gray-50 rounded-lg">
+                <p className="text-sm font-semibold">{selectedDebt.customerName}</p>
+                <p className="text-xs text-gray-500">Qoldiq: <span className="font-bold text-red-600">{(selectedDebt.totalAmount - (selectedDebt.paidAmount || 0)).toLocaleString()} so'm</span></p>
+              </div>
+              <div className="flex gap-2">
+                <Button size="sm" variant="outline" onClick={() => setPayAmount(String(selectedDebt.totalAmount - (selectedDebt.paidAmount || 0)))} className="text-xs">To'liq</Button>
+                <Button size="sm" variant="outline" onClick={() => setPayAmount(String(Math.floor((selectedDebt.totalAmount - (selectedDebt.paidAmount || 0)) / 2)))} className="text-xs">Yarmini</Button>
+              </div>
+              <div>
+                <Label>To'lov summasi (so'm)</Label>
+                <Input type="number" value={payAmount} onChange={e => setPayAmount(e.target.value)} placeholder="0" data-testid="input-pay-amount" />
+              </div>
+              <div>
+                <Label>Izoh</Label>
+                <Input value={payNote} onChange={e => setPayNote(e.target.value)} placeholder="Ixtiyoriy izoh" data-testid="input-pay-note" />
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setPayDialogOpen(false)}>Bekor</Button>
+            <Button onClick={handleDebtPay} disabled={!payAmount || parseInt(payAmount) <= 0} data-testid="button-confirm-pay">To'lash</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
@@ -823,13 +1095,6 @@ function ExpenseDialog({ isOpen, onClose, expense, categories, onSave, isLoading
     }
   }, [expense, isOpen]);
 
-  const handleSubmit = () => {
-    const amt = parseInt(amount);
-    if (!amt || amt <= 0) return;
-    if (!categoryId) return;
-    onSave({ amount: amt, categoryId, description, date });
-  };
-
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="sm:max-w-md">
@@ -838,54 +1103,110 @@ function ExpenseDialog({ isOpen, onClose, expense, categories, onSave, isLoading
         </DialogHeader>
         <div className="space-y-4">
           <div>
-            <Label>Kategoriya</Label>
+            <Label>Nimaga (kategoriya)</Label>
             <Select value={categoryId} onValueChange={setCategoryId}>
-              <SelectTrigger data-testid="select-expense-category">
-                <SelectValue placeholder="Tanlang..." />
-              </SelectTrigger>
+              <SelectTrigger data-testid="select-expense-category"><SelectValue placeholder="Tanlang..." /></SelectTrigger>
               <SelectContent>
-                {categories.map((cat: any) => (
-                  <SelectItem key={cat.id} value={cat.id}>
-                    {cat.name}
-                  </SelectItem>
-                ))}
+                {categories.map((cat: any) => <SelectItem key={cat.id} value={cat.id}>{cat.name}</SelectItem>)}
               </SelectContent>
             </Select>
           </div>
           <div>
             <Label>Summa (so'm)</Label>
-            <Input
-              type="number"
-              value={amount}
-              onChange={(e) => setAmount(e.target.value)}
-              placeholder="0"
-              data-testid="input-expense-amount"
-            />
+            <Input type="number" value={amount} onChange={e => setAmount(e.target.value)} placeholder="0" data-testid="input-expense-amount" />
           </div>
           <div>
             <Label>Sana</Label>
-            <Input
-              type="date"
-              value={date}
-              onChange={(e) => setDate(e.target.value)}
-              data-testid="input-expense-date"
-            />
+            <Input type="date" value={date} onChange={e => setDate(e.target.value)} data-testid="input-expense-date" />
           </div>
           <div>
             <Label>Izoh</Label>
-            <Textarea
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              placeholder="Izoh yozing..."
-              rows={2}
-              data-testid="input-expense-description"
-            />
+            <Textarea value={description} onChange={e => setDescription(e.target.value)} placeholder="Izoh yozing..." rows={2} data-testid="input-expense-description" />
           </div>
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={onClose}>Bekor qilish</Button>
-          <Button onClick={handleSubmit} disabled={isLoading || !amount || parseInt(amount) <= 0} data-testid="button-save-expense">
+          <Button onClick={() => { const amt = parseInt(amount); if (!amt || amt <= 0 || !categoryId) return; onSave({ amount: amt, categoryId, description, date }); }} disabled={isLoading || !amount || parseInt(amount) <= 0} data-testid="button-save-expense">
             {expense ? "Saqlash" : "Qo'shish"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function IncomeDialog({ isOpen, onClose, onSave, isLoading }: any) {
+  const [amount, setAmount] = useState("");
+  const [categoryName, setCategoryName] = useState(INCOME_CATEGORIES[0]);
+  const [counterparty, setCounterparty] = useState("");
+  const [paymentType, setPaymentType] = useState("cash");
+  const [note, setNote] = useState("");
+  const [date, setDate] = useState(new Date().toISOString().split("T")[0]);
+
+  useEffect(() => {
+    if (isOpen) {
+      setAmount("");
+      setCategoryName(INCOME_CATEGORIES[0]);
+      setCounterparty("");
+      setPaymentType("cash");
+      setNote("");
+      setDate(new Date().toISOString().split("T")[0]);
+    }
+  }, [isOpen]);
+
+  return (
+    <Dialog open={isOpen} onOpenChange={onClose}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2"><ArrowDownCircle className="h-5 w-5 text-green-600" /> Yangi kirim</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-4">
+          <div>
+            <Label>Nimadan</Label>
+            <Select value={categoryName} onValueChange={setCategoryName}>
+              <SelectTrigger data-testid="select-income-category"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {INCOME_CATEGORIES.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+          <div>
+            <Label>Kimdan</Label>
+            <Input value={counterparty} onChange={e => setCounterparty(e.target.value)} placeholder="Ism yoki kompaniya" data-testid="input-income-from" />
+          </div>
+          <div>
+            <Label>Summa (so'm)</Label>
+            <Input type="number" value={amount} onChange={e => setAmount(e.target.value)} placeholder="0" data-testid="input-income-amount" />
+          </div>
+          <div>
+            <Label>To'lov turi</Label>
+            <Select value={paymentType} onValueChange={setPaymentType}>
+              <SelectTrigger data-testid="select-income-payment"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="cash">Naqd</SelectItem>
+                <SelectItem value="card">Karta</SelectItem>
+                <SelectItem value="bank">Bank o'tkazma</SelectItem>
+                <SelectItem value="other">Boshqa</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div>
+            <Label>Sana</Label>
+            <Input type="date" value={date} onChange={e => setDate(e.target.value)} data-testid="input-income-date" />
+          </div>
+          <div>
+            <Label>Izoh</Label>
+            <Input value={note} onChange={e => setNote(e.target.value)} placeholder="Ixtiyoriy izoh" data-testid="input-income-note" />
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>Bekor qilish</Button>
+          <Button onClick={() => {
+            const amt = parseInt(amount);
+            if (!amt || amt <= 0) return;
+            onSave({ amount: amt, categoryName, counterparty, paymentType, note, date });
+          }} disabled={isLoading || !amount || parseInt(amount) <= 0} data-testid="button-save-income">
+            Qo'shish
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -898,25 +1219,13 @@ function CategoryDialog({ isOpen, onClose, category, onSave, isLoading }: any) {
   const [icon, setIcon] = useState("Receipt");
   const [color, setColor] = useState("#6b7280");
 
-  const iconOptions = ["Home", "Briefcase", "Truck", "Zap", "ShoppingBag", "Megaphone", "Receipt", "Users", "Tag", "Wallet", "MoreHorizontal"];
+  const iconOptions = ["Home", "Briefcase", "Truck", "Zap", "ShoppingBag", "Megaphone", "Receipt", "Users", "Tag", "Wallet", "Building", "MoreHorizontal"];
   const colorOptions = ["#ef4444", "#f59e0b", "#3b82f6", "#8b5cf6", "#10b981", "#ec4899", "#6b7280", "#14b8a6", "#f97316", "#06b6d4"];
 
   useEffect(() => {
-    if (category) {
-      setName(category.name);
-      setIcon(category.icon || "Receipt");
-      setColor(category.color || "#6b7280");
-    } else {
-      setName("");
-      setIcon("Receipt");
-      setColor("#6b7280");
-    }
+    if (category) { setName(category.name); setIcon(category.icon || "Receipt"); setColor(category.color || "#6b7280"); }
+    else { setName(""); setIcon("Receipt"); setColor("#6b7280"); }
   }, [category, isOpen]);
-
-  const handleSubmit = () => {
-    if (!name.trim()) return;
-    onSave({ name: name.trim(), icon, color });
-  };
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
@@ -927,27 +1236,17 @@ function CategoryDialog({ isOpen, onClose, category, onSave, isLoading }: any) {
         <div className="space-y-4">
           <div>
             <Label>Nomi</Label>
-            <Input
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="Kategoriya nomi..."
-              data-testid="input-category-name"
-            />
+            <Input value={name} onChange={e => setName(e.target.value)} placeholder="Kategoriya nomi..." data-testid="input-category-name" />
           </div>
           <div>
             <Label>Ikonka</Label>
             <div className="flex flex-wrap gap-2 mt-1">
-              {iconOptions.map((ic) => {
+              {iconOptions.map(ic => {
                 const IconComp = ICON_MAP[ic] || Receipt;
                 return (
-                  <button
-                    key={ic}
-                    onClick={() => setIcon(ic)}
-                    className={`w-9 h-9 rounded-lg flex items-center justify-center border-2 transition-colors ${
-                      icon === ic ? "border-primary bg-primary/10" : "border-gray-200 hover:border-gray-300"
-                    }`}
-                    data-testid={`button-icon-${ic}`}
-                  >
+                  <button key={ic} onClick={() => setIcon(ic)}
+                    className={`w-9 h-9 rounded-lg flex items-center justify-center border-2 transition-colors ${icon === ic ? "border-primary bg-primary/10" : "border-gray-200 hover:border-gray-300"}`}
+                    data-testid={`button-icon-${ic}`}>
                     <IconComp className="h-4 w-4" />
                   </button>
                 );
@@ -957,23 +1256,17 @@ function CategoryDialog({ isOpen, onClose, category, onSave, isLoading }: any) {
           <div>
             <Label>Rang</Label>
             <div className="flex flex-wrap gap-2 mt-1">
-              {colorOptions.map((c) => (
-                <button
-                  key={c}
-                  onClick={() => setColor(c)}
-                  className={`w-8 h-8 rounded-full border-2 transition-all ${
-                    color === c ? "border-gray-800 scale-110" : "border-transparent"
-                  }`}
-                  style={{ backgroundColor: c }}
-                  data-testid={`button-color-${c}`}
-                />
+              {colorOptions.map(c => (
+                <button key={c} onClick={() => setColor(c)}
+                  className={`w-8 h-8 rounded-full border-2 transition-all ${color === c ? "border-gray-800 scale-110" : "border-transparent"}`}
+                  style={{ backgroundColor: c }} data-testid={`button-color-${c}`} />
               ))}
             </div>
           </div>
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={onClose}>Bekor qilish</Button>
-          <Button onClick={handleSubmit} disabled={isLoading || !name.trim()} data-testid="button-save-category">
+          <Button onClick={() => { if (!name.trim()) return; onSave({ name: name.trim(), icon, color }); }} disabled={isLoading || !name.trim()} data-testid="button-save-category">
             {category ? "Saqlash" : "Qo'shish"}
           </Button>
         </DialogFooter>

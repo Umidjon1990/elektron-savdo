@@ -130,6 +130,20 @@ export const expenses = pgTable("expenses", {
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
+export const cashRegisterEntries = pgTable("cash_register_entries", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  tenantId: varchar("tenant_id").references(() => tenants.id),
+  type: text("type").notNull(),
+  amount: integer("amount").notNull(),
+  paymentType: text("payment_type").notNull().default("cash"),
+  categoryName: text("category_name").default(""),
+  counterparty: text("counterparty").default(""),
+  note: text("note").default(""),
+  createdBy: varchar("created_by"),
+  date: timestamp("date").notNull(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
 // Insert schemas
 export const insertTenantSchema = createInsertSchema(tenants).omit({
   id: true,
@@ -165,6 +179,11 @@ export const insertExpenseCategorySchema = createInsertSchema(expenseCategories)
 });
 
 export const insertExpenseSchema = createInsertSchema(expenses).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertCashRegisterEntrySchema = createInsertSchema(cashRegisterEntries).omit({
   id: true,
   createdAt: true,
 });
@@ -212,3 +231,6 @@ export type Expense = typeof expenses.$inferSelect;
 
 export type InsertDebtPayment = z.infer<typeof insertDebtPaymentSchema>;
 export type DebtPayment = typeof debtPayments.$inferSelect;
+
+export type InsertCashRegisterEntry = z.infer<typeof insertCashRegisterEntrySchema>;
+export type CashRegisterEntry = typeof cashRegisterEntries.$inferSelect;

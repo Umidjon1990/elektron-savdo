@@ -1,7 +1,7 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { insertProductSchema, insertOrderSchema, insertCategorySchema, insertTransactionSchema, registerTenantSchema, loginSchema, insertExpenseSchema, insertExpenseCategorySchema } from "@shared/schema";
+import { insertProductSchema, insertOrderSchema, insertCategorySchema, insertTransactionSchema, registerTenantSchema, loginSchema, insertExpenseSchema, insertExpenseCategorySchema, insertCashRegisterEntrySchema } from "@shared/schema";
 import { registerR2Routes } from "./integrations/r2-routes";
 import { sendTelegramNotification } from "./telegram";
 import { authMiddleware, optionalAuth, superAdminOnly, hashPassword, comparePassword, generateToken } from "./auth";
@@ -938,6 +938,58 @@ export async function registerRoutes(
       res.json({ success: true });
     } catch (error) {
       res.status(500).json({ error: "Failed to delete expense" });
+    }
+  });
+
+  // ============ CASH REGISTER ============
+
+  app.get("/api/cash-register/balance", authMiddleware, async (req, res) => {
+    try {
+      const { from, to } = req.query;
+      const dateFrom = from ? new Date(from as string) : undefined;
+      const dateTo = to ? new Date(to as string) : undefined;
+      const balance = await storage.getCashRegisterBalance(req.tenantId!, dateFrom, dateTo);
+      res.json(balance);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to get balance" });
+    }
+  });
+
+  app.get("/api/cash-register/entries", authMiddleware, async (req, res) => {
+    try {
+      const { type, from, to } = req.query;
+      const dateFrom = from ? new Date(from as string) : undefined;
+      const dateTo = to ? new Date(to as string) : undefined;
+      const entries = await storage.getCashRegisterEntries(req.tenantId!, type as string | undefined, dateFrom, dateTo);
+      res.json(entries);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to get entries" });
+    }
+  });
+
+  app.post("/api/cash-register/entries", authMiddleware, async (req, res) => {
+    try {
+      const data = insertCashRegisterEntrySchema.parse({
+        ...req.body,
+        tenantId: req.tenantId,
+        date: new Date(req.body.date || new Date()),
+        createdBy: req.user?.userId,
+      });
+      const entry = await storage.createCashRegisterEntry(data);
+      res.status(201).json(entry);
+    } catch (error: any) {
+      console.error("Error creating cash register entry:", error);
+      res.status(400).json({ error: "Kiritishda xatolik" });
+    }
+  });
+
+  app.delete("/api/cash-register/entries/:id", authMiddleware, async (req, res) => {
+    try {
+      const deleted = await storage.deleteCashRegisterEntry(req.params.id, req.tenantId);
+      if (!deleted) return res.status(404).json({ error: "Entry not found" });
+      res.json({ success: true });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to delete entry" });
     }
   });
 

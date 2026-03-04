@@ -1,6 +1,6 @@
 import { db } from "@db";
-import { users, products, orders, categories, transactions, tenants, expenses, expenseCategories, debtPayments } from "@shared/schema";
-import type { User, InsertUser, Product, InsertProduct, Order, InsertOrder, Category, InsertCategory, Transaction, InsertTransaction, Tenant, InsertTenant, Expense, InsertExpense, ExpenseCategory, InsertExpenseCategory, DebtPayment, InsertDebtPayment } from "@shared/schema";
+import { users, products, orders, categories, transactions, tenants, expenses, expenseCategories, debtPayments, cashRegisterEntries } from "@shared/schema";
+import type { User, InsertUser, Product, InsertProduct, Order, InsertOrder, Category, InsertCategory, Transaction, InsertTransaction, Tenant, InsertTenant, Expense, InsertExpense, ExpenseCategory, InsertExpenseCategory, DebtPayment, InsertDebtPayment, CashRegisterEntry, InsertCashRegisterEntry } from "@shared/schema";
 import { eq, desc, sql, and, inArray, gte, lte } from "drizzle-orm";
 
 export interface IStorage {
@@ -70,6 +70,12 @@ export interface IStorage {
   getDebtPayments(transactionId: string, tenantId?: string): Promise<DebtPayment[]>;
   createDebtPayment(payment: InsertDebtPayment): Promise<DebtPayment>;
   updateTransactionDebt(id: string, paidAmount: number, debtStatus: string, tenantId?: string): Promise<Transaction | undefined>;
+
+  // Cash Register Entries (kirim/chiqim journal)
+  getCashRegisterEntries(tenantId: string, type?: string, dateFrom?: Date, dateTo?: Date): Promise<CashRegisterEntry[]>;
+  createCashRegisterEntry(entry: InsertCashRegisterEntry): Promise<CashRegisterEntry>;
+  deleteCashRegisterEntry(id: string, tenantId?: string): Promise<boolean>;
+  getCashRegisterBalance(tenantId: string, dateFrom?: Date, dateTo?: Date): Promise<{ cash: number; card: number; nasiya: number; withdrawn: number; totalIncome: number; totalExpense: number; total: number }>;
 
   // Financial summary
   getFinancialSummary(tenantId: string, dateFrom: Date, dateTo: Date): Promise<{ revenue: number; expensesTotal: number; profit: number; totalProfit: number; paymentBreakdown: Record<string, number>; transactionCount: number }>;
@@ -470,6 +476,101 @@ export class DatabaseStorage implements IStorage {
       .where(and(...conditions))
       .returning();
     return updated;
+  }
+
+  // Cash Register Entries
+  async getCashRegisterEntries(tenantId: string, type?: string, dateFrom?: Date, dateTo?: Date): Promise<CashRegisterEntry[]> {
+    const conditions = [eq(cashRegisterEntries.tenantId, tenantId)];
+    if (type) conditions.push(eq(cashRegisterEntries.type, type));
+    if (dateFrom) conditions.push(gte(cashRegisterEntries.date, dateFrom));
+    if (dateTo) conditions.push(lte(cashRegisterEntries.date, dateTo));
+    return await db.select().from(cashRegisterEntries)
+      .where(and(...conditions))
+      .orderBy(desc(cashRegisterEntries.date));
+  }
+
+  async createCashRegisterEntry(entry: InsertCashRegisterEntry): Promise<CashRegisterEntry> {
+    const [created] = await db.insert(cashRegisterEntries).values(entry).returning();
+    return created;
+  }
+
+  async deleteCashRegisterEntry(id: string, tenantId?: string): Promise<boolean> {
+    const condition = tenantId
+      ? and(eq(cashRegisterEntries.id, id), eq(cashRegisterEntries.tenantId, tenantId))
+      : eq(cashRegisterEntries.id, id);
+    const result = await db.delete(cashRegisterEntries).where(condition);
+    return (result.rowCount ?? 0) > 0;
+  }
+
+  async getCashRegisterBalance(tenantId: string, dateFrom?: Date, dateTo?: Date): Promise<{ cash: number; card: number; nasiya: number; withdrawn: number; totalIncome: number; totalExpense: number; total: number }> {
+    const txnConditions = [
+      eq(transactions.tenantId, tenantId),
+      sql`${transactions.status} != 'voided'`,
+    ];
+    if (dateFrom) txnConditions.push(gte(transactions.date, dateFrom));
+    if (dateTo) txnConditions.push(lte(transactions.date, dateTo));
+
+    const txns = await db.select({
+      totalAmount: transactions.totalAmount,
+      paymentMethod: transactions.paymentMethod,
+      paidAmount: transactions.paidAmount,
+      debtStatus: transactions.debtStatus,
+    }).from(transactions).where(and(...txnConditions));
+
+    let cash = 0;
+    let card = 0;
+    let nasiya = 0;
+
+    for (const t of txns) {
+      const method = (t.paymentMethod || "cash").toLowerCase();
+      if (method === "nasiya") {
+        const remaining = t.totalAmount - (t.paidAmount || 0);
+        nasiya += remaining;
+        cash += t.paidAmount || 0;
+      } else if (method === "karta" || method === "card") {
+        card += t.totalAmount;
+      } else {
+        cash += t.totalAmount;
+      }
+    }
+
+    const entryConditions = [eq(cashRegisterEntries.tenantId, tenantId)];
+    if (dateFrom) entryConditions.push(gte(cashRegisterEntries.date, dateFrom));
+    if (dateTo) entryConditions.push(lte(cashRegisterEntries.date, dateTo));
+
+    const entries = await db.select().from(cashRegisterEntries).where(and(...entryConditions));
+
+    let withdrawn = 0;
+    let totalIncome = 0;
+    let totalExpense = 0;
+
+    for (const e of entries) {
+      const pt = (e.paymentType || "cash").toLowerCase();
+      if (e.type === "income") {
+        totalIncome += e.amount;
+        if (pt === "card" || pt === "karta") card += e.amount;
+        else cash += e.amount;
+      } else if (e.type === "expense" || e.type === "withdrawal") {
+        totalExpense += e.amount;
+        if (e.type === "withdrawal") withdrawn += e.amount;
+        if (pt === "card" || pt === "karta") card -= e.amount;
+        else cash -= e.amount;
+      }
+    }
+
+    const expConditions = [eq(expenses.tenantId, tenantId)];
+    if (dateFrom) expConditions.push(gte(expenses.date, dateFrom));
+    if (dateTo) expConditions.push(lte(expenses.date, dateTo));
+
+    const [expResult] = await db.select({
+      total: sql<number>`COALESCE(SUM(${expenses.amount}), 0)::int`
+    }).from(expenses).where(and(...expConditions));
+
+    const expensesFromTable = expResult?.total || 0;
+    totalExpense += expensesFromTable;
+    cash -= expensesFromTable;
+
+    return { cash: Math.max(cash, 0), card: Math.max(card, 0), nasiya, withdrawn, totalIncome, totalExpense, total: Math.max(cash, 0) + Math.max(card, 0) };
   }
 
   // Financial summary

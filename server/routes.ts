@@ -1,7 +1,7 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { insertProductSchema, insertOrderSchema, insertCategorySchema, insertTransactionSchema, registerTenantSchema, loginSchema, insertExpenseSchema, insertExpenseCategorySchema, insertCashRegisterEntrySchema } from "@shared/schema";
+import { insertProductSchema, insertOrderSchema, insertCategorySchema, insertTransactionSchema, registerTenantSchema, loginSchema, insertExpenseSchema, insertExpenseCategorySchema, insertCashRegisterEntrySchema, insertCustomerSchema, insertDeliverySchema } from "@shared/schema";
 import { registerR2Routes } from "./integrations/r2-routes";
 import { sendTelegramNotification } from "./telegram";
 import { authMiddleware, optionalAuth, superAdminOnly, hashPassword, comparePassword, generateToken } from "./auth";
@@ -1047,6 +1047,319 @@ export async function registerRoutes(
       res.status(500).json({ error: "Failed to get financial summary" });
     }
   });
+
+  // ============ CUSTOMERS API (tenant-scoped) ============
+
+  app.get("/api/customers", authMiddleware, async (req, res) => {
+    try {
+      const search = req.query.search as string | undefined;
+      const page = parseInt(req.query.page as string) || 1;
+      const limit = parseInt(req.query.limit as string) || 50;
+      const result = await storage.getCustomers(req.tenantId!, search, page, limit);
+      res.json(result);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch customers" });
+    }
+  });
+
+  app.get("/api/customers/:id", authMiddleware, async (req, res) => {
+    try {
+      const customer = await storage.getCustomer(req.params.id, req.tenantId);
+      if (!customer) return res.status(404).json({ error: "Mijoz topilmadi" });
+
+      const allOrders = await storage.getOrdersFiltered(req.tenantId!);
+      const customerOrders = allOrders.filter(o =>
+        o.customerPhone === customer.phone || o.customerName === customer.name
+      ).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+
+      const customerOrderIds = customerOrders.map(o => o.id);
+      const allDeliveries = await storage.getDeliveries(req.tenantId!);
+      const customerDeliveries = allDeliveries.filter(d =>
+        (d.customerId === customer.id) || (d.orderId && customerOrderIds.includes(d.orderId))
+      );
+
+      const debtTxns = await storage.getDebtTransactions(req.tenantId!);
+      const customerDebts = debtTxns.filter(t =>
+        (t.customerPhone === customer.phone || t.customerName === customer.name) &&
+        t.debtStatus !== "paid"
+      );
+
+      const totalRevenue = customerOrders.reduce((s, o) => s + o.totalAmount, 0);
+      const totalDebt = customerDebts.reduce((s, t) => s + (t.totalAmount - (t.paidAmount || 0)), 0);
+
+      res.json({
+        ...customer,
+        ordersCount: customerOrders.length,
+        totalRevenue,
+        totalDebt,
+        deliveriesCount: customerDeliveries.length,
+        lastOrder: customerOrders[0] || null,
+        orders: customerOrders.slice(0, 20),
+        deliveries: customerDeliveries.slice(0, 20),
+        debts: customerDebts.map(t => ({
+          transactionId: t.id,
+          totalAmount: t.totalAmount,
+          paidAmount: t.paidAmount || 0,
+          remaining: t.totalAmount - (t.paidAmount || 0),
+          date: t.date,
+          dueDate: t.dueDate,
+          debtStatus: t.debtStatus,
+          items: t.items,
+        })),
+      });
+    } catch (error) {
+      console.error("Error fetching customer:", error);
+      res.status(500).json({ error: "Failed to fetch customer" });
+    }
+  });
+
+  app.post("/api/customers", authMiddleware, async (req, res) => {
+    try {
+      const body = { ...req.body, tenantId: req.tenantId };
+      const validated = insertCustomerSchema.parse(body);
+      const existing = await storage.getCustomerByPhone(validated.phone!, req.tenantId!);
+      if (existing) {
+        return res.status(400).json({ error: "Bu telefon raqam allaqachon mavjud" });
+      }
+      const customer = await storage.createCustomer(validated);
+      await storage.createAuditLog({
+        tenantId: req.tenantId!,
+        entityType: "customer",
+        entityId: customer.id,
+        action: "created",
+        changes: { name: customer.name, phone: customer.phone },
+        userId: req.user!.userId,
+      });
+      res.status(201).json(customer);
+    } catch (error: any) {
+      if (error?.name === "ZodError") {
+        return res.status(400).json({ error: "Ma'lumotlar to'liq emas", details: error.errors });
+      }
+      res.status(500).json({ error: "Mijoz yaratishda xatolik" });
+    }
+  });
+
+  app.patch("/api/customers/:id", authMiddleware, async (req, res) => {
+    try {
+      const updated = await storage.updateCustomer(req.params.id, req.body, req.tenantId);
+      if (!updated) return res.status(404).json({ error: "Mijoz topilmadi" });
+      await storage.createAuditLog({
+        tenantId: req.tenantId!,
+        entityType: "customer",
+        entityId: updated.id,
+        action: "updated",
+        changes: req.body,
+        userId: req.user!.userId,
+      });
+      res.json(updated);
+    } catch (error) {
+      res.status(500).json({ error: "Mijozni yangilashda xatolik" });
+    }
+  });
+
+  app.delete("/api/customers/:id", authMiddleware, async (req, res) => {
+    try {
+      const deleted = await storage.deleteCustomer(req.params.id, req.tenantId);
+      if (!deleted) return res.status(404).json({ error: "Mijoz topilmadi" });
+      res.json({ success: true });
+    } catch (error) {
+      res.status(500).json({ error: "Mijozni o'chirishda xatolik" });
+    }
+  });
+
+  // ============ ENHANCED ORDERS API ============
+
+  app.get("/api/orders-filtered", authMiddleware, async (req, res) => {
+    try {
+      const filters: any = {};
+      if (req.query.status) filters.status = req.query.status;
+      if (req.query.paymentStatus) filters.paymentStatus = req.query.paymentStatus;
+      if (req.query.deliveryType) filters.deliveryType = req.query.deliveryType;
+      if (req.query.from) filters.dateFrom = new Date(req.query.from as string);
+      if (req.query.to) filters.dateTo = new Date(req.query.to as string);
+      const orders = await storage.getOrdersFiltered(req.tenantId!, filters);
+      res.json(orders);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch orders" });
+    }
+  });
+
+  app.patch("/api/orders/:id", authMiddleware, async (req, res) => {
+    try {
+      const allowedFields = ["address", "courier", "paymentStatus", "debtAmount", "deliveryType", "paymentMethod", "deliveryScheduledAt", "customerName", "customerPhone"];
+      const data: Record<string, any> = {};
+      for (const key of allowedFields) {
+        if (req.body[key] !== undefined) data[key] = req.body[key];
+      }
+      const updated = await storage.updateOrder(req.params.id, data, req.tenantId);
+      if (!updated) return res.status(404).json({ error: "Buyurtma topilmadi" });
+      await storage.createAuditLog({
+        tenantId: req.tenantId!,
+        entityType: "order",
+        entityId: updated.id,
+        action: "updated",
+        changes: data,
+        userId: req.user!.userId,
+      });
+      res.json(updated);
+    } catch (error) {
+      res.status(500).json({ error: "Buyurtmani yangilashda xatolik" });
+    }
+  });
+
+  app.patch("/api/orders/:id/status", authMiddleware, async (req, res) => {
+    try {
+      const { status, note } = req.body;
+      const validStatuses = ["new", "confirmed", "preparing", "out_for_delivery", "delivered", "cancelled"];
+      if (!validStatuses.includes(status)) {
+        return res.status(400).json({ error: "Noto'g'ri status" });
+      }
+
+      const order = await storage.getOrder(req.params.id, req.tenantId);
+      if (!order) return res.status(404).json({ error: "Buyurtma topilmadi" });
+
+      const allowedTransitions: Record<string, string[]> = {
+        new: ["confirmed", "cancelled"],
+        confirmed: ["preparing", "cancelled"],
+        preparing: ["out_for_delivery", "cancelled"],
+        out_for_delivery: ["delivered", "cancelled"],
+        delivered: [],
+        cancelled: [],
+      };
+      const allowed = allowedTransitions[order.status] || [];
+      if (!allowed.includes(status)) {
+        return res.status(400).json({ error: `"${order.status}" dan "${status}" ga o'tish mumkin emas` });
+      }
+
+      const history = (order.statusHistory as any[]) || [];
+      history.push({
+        status,
+        date: new Date().toISOString(),
+        userId: req.user!.userId,
+        note: note || "",
+      });
+
+      const updateData: any = { status, statusHistory: history };
+
+      if (status === "delivered") {
+        updateData.paymentStatus = order.paymentMethod === "cash" || order.paymentMethod === "card" ? "paid" : order.paymentStatus;
+        const existing = await storage.getDeliveriesByOrder(order.id, req.tenantId);
+        if (existing.length > 0) {
+          await storage.updateDelivery(existing[0].id, {
+            status: "delivered",
+            completedAt: new Date(),
+          }, req.tenantId);
+        }
+      }
+
+      if (status === "out_for_delivery" && order.deliveryType === "delivery") {
+        const existing = await storage.getDeliveriesByOrder(order.id, req.tenantId);
+        if (existing.length === 0) {
+          await storage.createDelivery({
+            tenantId: req.tenantId!,
+            orderId: order.id,
+            customerId: "",
+            address: order.address || "",
+            courier: order.courier || "",
+            scheduledAt: order.deliveryScheduledAt || null,
+            status: "pending",
+            note: "",
+          });
+        }
+      }
+
+      if (status === "cancelled") {
+        updateData.paymentStatus = "unpaid";
+      }
+
+      const updated = await storage.updateOrder(req.params.id, updateData, req.tenantId);
+
+      await storage.createAuditLog({
+        tenantId: req.tenantId!,
+        entityType: "order",
+        entityId: order.id,
+        action: "status_changed",
+        changes: { from: order.status, to: status, note: note || "" },
+        userId: req.user!.userId,
+      });
+
+      res.json(updated);
+    } catch (error) {
+      console.error("Update order status error:", error);
+      res.status(500).json({ error: "Status yangilashda xatolik" });
+    }
+  });
+
+  // ============ DELIVERIES API ============
+
+  app.get("/api/deliveries", authMiddleware, async (req, res) => {
+    try {
+      const filters: any = {};
+      if (req.query.status) filters.status = req.query.status;
+      if (req.query.courier) filters.courier = req.query.courier;
+      if (req.query.from) filters.dateFrom = new Date(req.query.from as string);
+      if (req.query.to) filters.dateTo = new Date(req.query.to as string);
+      const deliveriesList = await storage.getDeliveries(req.tenantId!, filters);
+
+      const orderIds = [...new Set(deliveriesList.filter(d => d.orderId).map(d => d.orderId!))];
+      const ordersMap = new Map<string, any>();
+      for (const oid of orderIds) {
+        const o = await storage.getOrder(oid, req.tenantId);
+        if (o) ordersMap.set(oid, o);
+      }
+
+      const enriched = deliveriesList.map(d => ({
+        ...d,
+        order: d.orderId ? ordersMap.get(d.orderId) || null : null,
+      }));
+
+      res.json(enriched);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch deliveries" });
+    }
+  });
+
+  app.patch("/api/deliveries/:id", authMiddleware, async (req, res) => {
+    try {
+      const { status, note, courier } = req.body;
+      const data: any = {};
+      if (status) data.status = status;
+      if (note !== undefined) data.note = note;
+      if (courier !== undefined) data.courier = courier;
+      if (status === "delivered") data.completedAt = new Date();
+
+      const updated = await storage.updateDelivery(req.params.id, data, req.tenantId);
+      if (!updated) return res.status(404).json({ error: "Yetkazish topilmadi" });
+
+      await storage.createAuditLog({
+        tenantId: req.tenantId!,
+        entityType: "delivery",
+        entityId: updated.id,
+        action: "updated",
+        changes: data,
+        userId: req.user!.userId,
+      });
+
+      res.json(updated);
+    } catch (error) {
+      res.status(500).json({ error: "Yetkazishni yangilashda xatolik" });
+    }
+  });
+
+  // ============ AUDIT LOGS API ============
+
+  app.get("/api/audit-logs", authMiddleware, async (req, res) => {
+    try {
+      const entityType = req.query.entityType as string | undefined;
+      const entityId = req.query.entityId as string | undefined;
+      const logs = await storage.getAuditLogs(req.tenantId!, entityType, entityId);
+      res.json(logs);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch audit logs" });
+    }
+  });
+
+  // ============ FINANCE API ============
 
   app.get("/api/finance/daily-breakdown", authMiddleware, async (req, res) => {
     try {

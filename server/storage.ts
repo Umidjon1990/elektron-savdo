@@ -1,7 +1,7 @@
 import { db } from "@db";
-import { users, products, orders, categories, transactions, tenants, expenses, expenseCategories, debtPayments, cashRegisterEntries } from "@shared/schema";
-import type { User, InsertUser, Product, InsertProduct, Order, InsertOrder, Category, InsertCategory, Transaction, InsertTransaction, Tenant, InsertTenant, Expense, InsertExpense, ExpenseCategory, InsertExpenseCategory, DebtPayment, InsertDebtPayment, CashRegisterEntry, InsertCashRegisterEntry } from "@shared/schema";
-import { eq, desc, sql, and, inArray, gte, lte } from "drizzle-orm";
+import { users, products, orders, categories, transactions, tenants, expenses, expenseCategories, debtPayments, cashRegisterEntries, customers, deliveries, auditLogs } from "@shared/schema";
+import type { User, InsertUser, Product, InsertProduct, Order, InsertOrder, Category, InsertCategory, Transaction, InsertTransaction, Tenant, InsertTenant, Expense, InsertExpense, ExpenseCategory, InsertExpenseCategory, DebtPayment, InsertDebtPayment, CashRegisterEntry, InsertCashRegisterEntry, Customer, InsertCustomer, Delivery, InsertDelivery, AuditLog, InsertAuditLog } from "@shared/schema";
+import { eq, desc, sql, and, inArray, gte, lte, or, ilike } from "drizzle-orm";
 
 export interface IStorage {
   // Tenants
@@ -76,6 +76,28 @@ export interface IStorage {
   createCashRegisterEntry(entry: InsertCashRegisterEntry): Promise<CashRegisterEntry>;
   deleteCashRegisterEntry(id: string, tenantId?: string): Promise<boolean>;
   getCashRegisterBalance(tenantId: string, dateFrom?: Date, dateTo?: Date): Promise<{ cash: number; card: number; nasiya: number; withdrawn: number; totalIncome: number; totalExpense: number; total: number }>;
+
+  // Customers
+  getCustomers(tenantId: string, search?: string, page?: number, limit?: number): Promise<{ customers: Customer[]; total: number }>;
+  getCustomer(id: string, tenantId?: string): Promise<Customer | undefined>;
+  getCustomerByPhone(phone: string, tenantId: string): Promise<Customer | undefined>;
+  createCustomer(customer: InsertCustomer): Promise<Customer>;
+  updateCustomer(id: string, data: Partial<InsertCustomer>, tenantId?: string): Promise<Customer | undefined>;
+  deleteCustomer(id: string, tenantId?: string): Promise<boolean>;
+
+  // Deliveries
+  getDeliveries(tenantId: string, filters?: { status?: string; courier?: string; dateFrom?: Date; dateTo?: Date }): Promise<Delivery[]>;
+  getDeliveriesByOrder(orderId: string, tenantId?: string): Promise<Delivery[]>;
+  createDelivery(delivery: InsertDelivery): Promise<Delivery>;
+  updateDelivery(id: string, data: Partial<InsertDelivery>, tenantId?: string): Promise<Delivery | undefined>;
+
+  // Audit Logs
+  createAuditLog(log: InsertAuditLog): Promise<AuditLog>;
+  getAuditLogs(tenantId: string, entityType?: string, entityId?: string): Promise<AuditLog[]>;
+
+  // Orders enhanced
+  updateOrder(id: string, data: Partial<InsertOrder>, tenantId?: string): Promise<Order | undefined>;
+  getOrdersFiltered(tenantId: string, filters?: { status?: string; paymentStatus?: string; deliveryType?: string; dateFrom?: Date; dateTo?: Date }): Promise<Order[]>;
 
   // Financial summary
   getFinancialSummary(tenantId: string, dateFrom: Date, dateTo: Date): Promise<{ revenue: number; expensesTotal: number; profit: number; totalProfit: number; paymentBreakdown: Record<string, number>; transactionCount: number }>;
@@ -610,6 +632,123 @@ export class DatabaseStorage implements IStorage {
 
     const expensesTotal = expResult?.total || 0;
     return { revenue, expensesTotal, profit: revenue - expensesTotal, totalProfit, paymentBreakdown, transactionCount: txns.length };
+  }
+
+  // Customers
+  async getCustomers(tenantId: string, search?: string, page?: number, limit?: number): Promise<{ customers: Customer[]; total: number }> {
+    const pg = page || 1;
+    const lim = limit || 50;
+    const offset = (pg - 1) * lim;
+    const conditions = [eq(customers.tenantId, tenantId)];
+    if (search) {
+      conditions.push(or(
+        ilike(customers.name, `%${search}%`),
+        ilike(customers.phone, `%${search}%`)
+      )!);
+    }
+    const where = and(...conditions);
+    const [customerList, countResult] = await Promise.all([
+      db.select().from(customers).where(where).orderBy(desc(customers.createdAt)).limit(lim).offset(offset),
+      db.select({ count: sql<number>`count(*)::int` }).from(customers).where(where),
+    ]);
+    return { customers: customerList, total: countResult[0]?.count || 0 };
+  }
+
+  async getCustomer(id: string, tenantId?: string): Promise<Customer | undefined> {
+    const condition = tenantId
+      ? and(eq(customers.id, id), eq(customers.tenantId, tenantId))
+      : eq(customers.id, id);
+    const [customer] = await db.select().from(customers).where(condition);
+    return customer;
+  }
+
+  async getCustomerByPhone(phone: string, tenantId: string): Promise<Customer | undefined> {
+    const [customer] = await db.select().from(customers).where(
+      and(eq(customers.phone, phone), eq(customers.tenantId, tenantId))
+    );
+    return customer;
+  }
+
+  async createCustomer(customer: InsertCustomer): Promise<Customer> {
+    const [created] = await db.insert(customers).values(customer).returning();
+    return created;
+  }
+
+  async updateCustomer(id: string, data: Partial<InsertCustomer>, tenantId?: string): Promise<Customer | undefined> {
+    const condition = tenantId
+      ? and(eq(customers.id, id), eq(customers.tenantId, tenantId))
+      : eq(customers.id, id);
+    const [updated] = await db.update(customers).set(data).where(condition).returning();
+    return updated;
+  }
+
+  async deleteCustomer(id: string, tenantId?: string): Promise<boolean> {
+    const condition = tenantId
+      ? and(eq(customers.id, id), eq(customers.tenantId, tenantId))
+      : eq(customers.id, id);
+    const result = await db.delete(customers).where(condition);
+    return (result.rowCount ?? 0) > 0;
+  }
+
+  // Orders enhanced
+  async updateOrder(id: string, data: Partial<InsertOrder>, tenantId?: string): Promise<Order | undefined> {
+    const condition = tenantId
+      ? and(eq(orders.id, id), eq(orders.tenantId, tenantId))
+      : eq(orders.id, id);
+    const [updated] = await db.update(orders).set(data).where(condition).returning();
+    return updated;
+  }
+
+  async getOrdersFiltered(tenantId: string, filters?: { status?: string; paymentStatus?: string; deliveryType?: string; dateFrom?: Date; dateTo?: Date }): Promise<Order[]> {
+    const conditions = [eq(orders.tenantId, tenantId)];
+    if (filters?.status) conditions.push(eq(orders.status, filters.status));
+    if (filters?.paymentStatus) conditions.push(eq(orders.paymentStatus, filters.paymentStatus));
+    if (filters?.deliveryType) conditions.push(eq(orders.deliveryType, filters.deliveryType));
+    if (filters?.dateFrom) conditions.push(gte(orders.createdAt, filters.dateFrom));
+    if (filters?.dateTo) conditions.push(lte(orders.createdAt, filters.dateTo));
+    return db.select().from(orders).where(and(...conditions)).orderBy(desc(orders.createdAt));
+  }
+
+  // Deliveries
+  async getDeliveries(tenantId: string, filters?: { status?: string; courier?: string; dateFrom?: Date; dateTo?: Date }): Promise<Delivery[]> {
+    const conditions = [eq(deliveries.tenantId, tenantId)];
+    if (filters?.status) conditions.push(eq(deliveries.status, filters.status));
+    if (filters?.courier) conditions.push(ilike(deliveries.courier, `%${filters.courier}%`));
+    if (filters?.dateFrom) conditions.push(gte(deliveries.createdAt, filters.dateFrom));
+    if (filters?.dateTo) conditions.push(lte(deliveries.createdAt, filters.dateTo));
+    return db.select().from(deliveries).where(and(...conditions)).orderBy(desc(deliveries.createdAt));
+  }
+
+  async getDeliveriesByOrder(orderId: string, tenantId?: string): Promise<Delivery[]> {
+    const conditions = [eq(deliveries.orderId, orderId)];
+    if (tenantId) conditions.push(eq(deliveries.tenantId, tenantId));
+    return db.select().from(deliveries).where(and(...conditions)).orderBy(desc(deliveries.createdAt));
+  }
+
+  async createDelivery(delivery: InsertDelivery): Promise<Delivery> {
+    const [created] = await db.insert(deliveries).values(delivery).returning();
+    return created;
+  }
+
+  async updateDelivery(id: string, data: Partial<InsertDelivery>, tenantId?: string): Promise<Delivery | undefined> {
+    const condition = tenantId
+      ? and(eq(deliveries.id, id), eq(deliveries.tenantId, tenantId))
+      : eq(deliveries.id, id);
+    const [updated] = await db.update(deliveries).set(data).where(condition).returning();
+    return updated;
+  }
+
+  // Audit Logs
+  async createAuditLog(log: InsertAuditLog): Promise<AuditLog> {
+    const [created] = await db.insert(auditLogs).values(log).returning();
+    return created;
+  }
+
+  async getAuditLogs(tenantId: string, entityType?: string, entityId?: string): Promise<AuditLog[]> {
+    const conditions = [eq(auditLogs.tenantId, tenantId)];
+    if (entityType) conditions.push(eq(auditLogs.entityType, entityType));
+    if (entityId) conditions.push(eq(auditLogs.entityId, entityId));
+    return db.select().from(auditLogs).where(and(...conditions)).orderBy(desc(auditLogs.createdAt));
   }
 }
 

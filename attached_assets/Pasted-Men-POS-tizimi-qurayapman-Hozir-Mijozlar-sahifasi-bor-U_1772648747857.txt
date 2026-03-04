@@ -1,0 +1,79 @@
+Men POS tizimi qurayapman. Hozir “Mijozlar” sahifasi bor (UI: chapda sidebar, yuqorida “Mijozlar” sarlavhasi, qidiruv inputi, pastda jadval: Mijoz | Telefon | Jami Buyurtmalar | Jami Savdo | Oxirgi xarid). Shu sahifa juda sodda, uni professional “Customer/CRM” modulga kengaytirib ber.
+
+TALAB: UI hozirgi dizaynga maksimal mos qolsin (sidebar, sarlavha, search, table). Lekin funksional quyidagi 4 modul bo‘lsin:
+
+1. MIJOZLAR RO‘YXATI (search -> customer card)
+
+* Qidiruv: telefon yoki ism bo‘yicha (instant search).
+* Jadval ustunlari: Mijoz, Telefon, Jami Buyurtmalar, Jami Savdo, Oxirgi xarid, (qo‘shimcha) Qarzdorlik badge (agar qarzi bo‘lsa).
+* Row bosilganda “Customer Card” (drawer yoki yangi page) ochilsin:
+
+  * Asosiy info: Ism, telefon, manzillar (multiple), izoh.
+  * Summary: total orders, total revenue, last purchase, outstanding debt.
+  * Tabs: “Buyurtmalar”, “Yetkazib berish tarixi”, “Qarzlar/To‘lovlar”.
+  * Actions: “Buyurtma yaratish” (ixtiyoriy), “Qarz to‘lovini qabul qilish”.
+
+2. BUYURTMALAR (sayt orqali keladigan buyurtmalar ro‘yxati)
+
+* Menu/route: /orders (yoki /buyurtmalar).
+* Jadval ustunlari: OrderID, Mijoz, Telefon, Manzil, Summa, To‘lov turi (cash/card/online/debt), To‘lov holati (paid/partial/unpaid), Yetkazish turi (delivery/pickup), Status, Sana.
+* Statuslar (minimal): NEW, CONFIRMED, PREPARING, OUT_FOR_DELIVERY, DELIVERED, CANCELED.
+* Filtrlar: sana oraliq (kun/hafta/oy/custom), status, to‘lov holati, yetkazish turi.
+* Order detail page/modal:
+
+  * Items list (name, qty, price)
+  * Customer + address
+  * Delivery assignment (courier)
+  * Status update timeline (audit log)
+  * “DELIVERED” bo‘lsa Delivery history va moliya (tushum/qarz)ga aks etsin.
+
+3. YETKAZIB BERISH TARIXI (delivery history)
+
+* Menu/route: /deliveries
+* Jadval: Sana, OrderID, Mijoz, Manzil, Kuryer (kim), Qachon (scheduled time), Status (DELIVERED/FAILED/RETURNED/CANCELED), Izoh.
+* Filtr: sana, kuryer, status.
+* Har bir delivery order bilan bog‘langan bo‘lsin.
+* Customer Card ichidagi tabda shu mijozning delivery tarixini ko‘rsat.
+
+4. QARZDORLIK (debtors)
+
+* Menu/route: /debtors
+* Jadval: Mijoz, Telefon, Umumiy qarz, Oxirgi to‘lov sanasi, Keyingi to‘lov sanasi, Status (UPCOMING/OVERDUE), Action: “To‘lov qabul qilish”.
+* Filtrlar: yaqin to‘lovchilar (3/7/14 kun), muddati o‘tganlar, qarz miqdori (min-max).
+* Customer Card -> “Qarzlar/To‘lovlar” tab:
+
+  * Qarzni keltirib chiqargan buyurtmalar ro‘yxati
+  * To‘lovlar tarixi (qisman/to‘liq)
+  * Qoldiq.
+
+INTEGRATSIYA QOIDALARI (MUHIM):
+
+* Qarzdorlik order bilan bog‘langan bo‘lsin (order.debt_amount yoki payment_status).
+* Qisman to‘lov kiritilganda qoldiq avtomatik kamayishi kerak.
+* Delivery status “DELIVERED” bo‘lganda order “completed” bo‘lib, moliyaga tushum/qarz yozilsin.
+* Har bir update audit log (kim, qachon, nima o‘zgardi) bilan saqlansin.
+
+TEXNIK TALABLAR:
+
+* Menga to‘liq ishlaydigan kichik MVP tuzib ber:
+
+  1. DB schema (SQLite/Postgres) + migration
+  2. Backend API (CRUD): customers, orders, deliveries, debts, payments, audit_logs
+  3. Frontend pages + components: CustomersList, CustomerCard, OrdersList, OrderDetail, DeliveriesList, DebtorsList
+  4. Seed data (10-20 mijoz, 30 buyurtma, delivery + debt aralash)
+  5. Qidiruv va filtrlar ishlasin (server-side yoki client-side, lekin tez va aniq)
+  6. Pagination (kamida customers/orders)
+
+UI/UX:
+
+* Dizayn rasmga o‘xshasin: yuqorida search, pastda table, satrlar toza, badge rangli (qarzdorlik, status).
+* Customer Card drawer bo‘lsa yaxshi (o‘ngdan ochiladigan), bo‘lmasa alohida /customers/:id page.
+* Jadvalda telefon ikonka va kichik vizual elementlar bo‘lishi mumkin, lekin minimalistik.
+
+YAKUNIY NATIJA:
+
+* Loyihani ishga tushirish bo‘yicha qisqa instruktsiya yoz.
+* Qaysi fayllarda nima borligini aniq ko‘rsat.
+* Har bir modul uchun asosiy endpointlar ro‘yxatini ber.
+
+Iltimos, avval struktura + schema + endpointlarni yoz, keyin kodni joylashtir va seed data bilan demo ishlashini ta’minla.

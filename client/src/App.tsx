@@ -32,6 +32,8 @@ const importSlugStore = () => import("@/pages/store/slug-store");
 const importSlugCart = () => import("@/pages/store/slug-cart");
 const importSlugLogin = () => import("@/pages/store/slug-login");
 const importFinance = () => import("@/pages/finance");
+const importDeliveries = () => import("@/pages/deliveries");
+const importDebtors = () => import("@/pages/debtors");
 
 const NotFound = lazy(importNotFound);
 const SuperAdminPage = lazy(importSuperAdmin);
@@ -52,6 +54,8 @@ const RegisterPage = lazy(importRegister);
 const SettingsPage = lazy(importSettings);
 const CategoriesPage = lazy(importCategories);
 const FinancePage = lazy(importFinance);
+const DeliveriesPage = lazy(importDeliveries);
+const DebtorsPage = lazy(importDebtors);
 
 function preloadAdminPages() {
   importDashboard();
@@ -275,6 +279,12 @@ function Router() {
       <Route path="/store/:slug/admin/finance">
         {(params) => <SlugProtectedRoute component={FinancePage} slug={params.slug} />}
       </Route>
+      <Route path="/store/:slug/admin/deliveries">
+        {(params) => <SlugProtectedRoute component={DeliveriesPage} slug={params.slug} />}
+      </Route>
+      <Route path="/store/:slug/admin/debtors">
+        {(params) => <SlugProtectedRoute component={DebtorsPage} slug={params.slug} />}
+      </Route>
       <Route path="/store/:slug/admin/super">
         {(params) => <SlugProtectedRoute component={SuperAdminPage} slug={params.slug} />}
       </Route>
@@ -311,6 +321,12 @@ function Router() {
       </Route>
       <Route path="/admin/finance">
         {() => <LegacyAdminRedirect component={FinancePage} subPath="finance" />}
+      </Route>
+      <Route path="/admin/deliveries">
+        {() => <LegacyAdminRedirect component={DeliveriesPage} subPath="deliveries" />}
+      </Route>
+      <Route path="/admin/debtors">
+        {() => <LegacyAdminRedirect component={DebtorsPage} subPath="debtors" />}
       </Route>
       <Route path="/admin/super">
         {() => <LegacyAdminRedirect component={SuperAdminPage} subPath="super" />}

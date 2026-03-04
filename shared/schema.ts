@@ -61,6 +61,16 @@ export const products = pgTable("products", {
   uniqueIndex("products_tenant_barcode_idx").on(table.tenantId, table.barcode),
 ]);
 
+export const customers = pgTable("customers", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  tenantId: varchar("tenant_id").references(() => tenants.id),
+  name: text("name").notNull(),
+  phone: text("phone").notNull(),
+  addresses: json("addresses").$type<Array<{label: string, address: string}>>().default([]),
+  notes: text("notes").default(""),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
 export const orders = pgTable("orders", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   tenantId: varchar("tenant_id").references(() => tenants.id),
@@ -72,6 +82,12 @@ export const orders = pgTable("orders", {
   status: text("status").notNull().default("new"),
   paymentMethod: text("payment_method").notNull(),
   deliveryType: text("delivery_type").notNull(),
+  address: text("address").default(""),
+  paymentStatus: text("payment_status").notNull().default("unpaid"),
+  debtAmount: integer("debt_amount").notNull().default(0),
+  courier: text("courier").default(""),
+  statusHistory: json("status_history").$type<Array<{status: string, date: string, userId?: string, note?: string}>>().default([]),
+  deliveryScheduledAt: timestamp("delivery_scheduled_at"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
@@ -130,6 +146,31 @@ export const expenses = pgTable("expenses", {
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
+export const deliveries = pgTable("deliveries", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  tenantId: varchar("tenant_id").references(() => tenants.id),
+  orderId: varchar("order_id").references(() => orders.id),
+  customerId: varchar("customer_id"),
+  address: text("address").default(""),
+  courier: text("courier").default(""),
+  scheduledAt: timestamp("scheduled_at"),
+  completedAt: timestamp("completed_at"),
+  status: text("status").notNull().default("pending"),
+  note: text("note").default(""),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const auditLogs = pgTable("audit_logs", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  tenantId: varchar("tenant_id").references(() => tenants.id),
+  entityType: text("entity_type").notNull(),
+  entityId: text("entity_id").notNull(),
+  action: text("action").notNull(),
+  changes: json("changes").$type<Record<string, any>>(),
+  userId: text("user_id").default(""),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
 export const cashRegisterEntries = pgTable("cash_register_entries", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   tenantId: varchar("tenant_id").references(() => tenants.id),
@@ -183,6 +224,21 @@ export const insertExpenseSchema = createInsertSchema(expenses).omit({
   createdAt: true,
 });
 
+export const insertCustomerSchema = createInsertSchema(customers).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertDeliverySchema = createInsertSchema(deliveries).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertAuditLogSchema = createInsertSchema(auditLogs).omit({
+  id: true,
+  createdAt: true,
+});
+
 export const insertCashRegisterEntrySchema = createInsertSchema(cashRegisterEntries).omit({
   id: true,
   createdAt: true,
@@ -231,6 +287,15 @@ export type Expense = typeof expenses.$inferSelect;
 
 export type InsertDebtPayment = z.infer<typeof insertDebtPaymentSchema>;
 export type DebtPayment = typeof debtPayments.$inferSelect;
+
+export type InsertCustomer = z.infer<typeof insertCustomerSchema>;
+export type Customer = typeof customers.$inferSelect;
+
+export type InsertDelivery = z.infer<typeof insertDeliverySchema>;
+export type Delivery = typeof deliveries.$inferSelect;
+
+export type InsertAuditLog = z.infer<typeof insertAuditLogSchema>;
+export type AuditLog = typeof auditLogs.$inferSelect;
 
 export type InsertCashRegisterEntry = z.infer<typeof insertCashRegisterEntrySchema>;
 export type CashRegisterEntry = typeof cashRegisterEntries.$inferSelect;

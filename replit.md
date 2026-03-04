@@ -127,6 +127,12 @@ Key backend files:
 - SidebarNav dynamically generates slug-based navigation links
 - Finance module: expense_categories, expenses tables, CRUD APIs, summary/daily-breakdown endpoints, finance page with KPI cards, BarChart, PieChart, expense management
 - Product form visibility settings: `productFormVisibility` JSON on tenants table, toggle switches in settings page to show/hide fields (costPrice, barcodePrice, wholesalePrice, description, videoUrl, isNew, category, author)
+- CRM Module: customers table, deliveries table, audit_logs table, enhanced orders with statusHistory/paymentStatus/address/courier
+- Professional Customers page: server-side search+pagination, Customer Card drawer (orders/deliveries/debts tabs), CRUD
+- Enhanced Orders page: 6-status workflow (new→confirmed→preparing→out_for_delivery→delivered/cancelled), filters, order detail drawer with status timeline, courier assignment, audit trail
+- Deliveries page: delivery tracking with status badges (pending/delivered/failed/returned/cancelled), filters by courier/status/date
+- Debtors page: nasiya debt tracking, grouped by customer, KPI cards, period filters, inline payment dialog
+- Sidebar nav: Mijozlar moved to primary, Yetkazish and Qarzdorlar added to secondary
 
 ## External Dependencies
 

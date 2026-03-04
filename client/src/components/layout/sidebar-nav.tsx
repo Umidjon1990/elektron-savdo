@@ -18,7 +18,6 @@ function getNavItems(slug?: string) {
     { href: prefix, icon: LayoutDashboard, label: "Kassa", primary: true },
     { href: `${prefix}/orders`, icon: ShoppingCart, label: "Buyurtmalar", primary: true },
     { href: `${prefix}/inventory`, icon: Package, label: "Ombor", primary: true },
-    { href: `${prefix}/history`, icon: History, label: "Tarix", primary: true },
     { href: `${prefix}/finance`, icon: Wallet, label: "Moliya", primary: true },
     { href: `${prefix}/categories`, icon: Layers, label: "Kategoriyalar", primary: false },
     { href: `${prefix}/customers`, icon: Users, label: "Mijozlar", primary: false },

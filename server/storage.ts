@@ -66,7 +66,7 @@ export interface IStorage {
   deleteExpense(id: string, tenantId?: string): Promise<boolean>;
 
   // Financial summary
-  getFinancialSummary(tenantId: string, dateFrom: Date, dateTo: Date): Promise<{ revenue: number; expensesTotal: number; profit: number }>;
+  getFinancialSummary(tenantId: string, dateFrom: Date, dateTo: Date): Promise<{ revenue: number; expensesTotal: number; profit: number; totalProfit: number; paymentBreakdown: Record<string, number>; transactionCount: number }>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -435,9 +435,11 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Financial summary
-  async getFinancialSummary(tenantId: string, dateFrom: Date, dateTo: Date): Promise<{ revenue: number; expensesTotal: number; profit: number }> {
-    const [revResult] = await db.select({
-      total: sql<number>`COALESCE(SUM(${transactions.totalAmount}), 0)::int`
+  async getFinancialSummary(tenantId: string, dateFrom: Date, dateTo: Date): Promise<{ revenue: number; expensesTotal: number; profit: number; totalProfit: number; paymentBreakdown: Record<string, number>; transactionCount: number }> {
+    const txns = await db.select({
+      totalAmount: transactions.totalAmount,
+      totalProfit: transactions.totalProfit,
+      paymentMethod: transactions.paymentMethod,
     }).from(transactions).where(
       and(
         eq(transactions.tenantId, tenantId),
@@ -446,6 +448,16 @@ export class DatabaseStorage implements IStorage {
         sql`${transactions.status} != 'voided'`
       )
     );
+
+    let revenue = 0;
+    let totalProfit = 0;
+    const paymentBreakdown: Record<string, number> = {};
+    for (const t of txns) {
+      revenue += t.totalAmount;
+      totalProfit += t.totalProfit || 0;
+      const method = t.paymentMethod || "Naqd";
+      paymentBreakdown[method] = (paymentBreakdown[method] || 0) + t.totalAmount;
+    }
 
     const [expResult] = await db.select({
       total: sql<number>`COALESCE(SUM(${expenses.amount}), 0)::int`
@@ -457,9 +469,8 @@ export class DatabaseStorage implements IStorage {
       )
     );
 
-    const revenue = revResult?.total || 0;
     const expensesTotal = expResult?.total || 0;
-    return { revenue, expensesTotal, profit: revenue - expensesTotal };
+    return { revenue, expensesTotal, profit: revenue - expensesTotal, totalProfit, paymentBreakdown, transactionCount: txns.length };
   }
 }
 

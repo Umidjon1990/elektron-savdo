@@ -934,6 +934,7 @@ export async function registerRoutes(
         prevRevenue: previous.revenue,
         prevExpenses: previous.expensesTotal,
         prevProfit: previous.profit,
+        prevTransactionCount: previous.transactionCount,
         period,
         dateFrom: dateFrom.toISOString(),
         dateTo: dateTo.toISOString(),
@@ -951,11 +952,11 @@ export async function registerRoutes(
       const allTransactions = await storage.getAllTransactions(req.tenantId!);
       const allExpenses = await storage.getExpenses(req.tenantId!, from, to);
 
-      const days: Record<string, { date: string; revenue: number; expenses: number; profit: number }> = {};
+      const days: Record<string, { date: string; revenue: number; expenses: number; profit: number; payments: Record<string, number> }> = {};
       const current = new Date(from);
       while (current <= to) {
         const key = current.toISOString().split("T")[0];
-        days[key] = { date: key, revenue: 0, expenses: 0, profit: 0 };
+        days[key] = { date: key, revenue: 0, expenses: 0, profit: 0, payments: {} };
         current.setDate(current.getDate() + 1);
       }
 
@@ -964,6 +965,8 @@ export async function registerRoutes(
         const key = new Date(t.date).toISOString().split("T")[0];
         if (days[key]) {
           days[key].revenue += t.totalAmount;
+          const method = t.paymentMethod || "Naqd";
+          days[key].payments[method] = (days[key].payments[method] || 0) + t.totalAmount;
         }
       }
 

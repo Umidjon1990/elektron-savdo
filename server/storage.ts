@@ -1,6 +1,6 @@
 import { db } from "@db";
-import { users, products, orders, categories, transactions, tenants, expenses, expenseCategories, incomeCategories, debtPayments, cashRegisterEntries, customers, deliveries, auditLogs, shiftHandovers } from "@shared/schema";
-import type { User, InsertUser, Product, InsertProduct, Order, InsertOrder, Category, InsertCategory, Transaction, InsertTransaction, Tenant, InsertTenant, Expense, InsertExpense, ExpenseCategory, InsertExpenseCategory, IncomeCategory, InsertIncomeCategory, DebtPayment, InsertDebtPayment, CashRegisterEntry, InsertCashRegisterEntry, Customer, InsertCustomer, Delivery, InsertDelivery, AuditLog, InsertAuditLog, ShiftHandover, InsertShiftHandover } from "@shared/schema";
+import { users, products, orders, categories, transactions, tenants, expenses, expenseCategories, incomeCategories, debtPayments, cashRegisterEntries, customers, deliveries, auditLogs, shiftHandovers, staffMembers, attendanceRecords } from "@shared/schema";
+import type { User, InsertUser, Product, InsertProduct, Order, InsertOrder, Category, InsertCategory, Transaction, InsertTransaction, Tenant, InsertTenant, Expense, InsertExpense, ExpenseCategory, InsertExpenseCategory, IncomeCategory, InsertIncomeCategory, DebtPayment, InsertDebtPayment, CashRegisterEntry, InsertCashRegisterEntry, Customer, InsertCustomer, Delivery, InsertDelivery, AuditLog, InsertAuditLog, ShiftHandover, InsertShiftHandover, StaffMember, InsertStaffMember, AttendanceRecord, InsertAttendanceRecord } from "@shared/schema";
 import { eq, desc, sql, and, inArray, gte, lte, or, ilike } from "drizzle-orm";
 
 export interface IStorage {
@@ -112,6 +112,18 @@ export interface IStorage {
   getShiftHandovers(tenantId: string, dateFrom?: Date, dateTo?: Date): Promise<ShiftHandover[]>;
   createShiftHandover(data: InsertShiftHandover): Promise<ShiftHandover>;
   updateShiftHandoverStatus(id: string, tenantId: string, status: string, confirmedAt?: Date): Promise<ShiftHandover | undefined>;
+
+  // Staff Members
+  getStaffMembers(tenantId: string): Promise<StaffMember[]>;
+  getStaffMember(id: string, tenantId?: string): Promise<StaffMember | undefined>;
+  getStaffByToken(token: string): Promise<StaffMember | undefined>;
+  createStaffMember(data: InsertStaffMember): Promise<StaffMember>;
+  updateStaffMember(id: string, data: Partial<InsertStaffMember>, tenantId?: string): Promise<StaffMember | undefined>;
+  deleteStaffMember(id: string, tenantId?: string): Promise<boolean>;
+
+  // Attendance
+  getAttendanceRecords(tenantId: string, staffId?: string, dateFrom?: Date, dateTo?: Date): Promise<AttendanceRecord[]>;
+  createAttendanceRecord(data: InsertAttendanceRecord): Promise<AttendanceRecord>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -818,6 +830,59 @@ export class DatabaseStorage implements IStorage {
       .where(and(eq(shiftHandovers.id, id), eq(shiftHandovers.tenantId, tenantId)))
       .returning();
     return updated;
+  }
+
+  // Staff Members
+  async getStaffMembers(tenantId: string): Promise<StaffMember[]> {
+    return db.select().from(staffMembers).where(eq(staffMembers.tenantId, tenantId)).orderBy(desc(staffMembers.createdAt));
+  }
+
+  async getStaffMember(id: string, tenantId?: string): Promise<StaffMember | undefined> {
+    const condition = tenantId
+      ? and(eq(staffMembers.id, id), eq(staffMembers.tenantId, tenantId))
+      : eq(staffMembers.id, id);
+    const [staff] = await db.select().from(staffMembers).where(condition);
+    return staff;
+  }
+
+  async getStaffByToken(token: string): Promise<StaffMember | undefined> {
+    const [staff] = await db.select().from(staffMembers).where(eq(staffMembers.token, token));
+    return staff;
+  }
+
+  async createStaffMember(data: InsertStaffMember): Promise<StaffMember> {
+    const [created] = await db.insert(staffMembers).values(data).returning();
+    return created;
+  }
+
+  async updateStaffMember(id: string, data: Partial<InsertStaffMember>, tenantId?: string): Promise<StaffMember | undefined> {
+    const condition = tenantId
+      ? and(eq(staffMembers.id, id), eq(staffMembers.tenantId, tenantId))
+      : eq(staffMembers.id, id);
+    const [updated] = await db.update(staffMembers).set(data).where(condition).returning();
+    return updated;
+  }
+
+  async deleteStaffMember(id: string, tenantId?: string): Promise<boolean> {
+    const condition = tenantId
+      ? and(eq(staffMembers.id, id), eq(staffMembers.tenantId, tenantId))
+      : eq(staffMembers.id, id);
+    const result = await db.delete(staffMembers).where(condition);
+    return (result.rowCount ?? 0) > 0;
+  }
+
+  // Attendance
+  async getAttendanceRecords(tenantId: string, staffId?: string, dateFrom?: Date, dateTo?: Date): Promise<AttendanceRecord[]> {
+    const conditions: any[] = [eq(attendanceRecords.tenantId, tenantId)];
+    if (staffId) conditions.push(eq(attendanceRecords.staffId, staffId));
+    if (dateFrom) conditions.push(gte(attendanceRecords.date, dateFrom));
+    if (dateTo) conditions.push(lte(attendanceRecords.date, dateTo));
+    return db.select().from(attendanceRecords).where(and(...conditions)).orderBy(desc(attendanceRecords.date));
+  }
+
+  async createAttendanceRecord(data: InsertAttendanceRecord): Promise<AttendanceRecord> {
+    const [created] = await db.insert(attendanceRecords).values(data).returning();
+    return created;
   }
 }
 

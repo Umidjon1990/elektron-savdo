@@ -213,6 +213,41 @@ export const shiftHandovers = pgTable("shift_handovers", {
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
+export const staffMembers = pgTable("staff_members", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  tenantId: varchar("tenant_id").references(() => tenants.id),
+  name: text("name").notNull(),
+  phone: text("phone").notNull().default(""),
+  username: text("username").notNull(),
+  password: text("password").notNull(),
+  token: text("token").notNull().unique(),
+  faceDescriptor: json("face_descriptor").$type<number[]>(),
+  facePhoto: text("face_photo"),
+  locationLat: text("location_lat"),
+  locationLng: text("location_lng"),
+  locationRadius: integer("location_radius").notNull().default(100),
+  locationName: text("location_name").default(""),
+  isActive: boolean("is_active").notNull().default(true),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const attendanceRecords = pgTable("attendance_records", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  tenantId: varchar("tenant_id").references(() => tenants.id),
+  staffId: varchar("staff_id").references(() => staffMembers.id),
+  type: text("type").notNull(),
+  faceVerified: boolean("face_verified").notNull().default(false),
+  locationVerified: boolean("location_verified").notNull().default(false),
+  locationLat: text("location_lat"),
+  locationLng: text("location_lng"),
+  faceScore: integer("face_score").notNull().default(0),
+  locationDistance: integer("location_distance").notNull().default(0),
+  photo: text("photo"),
+  note: text("note").default(""),
+  date: timestamp("date").notNull(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
 // Insert schemas
 export const insertTenantSchema = createInsertSchema(tenants).omit({
   id: true,
@@ -281,6 +316,16 @@ export const insertShiftHandoverSchema = createInsertSchema(shiftHandovers).omit
   createdAt: true,
 });
 
+export const insertStaffMemberSchema = createInsertSchema(staffMembers).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertAttendanceRecordSchema = createInsertSchema(attendanceRecords).omit({
+  id: true,
+  createdAt: true,
+});
+
 // Register schema for onboarding
 export const registerTenantSchema = z.object({
   storeName: z.string().min(2),
@@ -342,3 +387,9 @@ export type CashRegisterEntry = typeof cashRegisterEntries.$inferSelect;
 
 export type InsertShiftHandover = z.infer<typeof insertShiftHandoverSchema>;
 export type ShiftHandover = typeof shiftHandovers.$inferSelect;
+
+export type InsertStaffMember = z.infer<typeof insertStaffMemberSchema>;
+export type StaffMember = typeof staffMembers.$inferSelect;
+
+export type InsertAttendanceRecord = z.infer<typeof insertAttendanceRecordSchema>;
+export type AttendanceRecord = typeof attendanceRecords.$inferSelect;

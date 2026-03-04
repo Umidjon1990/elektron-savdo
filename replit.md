@@ -98,6 +98,7 @@ Key backend files:
 20. **Professional Finance Module**: 6 submenu tabs (Kassa/Kirim/Chiqim/Nasiya/Hisobot/Topshirish), cash register balance tracking (naqd/karta/nasiya/chiqarilgan), income entries (cash_register_entries table), expense management with categories, income management with categories (income_categories table), debt overview, daily/weekly/monthly reports with print support
 21. **Income Categories**: DB-backed `income_categories` table (like expense_categories), CRUD API (/api/income-categories), admin can add/edit/delete categories with icons/colors, income entries linked by categoryName, PieChart breakdown, default categories auto-created on first visit
 22. **Shift Handover (Smena topshirish)**: `shift_handovers` table, 6th tab in Finance module, auto-calculated totals (naqd/karta/nasiya/chiqim) from getCashRegisterBalance, sender/receiver names saved in localStorage, statuses (pending/confirmed/rejected), expandable history list with breakdown details
+23. **Staff Attendance System (Xodimlar nazorati)**: `staff_members` and `attendance_records` tables, Face ID verification via face-api.js (TinyFaceDetector + FaceRecognitionNet), GPS geofencing with Haversine formula, public check-in/check-out URL per staff (`/attendance/:token`), admin panel at `/store/:slug/admin/employees` with 2 tabs (Xodimlar/Davomat), KPI cards, attendance history table
 
 ### Tenant Configuration (JSON columns on tenants table)
 - `payment_methods`: Array of `{id, name}` - custom payment methods for POS

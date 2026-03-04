@@ -1103,6 +1103,222 @@ export async function registerRoutes(
     }
   });
 
+  // ============ STAFF & ATTENDANCE ============
+
+  app.get("/api/staff", authMiddleware, async (req, res) => {
+    try {
+      const staff = await storage.getStaffMembers(req.tenantId!);
+      const safe = staff.map(s => ({ ...s, password: undefined }));
+      res.json(safe);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch staff" });
+    }
+  });
+
+  app.post("/api/staff", authMiddleware, async (req, res) => {
+    try {
+      const { name, phone, username, password, faceDescriptor, facePhoto, locationLat, locationLng, locationRadius, locationName } = req.body;
+      if (!name || !username || !password) {
+        return res.status(400).json({ error: "Name, username and password are required" });
+      }
+      const crypto = await import("crypto");
+      const token = crypto.randomBytes(16).toString("hex");
+      const hashedPassword = await hashPassword(password);
+      const staff = await storage.createStaffMember({
+        tenantId: req.tenantId!,
+        name,
+        phone: phone || "",
+        username,
+        password: hashedPassword,
+        token,
+        faceDescriptor: faceDescriptor || null,
+        facePhoto: facePhoto || null,
+        locationLat: locationLat || null,
+        locationLng: locationLng || null,
+        locationRadius: locationRadius || 100,
+        locationName: locationName || "",
+        isActive: true,
+      });
+      res.json({ ...staff, password: undefined });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to create staff" });
+    }
+  });
+
+  app.patch("/api/staff/:id", authMiddleware, async (req, res) => {
+    try {
+      const data = { ...req.body };
+      if (data.password) {
+        data.password = await hashPassword(data.password);
+      }
+      delete data.id;
+      delete data.tenantId;
+      delete data.token;
+      const updated = await storage.updateStaffMember(req.params.id, data, req.tenantId!);
+      if (!updated) return res.status(404).json({ error: "Staff not found" });
+      res.json({ ...updated, password: undefined });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to update staff" });
+    }
+  });
+
+  app.delete("/api/staff/:id", authMiddleware, async (req, res) => {
+    try {
+      const deleted = await storage.deleteStaffMember(req.params.id, req.tenantId!);
+      if (!deleted) return res.status(404).json({ error: "Staff not found" });
+      res.json({ success: true });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to delete staff" });
+    }
+  });
+
+  app.get("/api/attendance", authMiddleware, async (req, res) => {
+    try {
+      const staffId = req.query.staffId as string | undefined;
+      const dateFrom = req.query.from ? new Date(req.query.from as string) : undefined;
+      const dateTo = req.query.to ? new Date(req.query.to as string) : undefined;
+      const records = await storage.getAttendanceRecords(req.tenantId!, staffId, dateFrom, dateTo);
+      res.json(records);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch attendance" });
+    }
+  });
+
+  app.get("/api/attendance/summary", authMiddleware, async (req, res) => {
+    try {
+      const now = new Date();
+      const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      const todayEnd = new Date(todayStart);
+      todayEnd.setHours(23, 59, 59, 999);
+      const staff = await storage.getStaffMembers(req.tenantId!);
+      const todayRecords = await storage.getAttendanceRecords(req.tenantId!, undefined, todayStart, todayEnd);
+      const staffSummary = staff.filter(s => s.isActive).map(s => {
+        const records = todayRecords.filter(r => r.staffId === s.id);
+        const checkIn = records.find(r => r.type === "check_in");
+        const checkOut = records.find(r => r.type === "check_out");
+        let hoursWorked = 0;
+        if (checkIn && checkOut) {
+          hoursWorked = Math.round((new Date(checkOut.date).getTime() - new Date(checkIn.date).getTime()) / (1000 * 60 * 60) * 10) / 10;
+        }
+        return {
+          staffId: s.id,
+          name: s.name,
+          phone: s.phone,
+          checkIn: checkIn ? checkIn.date : null,
+          checkOut: checkOut ? checkOut.date : null,
+          hoursWorked,
+          isPresent: !!checkIn && !checkOut,
+          faceVerified: checkIn?.faceVerified || false,
+          locationVerified: checkIn?.locationVerified || false,
+        };
+      });
+      const present = staffSummary.filter(s => s.checkIn).length;
+      const working = staffSummary.filter(s => s.isPresent).length;
+      const absent = staffSummary.filter(s => !s.checkIn).length;
+      res.json({ total: staff.filter(s => s.isActive).length, present, working, absent, staff: staffSummary });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch summary" });
+    }
+  });
+
+  // Public attendance endpoints (no auth, token-based)
+  app.get("/api/attendance/check/:token", async (req, res) => {
+    try {
+      const staff = await storage.getStaffByToken(req.params.token);
+      if (!staff || !staff.isActive) return res.status(404).json({ error: "Staff not found" });
+      const now = new Date();
+      const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      const todayEnd = new Date(todayStart);
+      todayEnd.setHours(23, 59, 59, 999);
+      const todayRecords = await storage.getAttendanceRecords(staff.tenantId!, staff.id, todayStart, todayEnd);
+      const tenant = await storage.getTenant(staff.tenantId!);
+      res.json({
+        name: staff.name,
+        hasFaceDescriptor: !!staff.faceDescriptor && Array.isArray(staff.faceDescriptor) && staff.faceDescriptor.length > 0,
+        locationLat: staff.locationLat,
+        locationLng: staff.locationLng,
+        locationRadius: staff.locationRadius,
+        locationName: staff.locationName,
+        storeName: tenant?.name || "",
+        todayRecords: todayRecords.map(r => ({ type: r.type, date: r.date, faceVerified: r.faceVerified, locationVerified: r.locationVerified })),
+      });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to check staff" });
+    }
+  });
+
+  app.post("/api/attendance/record/:token", async (req, res) => {
+    try {
+      const staff = await storage.getStaffByToken(req.params.token);
+      if (!staff || !staff.isActive) return res.status(404).json({ error: "Staff not found" });
+      const { type, faceDescriptor: liveDescriptor, locationLat, locationLng, photo } = req.body;
+      if (!type || !["check_in", "check_out"].includes(type)) {
+        return res.status(400).json({ error: "Invalid type" });
+      }
+
+      // Server-side face verification: compare live descriptor with stored descriptor
+      let faceScore = 0;
+      let faceVerified = false;
+      if (liveDescriptor && Array.isArray(liveDescriptor) && liveDescriptor.length === 128 &&
+          staff.faceDescriptor && Array.isArray(staff.faceDescriptor) && staff.faceDescriptor.length === 128) {
+        const storedDesc = staff.faceDescriptor as number[];
+        let sum = 0;
+        for (let i = 0; i < 128; i++) {
+          sum += (liveDescriptor[i] - storedDesc[i]) ** 2;
+        }
+        const distance = Math.sqrt(sum);
+        faceScore = Math.max(0, Math.min(100, Math.round((1 - distance / 1.0) * 100)));
+        faceVerified = faceScore >= 60;
+      }
+
+      // Verify location using Haversine formula
+      let locationVerified = false;
+      let locationDistance = 0;
+      if (staff.locationLat && staff.locationLng && locationLat && locationLng) {
+        const R = 6371000;
+        const toRad = (d: number) => d * Math.PI / 180;
+        const lat1 = parseFloat(staff.locationLat);
+        const lng1 = parseFloat(staff.locationLng);
+        const lat2 = parseFloat(locationLat);
+        const lng2 = parseFloat(locationLng);
+        const dLat = toRad(lat2 - lat1);
+        const dLng = toRad(lng2 - lng1);
+        const a = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
+        locationDistance = Math.round(R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)));
+        locationVerified = locationDistance <= (staff.locationRadius || 100);
+      }
+
+      let note = "";
+      if (!faceVerified) note += "Yuz tasdiqlanmadi. ";
+      if (!locationVerified) note += `Lokatsiya tashqarida (${locationDistance}m). `;
+
+      const record = await storage.createAttendanceRecord({
+        tenantId: staff.tenantId!,
+        staffId: staff.id,
+        type,
+        faceVerified,
+        locationVerified,
+        locationLat: locationLat || null,
+        locationLng: locationLng || null,
+        faceScore: faceScore || 0,
+        locationDistance,
+        photo: photo || null,
+        note: note.trim(),
+        date: new Date(),
+      });
+
+      res.json({
+        ...record,
+        accepted: faceVerified && locationVerified,
+        message: faceVerified && locationVerified
+          ? `${type === "check_in" ? "Kelish" : "Ketish"} muvaffaqiyatli qayd etildi!`
+          : `Tasdiqlash muvaffaqiyatsiz: ${note.trim()}`,
+      });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to record attendance" });
+    }
+  });
+
   // ============ FINANCE SUMMARY ============
 
   app.get("/api/finance/summary", authMiddleware, async (req, res) => {

@@ -1,6 +1,7 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/lib/auth-context";
+import { useTransactions } from "@/lib/transaction-context";
 import { SidebarNav } from "@/components/layout/sidebar-nav";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -70,6 +71,7 @@ export default function FinancePage() {
   const { token } = useAuth();
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const { transactions: allTransactions } = useTransactions();
   const [period, setPeriod] = useState<"day" | "week" | "month">("month");
   const [expenseDialogOpen, setExpenseDialogOpen] = useState(false);
   const [editingExpense, setEditingExpense] = useState<any>(null);
@@ -80,7 +82,7 @@ export default function FinancePage() {
 
   const headers = { Authorization: `Bearer ${token}`, "Content-Type": "application/json" };
 
-  const { data: summary } = useQuery<any>({
+  const { data: serverSummary } = useQuery<any>({
     queryKey: ["finance-summary", period],
     queryFn: async () => {
       const res = await fetch(`/api/finance/summary?period=${period}`, { headers });
@@ -90,7 +92,89 @@ export default function FinancePage() {
     enabled: !!token,
   });
 
-  const { data: dailyData = [] } = useQuery<any[]>({
+  const summary = useMemo(() => {
+    const now = new Date();
+    let dateFrom: Date;
+    let prevFrom: Date;
+    let prevTo: Date;
+
+    if (period === "week") {
+      const d = now.getDay() || 7;
+      dateFrom = new Date(now);
+      dateFrom.setDate(now.getDate() - d + 1);
+      dateFrom.setHours(0, 0, 0, 0);
+      prevTo = new Date(dateFrom);
+      prevTo.setMilliseconds(-1);
+      prevFrom = new Date(prevTo);
+      prevFrom.setDate(prevTo.getDate() - 6);
+      prevFrom.setHours(0, 0, 0, 0);
+    } else if (period === "month") {
+      dateFrom = new Date(now.getFullYear(), now.getMonth(), 1);
+      prevTo = new Date(dateFrom);
+      prevTo.setMilliseconds(-1);
+      prevFrom = new Date(prevTo.getFullYear(), prevTo.getMonth(), 1);
+    } else {
+      dateFrom = new Date(now);
+      dateFrom.setHours(0, 0, 0, 0);
+      prevTo = new Date(dateFrom);
+      prevTo.setMilliseconds(-1);
+      prevFrom = new Date(prevTo);
+      prevFrom.setHours(0, 0, 0, 0);
+    }
+
+    const active = (allTransactions || []).filter(t => t.status !== "voided");
+    const currentTxns = active.filter(t => new Date(t.date) >= dateFrom && new Date(t.date) <= now);
+    const prevTxns = active.filter(t => new Date(t.date) >= prevFrom && new Date(t.date) <= prevTo);
+
+    let clientRevenue = 0;
+    let clientProfit = 0;
+    const clientPaymentBreakdown: Record<string, number> = {};
+    for (const t of currentTxns) {
+      clientRevenue += t.totalAmount;
+      clientProfit += t.totalProfit || 0;
+      const method = t.paymentMethod || "Naqd";
+      clientPaymentBreakdown[method] = (clientPaymentBreakdown[method] || 0) + t.totalAmount;
+    }
+
+    let prevRevenue = 0;
+    for (const t of prevTxns) {
+      prevRevenue += t.totalAmount;
+    }
+
+    const srvRevenue = serverSummary?.revenue || 0;
+    const srvProfit = serverSummary?.totalProfit || 0;
+    const srvExpenses = serverSummary?.expensesTotal || 0;
+
+    const revenue = Math.max(clientRevenue, srvRevenue);
+    const totalProfit = Math.max(clientProfit, srvProfit);
+    const expensesTotal = srvExpenses;
+
+    const paymentBreakdown = { ...clientPaymentBreakdown };
+    if (serverSummary?.paymentBreakdown) {
+      for (const [k, v] of Object.entries(serverSummary.paymentBreakdown as Record<string, number>)) {
+        if (!paymentBreakdown[k] || (v as number) > paymentBreakdown[k]) {
+          paymentBreakdown[k] = v as number;
+        }
+      }
+    }
+
+    const transactionCount = Math.max(currentTxns.length, serverSummary?.transactionCount || 0);
+    const finalPrevRevenue = Math.max(prevRevenue, serverSummary?.prevRevenue || 0);
+
+    return {
+      revenue,
+      expensesTotal,
+      profit: revenue - expensesTotal,
+      totalProfit,
+      paymentBreakdown,
+      transactionCount,
+      prevRevenue: finalPrevRevenue,
+      prevExpenses: serverSummary?.prevExpenses || 0,
+      prevProfit: finalPrevRevenue - (serverSummary?.prevExpenses || 0),
+    };
+  }, [allTransactions, serverSummary, period]);
+
+  const { data: serverDailyData = [] } = useQuery<any[]>({
     queryKey: ["finance-daily", period],
     queryFn: async () => {
       const now = new Date();
@@ -112,6 +196,52 @@ export default function FinancePage() {
     },
     enabled: !!token,
   });
+
+  const dailyData = useMemo(() => {
+    const now = new Date();
+    let from: Date;
+    if (period === "month") {
+      from = new Date(now.getFullYear(), now.getMonth(), 1);
+    } else if (period === "week") {
+      const d = now.getDay() || 7;
+      from = new Date(now);
+      from.setDate(now.getDate() - d + 1);
+      from.setHours(0, 0, 0, 0);
+    } else {
+      from = new Date(now);
+      from.setHours(0, 0, 0, 0);
+    }
+
+    const active = (allTransactions || []).filter(t => t.status !== "voided");
+    const dayMap: Record<string, { revenue: number; profit: number }> = {};
+
+    for (const t of active) {
+      const tDate = new Date(t.date);
+      if (tDate >= from && tDate <= now) {
+        const dayKey = tDate.toISOString().split("T")[0];
+        if (!dayMap[dayKey]) dayMap[dayKey] = { revenue: 0, profit: 0 };
+        dayMap[dayKey].revenue += t.totalAmount;
+        dayMap[dayKey].profit += t.totalProfit || 0;
+      }
+    }
+
+    const srvMap: Record<string, any> = {};
+    for (const d of serverDailyData) {
+      srvMap[d.date] = d;
+    }
+
+    const allDates = new Set([...Object.keys(dayMap), ...Object.keys(srvMap)]);
+    return Array.from(allDates).sort().map(date => {
+      const client = dayMap[date] || { revenue: 0, profit: 0 };
+      const srv = srvMap[date] || { revenue: 0, expenses: 0, profit: 0 };
+      return {
+        date,
+        revenue: Math.max(client.revenue, srv.revenue || 0),
+        expenses: srv.expenses || 0,
+        profit: Math.max(client.revenue, srv.revenue || 0) - (srv.expenses || 0),
+      };
+    });
+  }, [allTransactions, serverDailyData, period]);
 
   const { data: expensesList = [] } = useQuery<any[]>({
     queryKey: ["expenses"],

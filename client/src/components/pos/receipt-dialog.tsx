@@ -2,10 +2,46 @@ import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { type Transaction } from "@/lib/transaction-context";
 import { Printer } from "lucide-react";
-import { useEffect } from "react";
+import React, { useEffect } from "react";
 import { useSettings } from "@/lib/settings-context";
 import { useAuth } from "@/lib/auth-context";
 import { useQuery } from "@tanstack/react-query";
+
+class ReceiptErrorBoundary extends React.Component<
+  { children: React.ReactNode; onError?: () => void },
+  { hasError: boolean }
+> {
+  constructor(props: { children: React.ReactNode; onError?: () => void }) {
+    super(props);
+    this.state = { hasError: false };
+  }
+  static getDerivedStateFromError() {
+    return { hasError: true };
+  }
+  componentDidCatch(error: Error) {
+    console.error("Receipt render error:", error);
+  }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div style={{ padding: 20, textAlign: "center" }}>
+          <p style={{ fontWeight: 600, marginBottom: 8 }}>Chekni ko'rsatishda xatolik</p>
+          <p style={{ fontSize: 12, color: "#64748b" }}>To'lov muvaffaqiyatli qabul qilindi</p>
+          <button
+            onClick={() => {
+              this.setState({ hasError: false });
+              this.props.onError?.();
+            }}
+            style={{ marginTop: 12, padding: "6px 16px", background: "#3b82f6", color: "#fff", border: "none", borderRadius: 6, cursor: "pointer" }}
+          >
+            Yopish
+          </button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
 
 interface ReceiptDialogProps {
   transaction: Transaction | null;
@@ -266,7 +302,9 @@ export function ReceiptDialog({ transaction, isOpen, onClose }: ReceiptDialogPro
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="sm:max-w-[380px] p-0 overflow-hidden bg-white gap-0 no-print">
         <div className="p-6 flex flex-col items-center text-center bg-white" id="receipt-area">
-          <ReceiptContent transaction={transaction} settings={settings} receiptLogo={receiptLogo} paymentMethods={tenantSettings?.paymentMethods} />
+          <ReceiptErrorBoundary onError={onClose}>
+            <ReceiptContent transaction={transaction} settings={settings} receiptLogo={receiptLogo} paymentMethods={tenantSettings?.paymentMethods} />
+          </ReceiptErrorBoundary>
         </div>
 
         <div className="p-4 bg-gray-50 border-t flex gap-2 no-print">

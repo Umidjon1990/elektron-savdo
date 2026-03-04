@@ -81,18 +81,27 @@ class ErrorBoundary extends React.Component<
     return { hasError: true, error };
   }
   componentDidCatch(error: Error) {
-    const reloaded = sessionStorage.getItem("chunk_reload");
-    if (!reloaded) {
-      sessionStorage.setItem("chunk_reload", "1");
-      window.location.reload();
-      return;
-    }
-    sessionStorage.removeItem("chunk_reload");
+    console.error("ErrorBoundary caught:", error);
   }
   render() {
     if (this.state.hasError) {
-      window.location.reload();
-      return null;
+      return (
+        <div style={{ padding: 40, textAlign: "center" }}>
+          <h2 style={{ marginBottom: 16 }}>Xatolik yuz berdi</h2>
+          <button
+            onClick={() => this.setState({ hasError: false, error: null })}
+            style={{ padding: "8px 24px", background: "#3b82f6", color: "#fff", border: "none", borderRadius: 8, cursor: "pointer", marginRight: 8 }}
+          >
+            Qayta urinish
+          </button>
+          <button
+            onClick={() => window.location.reload()}
+            style={{ padding: "8px 24px", background: "#64748b", color: "#fff", border: "none", borderRadius: 8, cursor: "pointer" }}
+          >
+            Sahifani yangilash
+          </button>
+        </div>
+      );
     }
     return this.props.children;
   }

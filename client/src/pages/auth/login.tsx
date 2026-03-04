@@ -11,7 +11,6 @@ function preloadAdminPages() {
   import("@/pages/dashboard");
   import("@/pages/inventory");
   import("@/pages/history");
-  import("@/pages/orders");
   import("@/pages/customers");
   import("@/pages/settings");
   import("@/pages/categories");

@@ -16,7 +16,6 @@ import { useQuery } from "@tanstack/react-query";
 const importDashboard = () => import("@/pages/dashboard");
 const importInventory = () => import("@/pages/inventory");
 const importHistory = () => import("@/pages/history");
-const importOrders = () => import("@/pages/orders");
 const importCustomers = () => import("@/pages/customers");
 const importStoreHome = () => import("@/pages/store/home");
 const importCart = () => import("@/pages/store/cart");
@@ -32,8 +31,6 @@ const importSlugStore = () => import("@/pages/store/slug-store");
 const importSlugCart = () => import("@/pages/store/slug-cart");
 const importSlugLogin = () => import("@/pages/store/slug-login");
 const importFinance = () => import("@/pages/finance");
-const importDeliveries = () => import("@/pages/deliveries");
-const importDebtors = () => import("@/pages/debtors");
 
 const NotFound = lazy(importNotFound);
 const SuperAdminPage = lazy(importSuperAdmin);
@@ -45,7 +42,6 @@ const SlugLoginPage = lazy(importSlugLogin);
 const Dashboard = lazy(importDashboard);
 const Inventory = lazy(importInventory);
 const History = lazy(importHistory);
-const OrdersPage = lazy(importOrders);
 const CustomersPage = lazy(importCustomers);
 const StoreHome = lazy(importStoreHome);
 const CartPage = lazy(importCart);
@@ -54,14 +50,11 @@ const RegisterPage = lazy(importRegister);
 const SettingsPage = lazy(importSettings);
 const CategoriesPage = lazy(importCategories);
 const FinancePage = lazy(importFinance);
-const DeliveriesPage = lazy(importDeliveries);
-const DebtorsPage = lazy(importDebtors);
 
 function preloadAdminPages() {
   importDashboard();
   importInventory();
   importHistory();
-  importOrders();
   importCustomers();
   importSettings();
   importCategories();
@@ -265,7 +258,7 @@ function Router() {
         {(params) => <SlugProtectedRoute component={History} slug={params.slug} />}
       </Route>
       <Route path="/store/:slug/admin/orders">
-        {(params) => <SlugProtectedRoute component={OrdersPage} slug={params.slug} />}
+        {(params) => <Redirect to={`/store/${params.slug}/admin/customers`} />}
       </Route>
       <Route path="/store/:slug/admin/customers">
         {(params) => <SlugProtectedRoute component={CustomersPage} slug={params.slug} />}
@@ -280,10 +273,10 @@ function Router() {
         {(params) => <SlugProtectedRoute component={FinancePage} slug={params.slug} />}
       </Route>
       <Route path="/store/:slug/admin/deliveries">
-        {(params) => <SlugProtectedRoute component={DeliveriesPage} slug={params.slug} />}
+        {(params) => <Redirect to={`/store/${params.slug}/admin/customers`} />}
       </Route>
       <Route path="/store/:slug/admin/debtors">
-        {(params) => <SlugProtectedRoute component={DebtorsPage} slug={params.slug} />}
+        {(params) => <Redirect to={`/store/${params.slug}/admin/customers`} />}
       </Route>
       <Route path="/store/:slug/admin/super">
         {(params) => <SlugProtectedRoute component={SuperAdminPage} slug={params.slug} />}
@@ -308,7 +301,7 @@ function Router() {
         {() => <LegacyAdminRedirect component={History} subPath="history" />}
       </Route>
       <Route path="/admin/orders">
-        {() => <LegacyAdminRedirect component={OrdersPage} subPath="orders" />}
+        {() => <LegacyAdminRedirect component={CustomersPage} subPath="customers" />}
       </Route>
       <Route path="/admin/customers">
         {() => <LegacyAdminRedirect component={CustomersPage} subPath="customers" />}
@@ -323,10 +316,10 @@ function Router() {
         {() => <LegacyAdminRedirect component={FinancePage} subPath="finance" />}
       </Route>
       <Route path="/admin/deliveries">
-        {() => <LegacyAdminRedirect component={DeliveriesPage} subPath="deliveries" />}
+        {() => <LegacyAdminRedirect component={CustomersPage} subPath="customers" />}
       </Route>
       <Route path="/admin/debtors">
-        {() => <LegacyAdminRedirect component={DebtorsPage} subPath="debtors" />}
+        {() => <LegacyAdminRedirect component={CustomersPage} subPath="customers" />}
       </Route>
       <Route path="/admin/super">
         {() => <LegacyAdminRedirect component={SuperAdminPage} subPath="super" />}

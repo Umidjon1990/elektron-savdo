@@ -129,11 +129,14 @@ Key backend files:
 - Finance module: expense_categories, expenses tables, CRUD APIs, summary/daily-breakdown endpoints, finance page with KPI cards, BarChart, PieChart, expense management
 - Product form visibility settings: `productFormVisibility` JSON on tenants table, toggle switches in settings page to show/hide fields (costPrice, barcodePrice, wholesalePrice, description, videoUrl, isNew, category, author)
 - CRM Module: customers table, deliveries table, audit_logs table, enhanced orders with statusHistory/paymentStatus/address/courier
-- Professional Customers page: server-side search+pagination, Customer Card drawer (orders/deliveries/debts tabs), CRUD
-- Enhanced Orders page: 6-status workflow (new→confirmed→preparing→out_for_delivery→delivered/cancelled), filters, order detail drawer with status timeline, courier assignment, audit trail
-- Deliveries page: delivery tracking with status badges (pending/delivered/failed/returned/cancelled), filters by courier/status/date
-- Debtors page: nasiya debt tracking, grouped by customer, KPI cards, period filters, inline payment dialog
-- Sidebar nav: Mijozlar moved to primary, Yetkazish and Qarzdorlar added to secondary
+- **Unified CRM Hub (Mijozlar page)**: 4 top-level tabs — Mijozlar | Buyurtmalar | Yetkazish | Qarzdorlar
+  - Mijozlar tab: customer list with server-side search+pagination, Customer Card drawer (orders/deliveries/debts sub-tabs), CRUD, KPI cards, filter tabs (Hammasi/Qarzdorlar/To'lganlar/Muddati yaqin)
+  - Buyurtmalar tab: 6-status order workflow (new→confirmed→preparing→out_for_delivery→delivered/cancelled), filters (date/status/payment/delivery), order detail sheet with status timeline, courier assignment, audit trail
+  - Yetkazish tab: delivery tracking with KPI cards, status badges (pending/delivered/failed/returned/cancelled), filters by courier/status/date, inline status update
+  - Qarzdorlar tab: nasiya debt tracking grouped by customer, KPI cards (jami qarz/qarzdorlar/muddati yaqin/o'tgan), period filters, inline payment dialog
+- Tab components in `/client/src/pages/crm/`: orders-tab.tsx, deliveries-tab.tsx, debtors-tab.tsx
+- Old standalone pages (orders.tsx, deliveries.tsx, debtors.tsx) removed; routes redirect to customers page
+- Sidebar nav: Kassa, Ombor, Mijozlar (primary); Moliya, Kategoriyalar, Do'kon, Sozlamalar (secondary) — Buyurtmalar/Yetkazish/Qarzdorlar removed from sidebar
 
 ## External Dependencies
 

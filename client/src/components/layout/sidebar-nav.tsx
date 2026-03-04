@@ -1,6 +1,6 @@
 import { Link, useLocation } from "wouter";
 import { cn } from "@/lib/utils";
-import { LayoutDashboard, Package, History, Settings, LogOut, Store, ShoppingCart, Users, Download, MoreHorizontal, Layers, Crown, Wallet, Truck, HandCoins } from "lucide-react";
+import { LayoutDashboard, Package, Settings, LogOut, Store, Users, Download, MoreHorizontal, Layers, Crown, Wallet } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useState, useEffect } from "react";
 import { useAuth } from "@/lib/auth-context";
@@ -16,12 +16,9 @@ function getNavItems(slug?: string) {
   const storeLink = slug ? `/store/${slug}` : "/";
   return [
     { href: prefix, icon: LayoutDashboard, label: "Kassa", primary: true },
-    { href: `${prefix}/orders`, icon: ShoppingCart, label: "Buyurtmalar", primary: true },
     { href: `${prefix}/inventory`, icon: Package, label: "Ombor", primary: true },
     { href: `${prefix}/customers`, icon: Users, label: "Mijozlar", primary: true },
     { href: `${prefix}/finance`, icon: Wallet, label: "Moliya", primary: false },
-    { href: `${prefix}/deliveries`, icon: Truck, label: "Yetkazish", primary: false },
-    { href: `${prefix}/debtors`, icon: HandCoins, label: "Qarzdorlar", primary: false },
     { href: `${prefix}/categories`, icon: Layers, label: "Kategoriyalar", primary: false },
     { href: storeLink, icon: Store, label: "Do'kon", primary: false },
     { href: `${prefix}/settings`, icon: Settings, label: "Sozlamalar", primary: false },

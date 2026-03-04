@@ -1,5 +1,4 @@
 import { useState, useMemo } from "react";
-import { SidebarNav } from "@/components/layout/sidebar-nav";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -32,7 +31,6 @@ import {
   Truck,
   CheckCircle2,
   Clock,
-  XCircle,
   User,
   Phone,
   MapPin,
@@ -40,7 +38,7 @@ import {
   CircleDot,
 } from "lucide-react";
 import { format, startOfDay, startOfWeek, startOfMonth } from "date-fns";
-import { useAuth, getAuthHeaders } from "@/lib/auth-context";
+import { getAuthHeaders } from "@/lib/auth-context";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 
 const statusConfig: Record<string, { label: string; color: string; bg: string }> = {
@@ -101,8 +99,7 @@ interface AuditLog {
   createdAt: string;
 }
 
-export default function OrdersPage() {
-  const { } = useAuth();
+export function OrdersTab() {
   const queryClient = useQueryClient();
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
@@ -219,178 +216,170 @@ export default function OrdersPage() {
   };
 
   return (
-    <div className="flex min-h-screen bg-slate-50">
-      <SidebarNav />
-      <main className="flex-1 p-4 md:p-8 pb-24 md:pb-8">
-        <div className="max-w-7xl mx-auto space-y-6">
-          <div>
-            <h1 className="text-2xl md:text-3xl font-bold text-slate-900" data-testid="text-page-title">Buyurtmalar</h1>
-            <p className="text-slate-500 text-sm">Barcha buyurtmalarni boshqaring</p>
-          </div>
+    <>
+      <div className="space-y-6">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <Card className="p-4 border-l-4 border-l-blue-500" data-testid="kpi-total">
+            <div className="text-sm text-slate-500">Jami</div>
+            <div className="text-2xl font-bold text-blue-600">{kpi.total}</div>
+          </Card>
+          <Card className="p-4 border-l-4 border-l-indigo-500" data-testid="kpi-new">
+            <div className="text-sm text-slate-500">Yangi</div>
+            <div className="text-2xl font-bold text-indigo-600">{kpi.new}</div>
+          </Card>
+          <Card className="p-4 border-l-4 border-l-purple-500" data-testid="kpi-delivering">
+            <div className="text-sm text-slate-500">Yetkazilayotgan</div>
+            <div className="text-2xl font-bold text-purple-600">{kpi.delivering}</div>
+          </Card>
+          <Card className="p-4 border-l-4 border-l-green-500" data-testid="kpi-delivered">
+            <div className="text-sm text-slate-500">Yetkazilgan</div>
+            <div className="text-2xl font-bold text-green-600">{kpi.delivered}</div>
+          </Card>
+        </div>
 
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <Card className="p-4 border-l-4 border-l-blue-500" data-testid="kpi-total">
-              <div className="text-sm text-slate-500">Jami</div>
-              <div className="text-2xl font-bold text-blue-600">{kpi.total}</div>
-            </Card>
-            <Card className="p-4 border-l-4 border-l-indigo-500" data-testid="kpi-new">
-              <div className="text-sm text-slate-500">Yangi</div>
-              <div className="text-2xl font-bold text-indigo-600">{kpi.new}</div>
-            </Card>
-            <Card className="p-4 border-l-4 border-l-purple-500" data-testid="kpi-delivering">
-              <div className="text-sm text-slate-500">Yetkazilayotgan</div>
-              <div className="text-2xl font-bold text-purple-600">{kpi.delivering}</div>
-            </Card>
-            <Card className="p-4 border-l-4 border-l-green-500" data-testid="kpi-delivered">
-              <div className="text-sm text-slate-500">Yetkazilgan</div>
-              <div className="text-2xl font-bold text-green-600">{kpi.delivered}</div>
-            </Card>
-          </div>
+        <div className="bg-white rounded-xl border shadow-sm">
+          <div className="p-4 flex flex-wrap items-center gap-3 border-b">
+            <div className="relative flex-1 min-w-[200px] max-w-sm">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+              <Input
+                placeholder="Ism yoki telefon orqali qidirish..."
+                className="pl-10"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                data-testid="input-orders-search"
+              />
+            </div>
 
-          <div className="bg-white rounded-xl border shadow-sm">
-            <div className="p-4 flex flex-wrap items-center gap-3 border-b">
-              <div className="relative flex-1 min-w-[200px] max-w-sm">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-                <Input
-                  placeholder="Ism yoki telefon orqali qidirish..."
-                  className="pl-10"
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  data-testid="input-search"
-                />
-              </div>
+            <div className="flex gap-1">
+              {[
+                { key: "all", label: "Barchasi" },
+                { key: "today", label: "Bugun" },
+                { key: "week", label: "Hafta" },
+                { key: "month", label: "Oy" },
+              ].map((d) => (
+                <Button
+                  key={d.key}
+                  variant={dateRange === d.key ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setDateRange(d.key)}
+                  data-testid={`filter-date-${d.key}`}
+                >
+                  {d.label}
+                </Button>
+              ))}
+            </div>
 
-              <div className="flex gap-1">
-                {[
-                  { key: "all", label: "Barchasi" },
-                  { key: "today", label: "Bugun" },
-                  { key: "week", label: "Hafta" },
-                  { key: "month", label: "Oy" },
-                ].map((d) => (
-                  <Button
-                    key={d.key}
-                    variant={dateRange === d.key ? "default" : "outline"}
-                    size="sm"
-                    onClick={() => setDateRange(d.key)}
-                    data-testid={`filter-date-${d.key}`}
-                  >
-                    {d.label}
-                  </Button>
+            <Select value={statusFilter} onValueChange={setStatusFilter}>
+              <SelectTrigger className="w-[160px]" data-testid="select-status-filter">
+                <SelectValue placeholder="Status" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Barcha status</SelectItem>
+                {Object.entries(statusConfig).map(([key, cfg]) => (
+                  <SelectItem key={key} value={key}>{cfg.label}</SelectItem>
                 ))}
-              </div>
+              </SelectContent>
+            </Select>
 
-              <Select value={statusFilter} onValueChange={setStatusFilter}>
-                <SelectTrigger className="w-[160px]" data-testid="select-status-filter">
-                  <SelectValue placeholder="Status" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Barcha status</SelectItem>
-                  {Object.entries(statusConfig).map(([key, cfg]) => (
-                    <SelectItem key={key} value={key}>{cfg.label}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+            <Select value={paymentFilter} onValueChange={setPaymentFilter}>
+              <SelectTrigger className="w-[160px]" data-testid="select-payment-filter">
+                <SelectValue placeholder="To'lov" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Barcha to'lov</SelectItem>
+                {Object.entries(paymentStatusConfig).map(([key, cfg]) => (
+                  <SelectItem key={key} value={key}>{cfg.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
 
-              <Select value={paymentFilter} onValueChange={setPaymentFilter}>
-                <SelectTrigger className="w-[160px]" data-testid="select-payment-filter">
-                  <SelectValue placeholder="To'lov" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Barcha to'lov</SelectItem>
-                  {Object.entries(paymentStatusConfig).map(([key, cfg]) => (
-                    <SelectItem key={key} value={key}>{cfg.label}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+            <Select value={deliveryFilter} onValueChange={setDeliveryFilter}>
+              <SelectTrigger className="w-[160px]" data-testid="select-delivery-filter">
+                <SelectValue placeholder="Yetkazish" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Barcha tur</SelectItem>
+                <SelectItem value="delivery">Yetkazish</SelectItem>
+                <SelectItem value="pickup">Olib ketish</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
 
-              <Select value={deliveryFilter} onValueChange={setDeliveryFilter}>
-                <SelectTrigger className="w-[160px]" data-testid="select-delivery-filter">
-                  <SelectValue placeholder="Yetkazish" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Barcha tur</SelectItem>
-                  <SelectItem value="delivery">Yetkazish</SelectItem>
-                  <SelectItem value="pickup">Olib ketish</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="overflow-x-auto">
-              <Table>
-                <TableHeader>
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>#ID</TableHead>
+                  <TableHead>Mijoz</TableHead>
+                  <TableHead>Telefon</TableHead>
+                  <TableHead>Manzil</TableHead>
+                  <TableHead>Summa</TableHead>
+                  <TableHead>To'lov</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Sana</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {isLoading ? (
                   <TableRow>
-                    <TableHead>#ID</TableHead>
-                    <TableHead>Mijoz</TableHead>
-                    <TableHead>Telefon</TableHead>
-                    <TableHead>Manzil</TableHead>
-                    <TableHead>Summa</TableHead>
-                    <TableHead>To'lov</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Sana</TableHead>
+                    <TableCell colSpan={8} className="text-center py-12 text-slate-400">
+                      Yuklanmoqda...
+                    </TableCell>
                   </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {isLoading ? (
-                    <TableRow>
-                      <TableCell colSpan={8} className="text-center py-12 text-slate-400">
-                        Yuklanmoqda...
-                      </TableCell>
-                    </TableRow>
-                  ) : filteredOrders.length === 0 ? (
-                    <TableRow>
-                      <TableCell colSpan={8} className="text-center py-12 text-slate-400" data-testid="text-empty">
-                        Buyurtmalar topilmadi
-                      </TableCell>
-                    </TableRow>
-                  ) : (
-                    filteredOrders.map((order) => {
-                      const sc = statusConfig[order.status] || statusConfig.new;
-                      const pc = paymentStatusConfig[order.paymentStatus] || paymentStatusConfig.unpaid;
-                      return (
-                        <TableRow
-                          key={order.id}
-                          className="cursor-pointer hover:bg-slate-50"
-                          onClick={() => openSheet(order.id)}
-                          data-testid={`row-order-${order.id}`}
-                        >
-                          <TableCell className="font-mono text-sm" data-testid={`text-order-id-${order.id}`}>
-                            #{order.id.slice(0, 6)}
-                          </TableCell>
-                          <TableCell className="font-medium" data-testid={`text-customer-${order.id}`}>
-                            {order.customerName}
-                          </TableCell>
-                          <TableCell className="text-slate-500" data-testid={`text-phone-${order.id}`}>
-                            {order.customerPhone}
-                          </TableCell>
-                          <TableCell className="text-slate-500 max-w-[150px] truncate" data-testid={`text-address-${order.id}`}>
-                            {order.address || "—"}
-                          </TableCell>
-                          <TableCell className="font-semibold" data-testid={`text-amount-${order.id}`}>
-                            {order.totalAmount?.toLocaleString()} so'm
-                          </TableCell>
-                          <TableCell>
-                            <Badge variant="secondary" className={`${pc.bg} ${pc.color}`} data-testid={`badge-payment-${order.id}`}>
-                              {pc.label}
-                            </Badge>
-                          </TableCell>
-                          <TableCell>
-                            <Badge variant="secondary" className={`${sc.bg} ${sc.color}`} data-testid={`badge-status-${order.id}`}>
-                              {sc.label}
-                            </Badge>
-                          </TableCell>
-                          <TableCell className="text-slate-500 text-sm" data-testid={`text-date-${order.id}`}>
-                            {order.createdAt ? format(new Date(order.createdAt), "dd.MM.yyyy HH:mm") : "—"}
-                          </TableCell>
-                        </TableRow>
-                      );
-                    })
-                  )}
-                </TableBody>
-              </Table>
-            </div>
+                ) : filteredOrders.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={8} className="text-center py-12 text-slate-400" data-testid="text-orders-empty">
+                      Buyurtmalar topilmadi
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  filteredOrders.map((order) => {
+                    const sc = statusConfig[order.status] || statusConfig.new;
+                    const pc = paymentStatusConfig[order.paymentStatus] || paymentStatusConfig.unpaid;
+                    return (
+                      <TableRow
+                        key={order.id}
+                        className="cursor-pointer hover:bg-slate-50"
+                        onClick={() => openSheet(order.id)}
+                        data-testid={`row-order-${order.id}`}
+                      >
+                        <TableCell className="font-mono text-sm" data-testid={`text-order-id-${order.id}`}>
+                          #{order.id.slice(0, 6)}
+                        </TableCell>
+                        <TableCell className="font-medium" data-testid={`text-customer-${order.id}`}>
+                          {order.customerName}
+                        </TableCell>
+                        <TableCell className="text-slate-500" data-testid={`text-phone-${order.id}`}>
+                          {order.customerPhone}
+                        </TableCell>
+                        <TableCell className="text-slate-500 max-w-[150px] truncate" data-testid={`text-address-${order.id}`}>
+                          {order.address || "\u2014"}
+                        </TableCell>
+                        <TableCell className="font-semibold" data-testid={`text-amount-${order.id}`}>
+                          {order.totalAmount?.toLocaleString()} so'm
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant="secondary" className={`${pc.bg} ${pc.color}`} data-testid={`badge-payment-${order.id}`}>
+                            {pc.label}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant="secondary" className={`${sc.bg} ${sc.color}`} data-testid={`badge-status-${order.id}`}>
+                            {sc.label}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="text-slate-500 text-sm" data-testid={`text-date-${order.id}`}>
+                          {order.createdAt ? format(new Date(order.createdAt), "dd.MM.yyyy HH:mm") : "\u2014"}
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })
+                )}
+              </TableBody>
+            </Table>
           </div>
         </div>
-      </main>
+      </div>
 
       <Sheet open={!!selectedOrderId} onOpenChange={(open) => { if (!open) setSelectedOrderId(null); }}>
         <SheetContent className="w-full sm:max-w-lg overflow-y-auto" data-testid="sheet-order-detail">
@@ -406,7 +395,7 @@ export default function OrdersPage() {
               <div className="flex items-center justify-between">
                 <div className="text-sm text-slate-500 flex items-center gap-1">
                   <Calendar className="h-4 w-4" />
-                  {detail.createdAt ? format(new Date(detail.createdAt), "dd.MM.yyyy HH:mm") : "—"}
+                  {detail.createdAt ? format(new Date(detail.createdAt), "dd.MM.yyyy HH:mm") : "\u2014"}
                 </div>
                 <Badge
                   variant="secondary"
@@ -431,7 +420,7 @@ export default function OrdersPage() {
                       <div key={i} className="flex items-center justify-between p-3" data-testid={`item-row-${i}`}>
                         <div>
                           <div className="font-medium text-sm">{name}</div>
-                          <div className="text-xs text-slate-400">{qty} × {price.toLocaleString()} so'm</div>
+                          <div className="text-xs text-slate-400">{qty} \u00d7 {price.toLocaleString()} so'm</div>
                         </div>
                         <div className="font-semibold text-sm">{(qty * price).toLocaleString()} so'm</div>
                       </div>
@@ -544,33 +533,29 @@ export default function OrdersPage() {
                       );
                     })
                   ) : (
-                    <p className="text-sm text-slate-400 pl-5">Tarix mavjud emas</p>
-                  )}
-
-                  {auditLogs.length > 0 && (
-                    <>
-                      <div className="border-t mt-3 pt-3">
-                        <p className="text-xs font-medium text-slate-400 mb-2 pl-5">Audit log</p>
-                      </div>
-                      {auditLogs.map((log, i) => (
-                        <div key={log.id} className="flex items-start gap-3 relative pl-5 py-2" data-testid={`audit-entry-${i}`}>
-                          <CircleDot className="h-4 w-4 absolute left-0 text-slate-400" />
-                          <div>
-                            <div className="text-xs text-slate-600">{log.action}</div>
-                            <span className="text-xs text-slate-400">
-                              {log.createdAt ? format(new Date(log.createdAt), "dd.MM.yyyy HH:mm") : ""}
-                            </span>
-                          </div>
-                        </div>
-                      ))}
-                    </>
+                    <p className="text-sm text-slate-400 pl-5">Tarix yo'q</p>
                   )}
                 </div>
               </div>
+
+              {auditLogs.length > 0 && (
+                <div className="space-y-2">
+                  <h3 className="font-semibold text-sm text-slate-700">Audit log</h3>
+                  <div className="space-y-1">
+                    {auditLogs.map((log) => (
+                      <div key={log.id} className="text-xs text-slate-500 flex items-center gap-2" data-testid={`audit-log-${log.id}`}>
+                        <span>{log.createdAt ? format(new Date(log.createdAt), "dd.MM HH:mm") : ""}</span>
+                        <span className="font-medium">{log.action}</span>
+                        {log.changes && <span className="text-slate-400">{JSON.stringify(log.changes)}</span>}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </SheetContent>
       </Sheet>
-    </div>
+    </>
   );
 }

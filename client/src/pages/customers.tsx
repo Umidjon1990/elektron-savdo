@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef, useCallback } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuth, getAuthHeaders } from "@/lib/auth-context";
 import { SidebarNav } from "@/components/layout/sidebar-nav";
@@ -17,6 +17,9 @@ import {
   MapPin, Clock, ShoppingCart, Truck, Calendar, AlertTriangle, CheckCircle2
 } from "lucide-react";
 import { format, differenceInDays } from "date-fns";
+import { OrdersTab } from "./crm/orders-tab";
+import { DeliveriesTab } from "./crm/deliveries-tab";
+import { DebtorsTab } from "./crm/debtors-tab";
 
 interface CustomerListItem {
   id: string;
@@ -53,11 +56,19 @@ interface CustomerDetail extends CustomerListItem {
   debts: DebtItem[];
 }
 
+const crmTabs = [
+  { id: "customers", label: "Mijozlar", icon: User },
+  { id: "orders", label: "Buyurtmalar", icon: ShoppingCart },
+  { id: "deliveries", label: "Yetkazish", icon: Truck },
+  { id: "debtors", label: "Qarzdorlar", icon: HandCoins },
+];
+
 export default function CustomersPage() {
   const { token } = useAuth();
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
+  const [activeCrmTab, setActiveCrmTab] = useState("customers");
   const [search, setSearch] = useState("");
   const [searchDebounced, setSearchDebounced] = useState("");
   const [page, setPage] = useState(1);
@@ -75,16 +86,16 @@ export default function CustomersPage() {
 
   const headers = { ...getAuthHeaders(), "Content-Type": "application/json" };
   const limit = 50;
+  const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  let searchTimer: any;
-  const handleSearch = (val: string) => {
+  const handleSearch = useCallback((val: string) => {
     setSearch(val);
-    clearTimeout(searchTimer);
-    searchTimer = setTimeout(() => {
+    if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
+    searchTimerRef.current = setTimeout(() => {
       setSearchDebounced(val);
       setPage(1);
     }, 300);
-  };
+  }, []);
 
   const { data: customersData, isLoading } = useQuery({
     queryKey: ["customers", searchDebounced, page],
@@ -230,7 +241,7 @@ export default function CustomersPage() {
     setEditDialogOpen(true);
   };
 
-  const tabs = [
+  const customerFilterTabs = [
     { id: "all", label: "Hammasi", count: total, icon: User },
     { id: "debtors", label: "Qarzdorlar", count: stats.debtors, icon: HandCoins },
     { id: "paid", label: "To'lganlar", count: null, icon: CheckCircle2 },
@@ -244,180 +255,208 @@ export default function CustomersPage() {
         <div className="max-w-7xl mx-auto">
           <div className="flex items-center justify-between mb-6">
             <div>
-              <h1 className="text-2xl md:text-3xl font-bold text-slate-900" data-testid="text-customers-title">Mijozlar</h1>
-              <p className="text-slate-500 text-sm">Qarzdorlar, to'lovlar va mijozlar bazasi</p>
+              <h1 className="text-2xl md:text-3xl font-bold text-slate-900" data-testid="text-crm-title">Mijozlar va CRM</h1>
+              <p className="text-slate-500 text-sm">Mijozlar, buyurtmalar, yetkazish va qarzlar</p>
             </div>
-            <Button
-              onClick={() => setAddDialogOpen(true)}
-              className="bg-blue-600 hover:bg-blue-700"
-              data-testid="button-add-customer"
-            >
-              <Plus className="h-4 w-4 mr-1" />
-              Mijoz qo'shish
-            </Button>
+            {activeCrmTab === "customers" && (
+              <Button
+                onClick={() => setAddDialogOpen(true)}
+                className="bg-blue-600 hover:bg-blue-700"
+                data-testid="button-add-customer"
+              >
+                <Plus className="h-4 w-4 mr-1" />
+                Mijoz qo'shish
+              </Button>
+            )}
           </div>
 
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
-            <Card className="bg-blue-500 text-white border-none" data-testid="card-kpi-total">
-              <CardContent className="p-4">
-                <div className="flex items-center gap-2 mb-1">
-                  <User className="h-4 w-4 opacity-80" />
-                  <span className="text-xs opacity-80">Jami mijozlar</span>
-                </div>
-                <p className="text-2xl font-bold" data-testid="text-total-customers">{stats.total}</p>
-              </CardContent>
-            </Card>
-            <Card className="bg-orange-500 text-white border-none" data-testid="card-kpi-debtors">
-              <CardContent className="p-4">
-                <div className="flex items-center gap-2 mb-1">
-                  <HandCoins className="h-4 w-4 opacity-80" />
-                  <span className="text-xs opacity-80">Qarzdorlar</span>
-                </div>
-                <p className="text-2xl font-bold" data-testid="text-debtors-count">{stats.debtors}</p>
-              </CardContent>
-            </Card>
-            <Card className="bg-red-500 text-white border-none" data-testid="card-kpi-debt">
-              <CardContent className="p-4">
-                <div className="flex items-center gap-2 mb-1">
-                  <Banknote className="h-4 w-4 opacity-80" />
-                  <span className="text-xs opacity-80">Jami qarz</span>
-                </div>
-                <p className="text-xl font-bold" data-testid="text-total-debt">{stats.totalDebt.toLocaleString()}</p>
-              </CardContent>
-            </Card>
-            <Card className="bg-yellow-500 text-white border-none" data-testid="card-kpi-upcoming">
-              <CardContent className="p-4">
-                <div className="flex items-center gap-2 mb-1">
-                  <AlertTriangle className="h-4 w-4 opacity-80" />
-                  <span className="text-xs opacity-80">Muddati yaqin</span>
-                </div>
-                <p className="text-2xl font-bold" data-testid="text-upcoming-count">{stats.upcoming}</p>
-              </CardContent>
-            </Card>
+          <div className="flex gap-1 mb-6 bg-white rounded-xl border p-1 shadow-sm overflow-x-auto">
+            {crmTabs.map((tab) => (
+              <button
+                key={tab.id}
+                onClick={() => setActiveCrmTab(tab.id)}
+                className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition-all whitespace-nowrap ${
+                  activeCrmTab === tab.id
+                    ? "bg-blue-600 text-white shadow-md"
+                    : "text-slate-600 hover:bg-slate-100"
+                }`}
+                data-testid={`crm-tab-${tab.id}`}
+              >
+                <tab.icon className="h-4 w-4" />
+                {tab.label}
+              </button>
+            ))}
           </div>
 
-          <div className="bg-white rounded-xl border shadow-sm">
-            <div className="p-4 border-b space-y-3">
-              <div className="flex flex-wrap gap-2">
-                {tabs.map((tab) => (
-                  <button
-                    key={tab.id}
-                    onClick={() => setActiveTab(tab.id)}
-                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
-                      activeTab === tab.id
-                        ? "bg-primary text-white"
-                        : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-                    }`}
-                    data-testid={`tab-${tab.id}`}
-                  >
-                    <tab.icon className="h-3.5 w-3.5" />
-                    {tab.label}
-                    {tab.count !== null && (
-                      <span className={`text-xs px-1.5 py-0.5 rounded-full ${
-                        activeTab === tab.id ? "bg-white/20" : "bg-gray-200"
-                      }`}>{tab.count}</span>
-                    )}
-                  </button>
-                ))}
+          {activeCrmTab === "customers" && (
+            <>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
+                <Card className="bg-blue-500 text-white border-none" data-testid="card-kpi-total">
+                  <CardContent className="p-4">
+                    <div className="flex items-center gap-2 mb-1">
+                      <User className="h-4 w-4 opacity-80" />
+                      <span className="text-xs opacity-80">Jami mijozlar</span>
+                    </div>
+                    <p className="text-2xl font-bold" data-testid="text-total-customers">{stats.total}</p>
+                  </CardContent>
+                </Card>
+                <Card className="bg-orange-500 text-white border-none" data-testid="card-kpi-debtors">
+                  <CardContent className="p-4">
+                    <div className="flex items-center gap-2 mb-1">
+                      <HandCoins className="h-4 w-4 opacity-80" />
+                      <span className="text-xs opacity-80">Qarzdorlar</span>
+                    </div>
+                    <p className="text-2xl font-bold" data-testid="text-debtors-count">{stats.debtors}</p>
+                  </CardContent>
+                </Card>
+                <Card className="bg-red-500 text-white border-none" data-testid="card-kpi-debt">
+                  <CardContent className="p-4">
+                    <div className="flex items-center gap-2 mb-1">
+                      <Banknote className="h-4 w-4 opacity-80" />
+                      <span className="text-xs opacity-80">Jami qarz</span>
+                    </div>
+                    <p className="text-xl font-bold" data-testid="text-total-debt">{stats.totalDebt.toLocaleString()}</p>
+                  </CardContent>
+                </Card>
+                <Card className="bg-yellow-500 text-white border-none" data-testid="card-kpi-upcoming">
+                  <CardContent className="p-4">
+                    <div className="flex items-center gap-2 mb-1">
+                      <AlertTriangle className="h-4 w-4 opacity-80" />
+                      <span className="text-xs opacity-80">Muddati yaqin</span>
+                    </div>
+                    <p className="text-2xl font-bold" data-testid="text-upcoming-count">{stats.upcoming}</p>
+                  </CardContent>
+                </Card>
               </div>
-              <div className="relative max-w-sm">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-                <Input
-                  placeholder="Ism yoki telefon..."
-                  className="pl-10"
-                  value={search}
-                  onChange={(e) => handleSearch(e.target.value)}
-                  data-testid="input-customer-search"
-                />
-              </div>
-            </div>
 
-            {isLoading ? (
-              <div className="p-12 text-center text-muted-foreground">
-                <div className="animate-spin h-8 w-8 border-2 border-blue-500 border-t-transparent rounded-full mx-auto mb-3" />
-                <p>Yuklanmoqda...</p>
-              </div>
-            ) : filteredCustomers.length === 0 ? (
-              <div className="p-12 text-center text-muted-foreground">
-                <User className="h-12 w-12 mx-auto mb-3 opacity-30" />
-                <p className="font-medium">Mijoz topilmadi</p>
-                <p className="text-sm mt-1">Bu bo'limda hali ma'lumot yo'q</p>
-              </div>
-            ) : (
-              <div className="divide-y">
-                {filteredCustomers.map((customer) => (
-                  <div
-                    key={customer.id}
-                    className="flex items-center justify-between p-4 hover:bg-gray-50 cursor-pointer transition-colors"
-                    onClick={() => openCustomerSheet(customer.id)}
-                    data-testid={`customer-row-${customer.id}`}
-                  >
-                    <div className="flex items-center gap-3 min-w-0 flex-1">
-                      <div className={`w-10 h-10 rounded-full flex items-center justify-center text-white font-bold text-sm shrink-0 ${
-                        (customer.totalDebt || 0) > 0 ? "bg-orange-500" : "bg-indigo-500"
-                      }`}>
-                        {customer.name ? customer.name.charAt(0).toUpperCase() : "?"}
-                      </div>
-                      <div className="min-w-0">
-                        <p className="font-semibold text-sm truncate" data-testid={`text-customer-name-${customer.id}`}>{customer.name || "Nomsiz"}</p>
-                        <p className="text-xs text-muted-foreground flex items-center gap-1">
-                          <Phone className="h-3 w-3" />
-                          {customer.phone || "—"}
-                        </p>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-4 text-right shrink-0">
-                      <div className="hidden md:block">
-                        <p className="text-xs text-muted-foreground">Buyurtmalar</p>
-                        <p className="text-sm font-semibold">{customer.ordersCount || 0}</p>
-                      </div>
-                      <div className="hidden md:block">
-                        <p className="text-xs text-muted-foreground">Jami xarid</p>
-                        <p className="text-sm font-semibold">{(customer.totalRevenue || 0).toLocaleString()}</p>
-                      </div>
-                      {customer.lastOrderDate && (
-                        <div className="hidden lg:block">
-                          <p className="text-xs text-muted-foreground">Oxirgi</p>
-                          <p className="text-sm font-semibold">{format(new Date(customer.lastOrderDate), "dd.MM.yyyy")}</p>
-                        </div>
-                      )}
-                      {(customer.totalDebt || 0) > 0 && (
-                        <Badge variant="destructive" className="bg-orange-100 text-orange-700 hover:bg-orange-100" data-testid={`badge-debt-${customer.id}`}>
-                          {(customer.totalDebt || 0).toLocaleString()} qarz
-                        </Badge>
-                      )}
-                    </div>
+              <div className="bg-white rounded-xl border shadow-sm">
+                <div className="p-4 border-b space-y-3">
+                  <div className="flex flex-wrap gap-2">
+                    {customerFilterTabs.map((tab) => (
+                      <button
+                        key={tab.id}
+                        onClick={() => setActiveTab(tab.id)}
+                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+                          activeTab === tab.id
+                            ? "bg-primary text-white"
+                            : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                        }`}
+                        data-testid={`tab-${tab.id}`}
+                      >
+                        <tab.icon className="h-3.5 w-3.5" />
+                        {tab.label}
+                        {tab.count !== null && (
+                          <span className={`text-xs px-1.5 py-0.5 rounded-full ${
+                            activeTab === tab.id ? "bg-white/20" : "bg-gray-200"
+                          }`}>{tab.count}</span>
+                        )}
+                      </button>
+                    ))}
                   </div>
-                ))}
-              </div>
-            )}
+                  <div className="relative max-w-sm">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                    <Input
+                      placeholder="Ism yoki telefon..."
+                      className="pl-10"
+                      value={search}
+                      onChange={(e) => handleSearch(e.target.value)}
+                      data-testid="input-customer-search"
+                    />
+                  </div>
+                </div>
 
-            {totalPages > 1 && (
-              <div className="flex items-center justify-center gap-2 p-4 border-t">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  disabled={page <= 1}
-                  onClick={() => setPage((p) => p - 1)}
-                  data-testid="button-prev-page"
-                >
-                  Oldingi
-                </Button>
-                <span className="text-sm text-muted-foreground" data-testid="text-page-info">
-                  {page} / {totalPages}
-                </span>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  disabled={page >= totalPages}
-                  onClick={() => setPage((p) => p + 1)}
-                  data-testid="button-next-page"
-                >
-                  Keyingi
-                </Button>
+                {isLoading ? (
+                  <div className="p-12 text-center text-muted-foreground">
+                    <div className="animate-spin h-8 w-8 border-2 border-blue-500 border-t-transparent rounded-full mx-auto mb-3" />
+                    <p>Yuklanmoqda...</p>
+                  </div>
+                ) : filteredCustomers.length === 0 ? (
+                  <div className="p-12 text-center text-muted-foreground">
+                    <User className="h-12 w-12 mx-auto mb-3 opacity-30" />
+                    <p className="font-medium">Mijoz topilmadi</p>
+                    <p className="text-sm mt-1">Bu bo'limda hali ma'lumot yo'q</p>
+                  </div>
+                ) : (
+                  <div className="divide-y">
+                    {filteredCustomers.map((customer) => (
+                      <div
+                        key={customer.id}
+                        className="flex items-center justify-between p-4 hover:bg-gray-50 cursor-pointer transition-colors"
+                        onClick={() => openCustomerSheet(customer.id)}
+                        data-testid={`customer-row-${customer.id}`}
+                      >
+                        <div className="flex items-center gap-3 min-w-0 flex-1">
+                          <div className={`w-10 h-10 rounded-full flex items-center justify-center text-white font-bold text-sm shrink-0 ${
+                            (customer.totalDebt || 0) > 0 ? "bg-orange-500" : "bg-indigo-500"
+                          }`}>
+                            {customer.name ? customer.name.charAt(0).toUpperCase() : "?"}
+                          </div>
+                          <div className="min-w-0">
+                            <p className="font-semibold text-sm truncate" data-testid={`text-customer-name-${customer.id}`}>{customer.name || "Nomsiz"}</p>
+                            <p className="text-xs text-muted-foreground flex items-center gap-1">
+                              <Phone className="h-3 w-3" />
+                              {customer.phone || "\u2014"}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-4 text-right shrink-0">
+                          <div className="hidden md:block">
+                            <p className="text-xs text-muted-foreground">Buyurtmalar</p>
+                            <p className="text-sm font-semibold">{customer.ordersCount || 0}</p>
+                          </div>
+                          <div className="hidden md:block">
+                            <p className="text-xs text-muted-foreground">Jami xarid</p>
+                            <p className="text-sm font-semibold">{(customer.totalRevenue || 0).toLocaleString()}</p>
+                          </div>
+                          {customer.lastOrderDate && (
+                            <div className="hidden lg:block">
+                              <p className="text-xs text-muted-foreground">Oxirgi</p>
+                              <p className="text-sm font-semibold">{format(new Date(customer.lastOrderDate), "dd.MM.yyyy")}</p>
+                            </div>
+                          )}
+                          {(customer.totalDebt || 0) > 0 && (
+                            <Badge variant="destructive" className="bg-orange-100 text-orange-700 hover:bg-orange-100" data-testid={`badge-debt-${customer.id}`}>
+                              {(customer.totalDebt || 0).toLocaleString()} qarz
+                            </Badge>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {totalPages > 1 && (
+                  <div className="flex items-center justify-center gap-2 p-4 border-t">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={page <= 1}
+                      onClick={() => setPage((p) => p - 1)}
+                      data-testid="button-prev-page"
+                    >
+                      Oldingi
+                    </Button>
+                    <span className="text-sm text-muted-foreground" data-testid="text-page-info">
+                      {page} / {totalPages}
+                    </span>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={page >= totalPages}
+                      onClick={() => setPage((p) => p + 1)}
+                      data-testid="button-next-page"
+                    >
+                      Keyingi
+                    </Button>
+                  </div>
+                )}
               </div>
-            )}
-          </div>
+            </>
+          )}
+
+          {activeCrmTab === "orders" && <OrdersTab />}
+          {activeCrmTab === "deliveries" && <DeliveriesTab />}
+          {activeCrmTab === "debtors" && <DebtorsTab />}
         </div>
       </main>
 
@@ -536,7 +575,7 @@ export default function CustomersPage() {
                             <p className="text-sm font-semibold">{order.totalAmount?.toLocaleString()} so'm</p>
                             <p className="text-xs text-muted-foreground flex items-center gap-1">
                               <Calendar className="h-3 w-3" />
-                              {order.createdAt ? format(new Date(order.createdAt), "dd.MM.yyyy HH:mm") : "—"}
+                              {order.createdAt ? format(new Date(order.createdAt), "dd.MM.yyyy HH:mm") : "\u2014"}
                             </p>
                           </div>
                           <Badge variant={order.status === "completed" ? "default" : "secondary"} data-testid={`badge-order-status-${order.id}`}>
@@ -570,7 +609,7 @@ export default function CustomersPage() {
                             </p>
                             <p className="text-xs text-muted-foreground flex items-center gap-1">
                               <Clock className="h-3 w-3" />
-                              {delivery.scheduledAt ? format(new Date(delivery.scheduledAt), "dd.MM.yyyy HH:mm") : "—"}
+                              {delivery.scheduledAt ? format(new Date(delivery.scheduledAt), "dd.MM.yyyy HH:mm") : "\u2014"}
                             </p>
                           </div>
                           <Badge variant={delivery.status === "completed" ? "default" : "secondary"}>

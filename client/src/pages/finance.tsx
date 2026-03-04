@@ -55,7 +55,7 @@ const PAYMENT_COLORS: Record<string, string> = {
 
 const PIE_COLORS = ["#ef4444", "#f59e0b", "#3b82f6", "#8b5cf6", "#10b981", "#ec4899", "#6b7280", "#14b8a6", "#f97316", "#06b6d4"];
 
-type SubMenu = "kassa" | "kirim" | "chiqim" | "nasiya" | "hisobot";
+type SubMenu = "kassa" | "kirim" | "chiqim" | "nasiya" | "hisobot" | "topshirish";
 
 function formatSum(val: number): string {
   if (val >= 1000000) return (val / 1000000).toFixed(1) + "M";
@@ -510,6 +510,7 @@ export default function FinancePage() {
     { key: "chiqim", label: "Chiqim", icon: ArrowUpCircle },
     { key: "nasiya", label: "Nasiya", icon: HandCoins },
     { key: "hisobot", label: "Hisobot", icon: FileText },
+    { key: "topshirish", label: "Topshirish", icon: UserCheck },
   ];
 
   return (
@@ -1164,6 +1165,8 @@ export default function FinancePage() {
               </Card>
             </>
           )}
+
+          {activeMenu === "topshirish" && <ShiftHandoverTab token={token} period={period} balance={balance} headers={headers} />}
         </div>
       </div>
 
@@ -1446,5 +1449,312 @@ function CategoryDialog({ isOpen, onClose, category, onSave, isLoading }: any) {
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  );
+}
+
+function ShiftHandoverTab({ token, period, balance, headers }: { token: string | null; period: string; balance: any; headers: Record<string, string> }) {
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const [handedBy, setHandedBy] = useState(() => localStorage.getItem("shift_handed_by") || "");
+  const [receivedBy, setReceivedBy] = useState(() => localStorage.getItem("shift_received_by") || "");
+  const [note, setNote] = useState("");
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+
+  const getDateRange = () => {
+    const now = new Date();
+    let dateFrom: Date;
+    if (period === "week") {
+      const d = now.getDay() || 7;
+      dateFrom = new Date(now);
+      dateFrom.setDate(now.getDate() - d + 1);
+      dateFrom.setHours(0, 0, 0, 0);
+    } else if (period === "month") {
+      dateFrom = new Date(now.getFullYear(), now.getMonth(), 1);
+    } else {
+      dateFrom = new Date(now);
+      dateFrom.setHours(0, 0, 0, 0);
+    }
+    const dateTo = new Date(now);
+    dateTo.setHours(23, 59, 59, 999);
+    return { dateFrom, dateTo };
+  };
+
+  const { data: handovers = [] } = useQuery<any[]>({
+    queryKey: ["shift-handovers"],
+    queryFn: async () => {
+      const res = await fetch("/api/shift-handovers", { headers });
+      if (!res.ok) throw new Error("Failed");
+      return res.json();
+    },
+    enabled: !!token,
+  });
+
+  const createHandover = useMutation({
+    mutationFn: async () => {
+      const { dateFrom, dateTo } = getDateRange();
+      localStorage.setItem("shift_handed_by", handedBy);
+      localStorage.setItem("shift_received_by", receivedBy);
+      const res = await fetch("/api/shift-handovers", {
+        method: "POST", headers,
+        body: JSON.stringify({
+          periodType: period,
+          dateFrom: dateFrom.toISOString(),
+          dateTo: dateTo.toISOString(),
+          handedByName: handedBy,
+          receivedByName: receivedBy,
+          note,
+        }),
+      });
+      if (!res.ok) throw new Error("Failed");
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["shift-handovers"] });
+      setNote("");
+      toast({ title: "Topshirish yaratildi!", description: "Qabul qiluvchi tasdiqlashi kerak", className: "bg-green-500 text-white border-none" });
+    },
+    onError: () => toast({ title: "Xatolik yuz berdi", variant: "destructive" }),
+  });
+
+  const updateStatus = useMutation({
+    mutationFn: async ({ id, status }: { id: string; status: string }) => {
+      const res = await fetch(`/api/shift-handovers/${id}/status`, {
+        method: "PATCH", headers,
+        body: JSON.stringify({ status }),
+      });
+      if (!res.ok) throw new Error("Failed");
+      return res.json();
+    },
+    onSuccess: (_, vars) => {
+      queryClient.invalidateQueries({ queryKey: ["shift-handovers"] });
+      toast({
+        title: vars.status === "confirmed" ? "Qabul qilindi!" : "Rad etildi",
+        className: vars.status === "confirmed" ? "bg-green-500 text-white border-none" : "bg-red-500 text-white border-none",
+      });
+    },
+    onError: () => toast({ title: "Xatolik", variant: "destructive" }),
+  });
+
+  const periodLabel = period === "day" ? "Bugun" : period === "week" ? "Hafta" : "Oy";
+  const cashAmount = balance?.cash || 0;
+  const cardAmount = balance?.card || 0;
+  const nasiyaAmount = balance?.nasiya || 0;
+  const expensesAmount = balance?.totalExpense || 0;
+  const totalAmount = cashAmount + cardAmount;
+
+  const stats = useMemo(() => {
+    const pending = handovers.filter((h: any) => h.status === "pending").length;
+    const confirmed = handovers.filter((h: any) => h.status === "confirmed").length;
+    const rejected = handovers.filter((h: any) => h.status === "rejected").length;
+    return { total: handovers.length, pending, confirmed, rejected };
+  }, [handovers]);
+
+  const statusBadge = (status: string) => {
+    if (status === "confirmed") return <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-green-100 text-green-700">Tasdiqlangan</span>;
+    if (status === "rejected") return <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-red-100 text-red-700">Rad etilgan</span>;
+    return <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-100 text-amber-700">Kutilmoqda</span>;
+  };
+
+  return (
+    <>
+      <Card className="border-0 shadow-sm">
+        <CardHeader className="pb-2 pt-3 px-4">
+          <CardTitle className="text-sm font-semibold flex items-center gap-2">
+            <UserCheck className="h-4 w-4 text-primary" />
+            Smena topshirish — {periodLabel}
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="px-4 pb-4 space-y-3">
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
+            <div className="p-3 rounded-lg bg-green-50 border border-green-100">
+              <p className="text-[10px] text-green-600 font-medium">Naqd</p>
+              <p className="text-lg font-bold text-green-700" data-testid="text-handover-cash">{cashAmount.toLocaleString()}</p>
+            </div>
+            <div className="p-3 rounded-lg bg-blue-50 border border-blue-100">
+              <p className="text-[10px] text-blue-600 font-medium">Karta</p>
+              <p className="text-lg font-bold text-blue-700" data-testid="text-handover-card">{cardAmount.toLocaleString()}</p>
+            </div>
+            <div className="p-3 rounded-lg bg-amber-50 border border-amber-100">
+              <p className="text-[10px] text-amber-600 font-medium">Nasiya</p>
+              <p className="text-lg font-bold text-amber-700" data-testid="text-handover-nasiya">{nasiyaAmount.toLocaleString()}</p>
+            </div>
+            <div className="p-3 rounded-lg bg-red-50 border border-red-100">
+              <p className="text-[10px] text-red-600 font-medium">Chiqimlar</p>
+              <p className="text-lg font-bold text-red-700" data-testid="text-handover-expenses">{expensesAmount.toLocaleString()}</p>
+            </div>
+            <div className="p-3 rounded-lg bg-indigo-50 border border-indigo-100 col-span-2 md:col-span-1">
+              <p className="text-[10px] text-indigo-600 font-medium">Jami tushum</p>
+              <p className="text-lg font-bold text-indigo-700" data-testid="text-handover-total">{totalAmount.toLocaleString()}</p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div>
+              <Label className="text-xs text-gray-500">Topshiruvchi</Label>
+              <Input
+                value={handedBy}
+                onChange={e => setHandedBy(e.target.value)}
+                placeholder="Ism kiriting (masalan: Yordamchi)"
+                data-testid="input-handed-by"
+              />
+            </div>
+            <div>
+              <Label className="text-xs text-gray-500">Qabul qiluvchi</Label>
+              <Input
+                value={receivedBy}
+                onChange={e => setReceivedBy(e.target.value)}
+                placeholder="Ism kiriting (masalan: Boshliq)"
+                data-testid="input-received-by"
+              />
+            </div>
+          </div>
+          <div>
+            <Label className="text-xs text-gray-500">Izoh (ixtiyoriy)</Label>
+            <Textarea
+              value={note}
+              onChange={e => setNote(e.target.value)}
+              placeholder="Qo'shimcha ma'lumot..."
+              className="h-16 resize-none"
+              data-testid="input-handover-note"
+            />
+          </div>
+          <Button
+            onClick={() => createHandover.mutate()}
+            disabled={!handedBy.trim() || !receivedBy.trim() || createHandover.isPending}
+            className="w-full gap-2"
+            data-testid="button-create-handover"
+          >
+            <UserCheck className="h-4 w-4" />
+            {createHandover.isPending ? "Yaratilmoqda..." : "Topshirish yaratish"}
+          </Button>
+        </CardContent>
+      </Card>
+
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <Card className="border-0 shadow-sm">
+          <CardContent className="p-3">
+            <div className="flex items-center gap-1.5 mb-1"><FileText className="h-3.5 w-3.5 text-gray-400" /><span className="text-[10px] text-gray-500 font-medium">JAMI</span></div>
+            <p className="text-xl font-bold" data-testid="text-handover-count-total">{stats.total}</p>
+          </CardContent>
+        </Card>
+        <Card className="border-0 shadow-sm">
+          <CardContent className="p-3">
+            <div className="flex items-center gap-1.5 mb-1"><Clock className="h-3.5 w-3.5 text-amber-500" /><span className="text-[10px] text-amber-600 font-medium">KUTILMOQDA</span></div>
+            <p className="text-xl font-bold text-amber-600" data-testid="text-handover-count-pending">{stats.pending}</p>
+          </CardContent>
+        </Card>
+        <Card className="border-0 shadow-sm">
+          <CardContent className="p-3">
+            <div className="flex items-center gap-1.5 mb-1"><UserCheck className="h-3.5 w-3.5 text-green-500" /><span className="text-[10px] text-green-600 font-medium">TASDIQLANGAN</span></div>
+            <p className="text-xl font-bold text-green-600" data-testid="text-handover-count-confirmed">{stats.confirmed}</p>
+          </CardContent>
+        </Card>
+        <Card className="border-0 shadow-sm">
+          <CardContent className="p-3">
+            <div className="flex items-center gap-1.5 mb-1"><X className="h-3.5 w-3.5 text-red-500" /><span className="text-[10px] text-red-600 font-medium">RAD ETILGAN</span></div>
+            <p className="text-xl font-bold text-red-600" data-testid="text-handover-count-rejected">{stats.rejected}</p>
+          </CardContent>
+        </Card>
+      </div>
+
+      <Card className="border-0 shadow-sm">
+        <CardHeader className="pb-2 pt-3 px-4">
+          <CardTitle className="text-sm font-semibold flex items-center gap-2">
+            <Receipt className="h-4 w-4 text-gray-500" />
+            Topshirishlar tarixi
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="px-4 pb-3">
+          {handovers.length === 0 ? (
+            <div className="text-center py-8 text-sm text-gray-400">Hali topshirish yo'q</div>
+          ) : (
+            <div className="space-y-2 max-h-[500px] overflow-y-auto">
+              {handovers.map((h: any) => (
+                <div key={h.id} className="border rounded-lg overflow-hidden" data-testid={`handover-${h.id}`}>
+                  <div
+                    className="flex items-center gap-3 p-3 hover:bg-gray-50 transition-colors cursor-pointer"
+                    onClick={() => setExpandedId(expandedId === h.id ? null : h.id)}
+                  >
+                    <div className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${
+                      h.status === "confirmed" ? "bg-green-50" : h.status === "rejected" ? "bg-red-50" : "bg-amber-50"
+                    }`}>
+                      {h.status === "confirmed" ? <UserCheck className="h-4 w-4 text-green-600" /> :
+                       h.status === "rejected" ? <X className="h-4 w-4 text-red-600" /> :
+                       <Clock className="h-4 w-4 text-amber-600" />}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <p className="text-sm font-medium truncate">{h.handedByName} → {h.receivedByName}</p>
+                        {statusBadge(h.status)}
+                      </div>
+                      <p className="text-[10px] text-gray-400">
+                        {formatDateTime(h.createdAt)} · {h.periodType === "day" ? "Kunlik" : h.periodType === "week" ? "Haftalik" : "Oylik"}
+                      </p>
+                    </div>
+                    <div className="text-right shrink-0">
+                      <p className="text-sm font-bold">{(h.totalAmount || 0).toLocaleString()}</p>
+                      <ChevronDown className={`h-3 w-3 text-gray-400 ml-auto transition-transform ${expandedId === h.id ? "rotate-180" : ""}`} />
+                    </div>
+                  </div>
+
+                  {expandedId === h.id && (
+                    <div className="border-t bg-gray-50 p-3 space-y-2">
+                      <div className="grid grid-cols-2 md:grid-cols-5 gap-2 text-xs">
+                        <div className="p-2 bg-white rounded border">
+                          <span className="text-gray-500">Naqd:</span>
+                          <span className="font-bold text-green-600 ml-1">{(h.totalCash || 0).toLocaleString()}</span>
+                        </div>
+                        <div className="p-2 bg-white rounded border">
+                          <span className="text-gray-500">Karta:</span>
+                          <span className="font-bold text-blue-600 ml-1">{(h.totalCard || 0).toLocaleString()}</span>
+                        </div>
+                        <div className="p-2 bg-white rounded border">
+                          <span className="text-gray-500">Nasiya:</span>
+                          <span className="font-bold text-amber-600 ml-1">{(h.totalNasiya || 0).toLocaleString()}</span>
+                        </div>
+                        <div className="p-2 bg-white rounded border">
+                          <span className="text-gray-500">Chiqim:</span>
+                          <span className="font-bold text-red-600 ml-1">{(h.totalExpenses || 0).toLocaleString()}</span>
+                        </div>
+                        <div className="p-2 bg-white rounded border col-span-2 md:col-span-1">
+                          <span className="text-gray-500">Jami:</span>
+                          <span className="font-bold text-indigo-600 ml-1">{(h.totalAmount || 0).toLocaleString()}</span>
+                        </div>
+                      </div>
+                      {h.note && <p className="text-xs text-gray-500 italic">Izoh: {h.note}</p>}
+                      {h.confirmedAt && <p className="text-[10px] text-gray-400">{h.status === "confirmed" ? "Tasdiqlangan" : "Rad etilgan"}: {formatDateTime(h.confirmedAt)}</p>}
+
+                      {h.status === "pending" && (
+                        <div className="flex gap-2 pt-1">
+                          <Button
+                            size="sm"
+                            onClick={() => updateStatus.mutate({ id: h.id, status: "confirmed" })}
+                            disabled={updateStatus.isPending}
+                            className="gap-1 bg-green-600 hover:bg-green-700"
+                            data-testid={`button-confirm-${h.id}`}
+                          >
+                            <UserCheck className="h-3 w-3" /> Qabul qilish
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="destructive"
+                            onClick={() => updateStatus.mutate({ id: h.id, status: "rejected" })}
+                            disabled={updateStatus.isPending}
+                            className="gap-1"
+                            data-testid={`button-reject-${h.id}`}
+                          >
+                            <X className="h-3 w-3" /> Rad etish
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    </>
   );
 }

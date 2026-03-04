@@ -1044,6 +1044,65 @@ export async function registerRoutes(
     }
   });
 
+  // ============ SHIFT HANDOVERS ============
+
+  app.get("/api/shift-handovers", authMiddleware, async (req, res) => {
+    try {
+      const dateFrom = req.query.from ? new Date(req.query.from as string) : undefined;
+      const dateTo = req.query.to ? new Date(req.query.to as string) : undefined;
+      const handovers = await storage.getShiftHandovers(req.tenantId!, dateFrom, dateTo);
+      res.json(handovers);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch shift handovers" });
+    }
+  });
+
+  app.post("/api/shift-handovers", authMiddleware, async (req, res) => {
+    try {
+      const { periodType, dateFrom, dateTo, handedByName, receivedByName, note } = req.body;
+      if (!handedByName || !receivedByName || !dateFrom || !dateTo) {
+        return res.status(400).json({ error: "Missing required fields" });
+      }
+      const from = new Date(dateFrom);
+      const to = new Date(dateTo);
+      const balance = await storage.getCashRegisterBalance(req.tenantId!, from, to);
+      const handover = await storage.createShiftHandover({
+        tenantId: req.tenantId!,
+        periodType: periodType || "day",
+        dateFrom: from,
+        dateTo: to,
+        totalCash: balance.cash,
+        totalCard: balance.card,
+        totalNasiya: balance.nasiya,
+        totalExpenses: balance.totalExpense,
+        totalAmount: balance.cash + balance.card,
+        handedByName,
+        receivedByName,
+        note: note || "",
+        status: "pending",
+      });
+      res.json(handover);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to create shift handover" });
+    }
+  });
+
+  app.patch("/api/shift-handovers/:id/status", authMiddleware, async (req, res) => {
+    try {
+      const { status } = req.body;
+      if (!["confirmed", "rejected"].includes(status)) {
+        return res.status(400).json({ error: "Invalid status" });
+      }
+      const updated = await storage.updateShiftHandoverStatus(
+        req.params.id, req.tenantId!, status, new Date()
+      );
+      if (!updated) return res.status(404).json({ error: "Handover not found" });
+      res.json(updated);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to update status" });
+    }
+  });
+
   // ============ FINANCE SUMMARY ============
 
   app.get("/api/finance/summary", authMiddleware, async (req, res) => {

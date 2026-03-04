@@ -1,6 +1,6 @@
 import { db } from "@db";
-import { users, products, orders, categories, transactions, tenants, expenses, expenseCategories, incomeCategories, debtPayments, cashRegisterEntries, customers, deliveries, auditLogs } from "@shared/schema";
-import type { User, InsertUser, Product, InsertProduct, Order, InsertOrder, Category, InsertCategory, Transaction, InsertTransaction, Tenant, InsertTenant, Expense, InsertExpense, ExpenseCategory, InsertExpenseCategory, IncomeCategory, InsertIncomeCategory, DebtPayment, InsertDebtPayment, CashRegisterEntry, InsertCashRegisterEntry, Customer, InsertCustomer, Delivery, InsertDelivery, AuditLog, InsertAuditLog } from "@shared/schema";
+import { users, products, orders, categories, transactions, tenants, expenses, expenseCategories, incomeCategories, debtPayments, cashRegisterEntries, customers, deliveries, auditLogs, shiftHandovers } from "@shared/schema";
+import type { User, InsertUser, Product, InsertProduct, Order, InsertOrder, Category, InsertCategory, Transaction, InsertTransaction, Tenant, InsertTenant, Expense, InsertExpense, ExpenseCategory, InsertExpenseCategory, IncomeCategory, InsertIncomeCategory, DebtPayment, InsertDebtPayment, CashRegisterEntry, InsertCashRegisterEntry, Customer, InsertCustomer, Delivery, InsertDelivery, AuditLog, InsertAuditLog, ShiftHandover, InsertShiftHandover } from "@shared/schema";
 import { eq, desc, sql, and, inArray, gte, lte, or, ilike } from "drizzle-orm";
 
 export interface IStorage {
@@ -107,6 +107,11 @@ export interface IStorage {
 
   // Financial summary
   getFinancialSummary(tenantId: string, dateFrom: Date, dateTo: Date): Promise<{ revenue: number; expensesTotal: number; profit: number; totalProfit: number; paymentBreakdown: Record<string, number>; transactionCount: number }>;
+
+  // Shift Handovers
+  getShiftHandovers(tenantId: string, dateFrom?: Date, dateTo?: Date): Promise<ShiftHandover[]>;
+  createShiftHandover(data: InsertShiftHandover): Promise<ShiftHandover>;
+  updateShiftHandoverStatus(id: string, tenantId: string, status: string, confirmedAt?: Date): Promise<ShiftHandover | undefined>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -790,6 +795,29 @@ export class DatabaseStorage implements IStorage {
     if (entityType) conditions.push(eq(auditLogs.entityType, entityType));
     if (entityId) conditions.push(eq(auditLogs.entityId, entityId));
     return db.select().from(auditLogs).where(and(...conditions)).orderBy(desc(auditLogs.createdAt));
+  }
+
+  // Shift Handovers
+  async getShiftHandovers(tenantId: string, dateFrom?: Date, dateTo?: Date): Promise<ShiftHandover[]> {
+    const conditions: any[] = [eq(shiftHandovers.tenantId, tenantId)];
+    if (dateFrom) conditions.push(gte(shiftHandovers.createdAt, dateFrom));
+    if (dateTo) conditions.push(lte(shiftHandovers.createdAt, dateTo));
+    return db.select().from(shiftHandovers).where(and(...conditions)).orderBy(desc(shiftHandovers.createdAt));
+  }
+
+  async createShiftHandover(data: InsertShiftHandover): Promise<ShiftHandover> {
+    const [created] = await db.insert(shiftHandovers).values(data).returning();
+    return created;
+  }
+
+  async updateShiftHandoverStatus(id: string, tenantId: string, status: string, confirmedAt?: Date): Promise<ShiftHandover | undefined> {
+    const updateData: any = { status };
+    if (confirmedAt) updateData.confirmedAt = confirmedAt;
+    const [updated] = await db.update(shiftHandovers)
+      .set(updateData)
+      .where(and(eq(shiftHandovers.id, id), eq(shiftHandovers.tenantId, tenantId)))
+      .returning();
+    return updated;
   }
 }
 

@@ -194,6 +194,25 @@ export const cashRegisterEntries = pgTable("cash_register_entries", {
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
+export const shiftHandovers = pgTable("shift_handovers", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  tenantId: varchar("tenant_id").references(() => tenants.id),
+  periodType: text("period_type").notNull().default("day"),
+  dateFrom: timestamp("date_from").notNull(),
+  dateTo: timestamp("date_to").notNull(),
+  totalCash: integer("total_cash").notNull().default(0),
+  totalCard: integer("total_card").notNull().default(0),
+  totalNasiya: integer("total_nasiya").notNull().default(0),
+  totalExpenses: integer("total_expenses").notNull().default(0),
+  totalAmount: integer("total_amount").notNull().default(0),
+  handedByName: text("handed_by_name").notNull(),
+  receivedByName: text("received_by_name").notNull(),
+  status: text("status").notNull().default("pending"),
+  note: text("note").default(""),
+  confirmedAt: timestamp("confirmed_at"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
 // Insert schemas
 export const insertTenantSchema = createInsertSchema(tenants).omit({
   id: true,
@@ -257,6 +276,11 @@ export const insertCashRegisterEntrySchema = createInsertSchema(cashRegisterEntr
   createdAt: true,
 });
 
+export const insertShiftHandoverSchema = createInsertSchema(shiftHandovers).omit({
+  id: true,
+  createdAt: true,
+});
+
 // Register schema for onboarding
 export const registerTenantSchema = z.object({
   storeName: z.string().min(2),
@@ -315,3 +339,6 @@ export type AuditLog = typeof auditLogs.$inferSelect;
 
 export type InsertCashRegisterEntry = z.infer<typeof insertCashRegisterEntrySchema>;
 export type CashRegisterEntry = typeof cashRegisterEntries.$inferSelect;
+
+export type InsertShiftHandover = z.infer<typeof insertShiftHandoverSchema>;
+export type ShiftHandover = typeof shiftHandovers.$inferSelect;

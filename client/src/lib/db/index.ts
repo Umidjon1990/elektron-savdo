@@ -39,6 +39,9 @@ export interface CachedTransaction {
   customerName?: string;
   customerPhone?: string;
   customerInfo?: Record<string, string>;
+  dueDate?: string;
+  paidAmount?: number;
+  debtStatus?: string;
 }
 
 export interface SyncMeta {

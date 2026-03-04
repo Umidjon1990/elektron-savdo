@@ -16,13 +16,16 @@ export interface Transaction {
   customerName?: string;
   customerPhone?: string;
   customerInfo?: Record<string, string>;
+  dueDate?: string;
+  paidAmount?: number;
+  debtStatus?: string;
 }
 
 interface TransactionContextType {
   transactions: Transaction[];
   pendingCount: number;
   isOffline: boolean;
-  addTransaction: (items: CartItem[], total: number, method: string, customerData?: { customerName?: string; customerPhone?: string; customerInfo?: Record<string, string> }) => Promise<Transaction>;
+  addTransaction: (items: CartItem[], total: number, method: string, customerData?: { customerName?: string; customerPhone?: string; customerInfo?: Record<string, string> }, nasiyaData?: { dueDate: string }) => Promise<Transaction>;
   voidTransaction: (id: string) => Promise<void>;
   getStats: () => {
     todayTotal: number;
@@ -67,7 +70,10 @@ export function TransactionProvider({ children }: { children: ReactNode }) {
         status: t.status || "completed",
         customerName: t.customerName,
         customerPhone: t.customerPhone,
-        customerInfo: t.customerInfo
+        customerInfo: t.customerInfo,
+        dueDate: t.dueDate,
+        paidAmount: t.paidAmount || 0,
+        debtStatus: t.debtStatus || "none",
       }));
       setTransactions(mapped);
       setPendingCount(cached.filter(t => !t.synced).length);
@@ -98,7 +104,7 @@ export function TransactionProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
-  const addTransaction = async (items: CartItem[], total: number, method: string, customerData?: { customerName?: string; customerPhone?: string; customerInfo?: Record<string, string> }): Promise<Transaction> => {
+  const addTransaction = async (items: CartItem[], total: number, method: string, customerData?: { customerName?: string; customerPhone?: string; customerInfo?: Record<string, string> }, nasiyaData?: { dueDate: string }): Promise<Transaction> => {
     const profit = items.reduce((acc, item) => {
       const costPrice = item.product.costPrice || 0;
       const discount = item.discount || 0;
@@ -121,7 +127,10 @@ export function TransactionProvider({ children }: { children: ReactNode }) {
       status: "completed",
       customerName: customerData?.customerName,
       customerPhone: customerData?.customerPhone,
-      customerInfo: customerData?.customerInfo
+      customerInfo: customerData?.customerInfo,
+      dueDate: nasiyaData?.dueDate,
+      paidAmount: 0,
+      debtStatus: method === "nasiya" ? "pending" : "none",
     };
     
     await saveTransactionLocally(newTransaction);
@@ -148,7 +157,10 @@ export function TransactionProvider({ children }: { children: ReactNode }) {
       status: "completed" as const,
       customerName: customerData?.customerName,
       customerPhone: customerData?.customerPhone,
-      customerInfo: customerData?.customerInfo
+      customerInfo: customerData?.customerInfo,
+      dueDate: nasiyaData?.dueDate,
+      paidAmount: 0,
+      debtStatus: method === "nasiya" ? "pending" : "none",
     };
   };
 

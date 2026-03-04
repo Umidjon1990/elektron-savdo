@@ -763,6 +763,7 @@ export async function registerRoutes(
     try {
       const tenantId = req.tenantId;
       if (!tenantId) return res.status(400).json({ error: "Tenant aniqlanmadi" });
+      const isNasiya = (req.body.paymentMethod || "cash") === "nasiya";
       const data = {
         id: req.body.id || crypto.randomUUID(),
         tenantId,
@@ -775,6 +776,9 @@ export async function registerRoutes(
         customerName: req.body.customerName || null,
         customerPhone: req.body.customerPhone || null,
         customerInfo: req.body.customerInfo || null,
+        dueDate: req.body.dueDate ? new Date(req.body.dueDate) : null,
+        paidAmount: Number(req.body.paidAmount) || 0,
+        debtStatus: isNasiya ? "pending" : "none",
       };
       const transaction = await storage.createTransaction(data);
       res.status(201).json(transaction);
@@ -794,6 +798,54 @@ export async function registerRoutes(
       res.json(result.transaction);
     } catch (error) {
       res.status(500).json({ error: "Failed to void transaction" });
+    }
+  });
+
+  // ============ DEBT / NASIYA ============
+
+  app.get("/api/debts", authMiddleware, async (req, res) => {
+    try {
+      const debtTxns = await storage.getDebtTransactions(req.tenantId!);
+      res.json(debtTxns);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch debts" });
+    }
+  });
+
+  app.get("/api/debts/:transactionId/payments", authMiddleware, async (req, res) => {
+    try {
+      const payments = await storage.getDebtPayments(req.params.transactionId, req.tenantId);
+      res.json(payments);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch payments" });
+    }
+  });
+
+  app.post("/api/debts/:transactionId/pay", authMiddleware, async (req, res) => {
+    try {
+      const txn = await storage.getTransaction(req.params.transactionId, req.tenantId);
+      if (!txn) return res.status(404).json({ error: "Tranzaksiya topilmadi" });
+
+      const payAmount = Number(req.body.amount);
+      if (!payAmount || payAmount <= 0) return res.status(400).json({ error: "To'lov summasi noto'g'ri" });
+
+      const newPaid = (txn.paidAmount || 0) + payAmount;
+      const remaining = txn.totalAmount - newPaid;
+      const newStatus = remaining <= 0 ? "paid" : "partial";
+
+      await storage.createDebtPayment({
+        tenantId: req.tenantId!,
+        transactionId: txn.id,
+        amount: payAmount,
+        date: new Date(),
+        note: req.body.note || null,
+      });
+
+      const updated = await storage.updateTransactionDebt(txn.id, Math.min(newPaid, txn.totalAmount), newStatus, req.tenantId);
+      res.json(updated);
+    } catch (error) {
+      console.error("Error processing debt payment:", error);
+      res.status(500).json({ error: "To'lov amalga oshirilmadi" });
     }
   });
 

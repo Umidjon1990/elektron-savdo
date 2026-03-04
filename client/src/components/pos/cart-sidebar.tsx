@@ -4,7 +4,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
-import { CreditCard, Banknote, QrCode, Trash2, ShoppingBag, HandCoins, ChevronDown, ChevronUp, User, Phone, MapPin, FileText, Plus } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { CreditCard, Banknote, QrCode, Trash2, ShoppingBag, HandCoins, ChevronDown, ChevronUp, User, Phone, MapPin, FileText, Plus, CalendarIcon, AlertCircle } from "lucide-react";
 import { CartItem } from "./cart-item";
 import type { CartItem as CartItemType } from "@/pages/dashboard";
 
@@ -24,7 +25,7 @@ interface CartSidebarProps {
   onUpdateDiscount: (id: string, discount: number) => void;
   onRemove: (id: string) => void;
   onClear: () => void;
-  onCheckout: (method: string, customerData?: { customerName?: string; customerPhone?: string; customerInfo?: Record<string, string> }) => void;
+  onCheckout: (method: string, customerData?: { customerName?: string; customerPhone?: string; customerInfo?: Record<string, string> }, nasiyaData?: { dueDate: string }) => void;
   paymentMethods?: PaymentMethod[];
   customerFields?: CustomerField[];
 }
@@ -70,10 +71,33 @@ export function CartSidebar({ items, onUpdateQuantity, onUpdateDiscount, onRemov
   const [customerData, setCustomerData] = useState<Record<string, string>>({});
   const [selectedMethod, setSelectedMethod] = useState<string | null>(null);
 
+  const [nasiyaDialogOpen, setNasiyaDialogOpen] = useState(false);
+  const [nasiyaName, setNasiyaName] = useState("");
+  const [nasiyaPhone, setNasiyaPhone] = useState("");
+  const [nasiyaAddress, setNasiyaAddress] = useState("");
+  const [nasiyaNote, setNasiyaNote] = useState("");
+  const [nasiyaDueDate, setNasiyaDueDate] = useState("");
+  const [nasiyaError, setNasiyaError] = useState("");
+
   const methods = paymentMethods && paymentMethods.length > 0 ? paymentMethods : DEFAULT_PAYMENT_METHODS;
   const custFields = customerFields && customerFields.length > 0 ? customerFields : DEFAULT_CUSTOMER_FIELDS;
 
+  const today = new Date().toISOString().split("T")[0];
+
   const handleCheckout = (methodId: string) => {
+    if (methodId === "nasiya") {
+      setNasiyaName(customerData["name"] || "");
+      setNasiyaPhone(customerData["phone"] || "");
+      setNasiyaAddress(customerData["address"] || "");
+      setNasiyaNote(customerData["note"] || "");
+      const defaultDue = new Date();
+      defaultDue.setDate(defaultDue.getDate() + 30);
+      setNasiyaDueDate(defaultDue.toISOString().split("T")[0]);
+      setNasiyaError("");
+      setNasiyaDialogOpen(true);
+      return;
+    }
+
     const custInfo: Record<string, string> = {};
     let custName: string | undefined;
     let custPhone: string | undefined;
@@ -91,6 +115,45 @@ export function CartSidebar({ items, onUpdateQuantity, onUpdateDiscount, onRemov
       methodId,
       hasCustomerData ? { customerName: custName, customerPhone: custPhone, customerInfo: Object.keys(custInfo).length > 0 ? custInfo : undefined } : undefined
     );
+    setCustomerData({});
+    setShowCustomer(false);
+    setSelectedMethod(null);
+  };
+
+  const handleNasiyaConfirm = () => {
+    if (!nasiyaName.trim()) {
+      setNasiyaError("Mijoz ismi kiritilishi shart");
+      return;
+    }
+    if (!nasiyaPhone.trim()) {
+      setNasiyaError("Telefon raqam kiritilishi shart");
+      return;
+    }
+    if (!nasiyaDueDate) {
+      setNasiyaError("To'lov muddati tanlanishi shart");
+      return;
+    }
+
+    const custInfo: Record<string, string> = {};
+    if (nasiyaAddress.trim()) custInfo["address"] = nasiyaAddress.trim();
+    if (nasiyaNote.trim()) custInfo["note"] = nasiyaNote.trim();
+
+    onCheckout(
+      "nasiya",
+      {
+        customerName: nasiyaName.trim(),
+        customerPhone: nasiyaPhone.trim(),
+        customerInfo: Object.keys(custInfo).length > 0 ? custInfo : undefined,
+      },
+      { dueDate: nasiyaDueDate }
+    );
+
+    setNasiyaDialogOpen(false);
+    setNasiyaName("");
+    setNasiyaPhone("");
+    setNasiyaAddress("");
+    setNasiyaNote("");
+    setNasiyaDueDate("");
     setCustomerData({});
     setShowCustomer(false);
     setSelectedMethod(null);
@@ -221,6 +284,116 @@ export function CartSidebar({ items, onUpdateQuantity, onUpdateDiscount, onRemov
           To'lov qilish
         </Button>
       </div>
+
+      <Dialog open={nasiyaDialogOpen} onOpenChange={setNasiyaDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <HandCoins className="h-5 w-5 text-orange-500" />
+              Nasiyaga sotish
+            </DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <div className="bg-orange-50 border border-orange-200 rounded-lg p-3">
+              <div className="flex justify-between items-center">
+                <span className="text-sm text-orange-700 font-medium">Qarz summasi:</span>
+                <span className="text-lg font-bold text-orange-800">{total.toLocaleString()} so'm</span>
+              </div>
+              <div className="flex justify-between items-center mt-1">
+                <span className="text-xs text-orange-600">Sana:</span>
+                <span className="text-xs text-orange-600">{new Date().toLocaleDateString("uz-UZ")}</span>
+              </div>
+            </div>
+
+            {nasiyaError && (
+              <div className="flex items-center gap-2 text-sm text-red-600 bg-red-50 p-2 rounded">
+                <AlertCircle className="h-4 w-4 shrink-0" />
+                {nasiyaError}
+              </div>
+            )}
+
+            <div className="space-y-3">
+              <div>
+                <Label className="text-xs font-medium text-gray-600">Mijoz ismi *</Label>
+                <div className="flex items-center gap-2 mt-1">
+                  <User className="h-4 w-4 text-muted-foreground shrink-0" />
+                  <Input
+                    placeholder="Ism familiya"
+                    value={nasiyaName}
+                    onChange={(e) => { setNasiyaName(e.target.value); setNasiyaError(""); }}
+                    className="h-9"
+                    data-testid="input-nasiya-name"
+                  />
+                </div>
+              </div>
+              <div>
+                <Label className="text-xs font-medium text-gray-600">Telefon raqam *</Label>
+                <div className="flex items-center gap-2 mt-1">
+                  <Phone className="h-4 w-4 text-muted-foreground shrink-0" />
+                  <Input
+                    placeholder="+998 90 123 45 67"
+                    value={nasiyaPhone}
+                    onChange={(e) => { setNasiyaPhone(e.target.value); setNasiyaError(""); }}
+                    className="h-9"
+                    data-testid="input-nasiya-phone"
+                  />
+                </div>
+              </div>
+              <div>
+                <Label className="text-xs font-medium text-gray-600">Manzil</Label>
+                <div className="flex items-center gap-2 mt-1">
+                  <MapPin className="h-4 w-4 text-muted-foreground shrink-0" />
+                  <Input
+                    placeholder="MFY, ko'cha"
+                    value={nasiyaAddress}
+                    onChange={(e) => setNasiyaAddress(e.target.value)}
+                    className="h-9"
+                    data-testid="input-nasiya-address"
+                  />
+                </div>
+              </div>
+              <div>
+                <Label className="text-xs font-medium text-gray-600">To'lov muddati *</Label>
+                <div className="flex items-center gap-2 mt-1">
+                  <CalendarIcon className="h-4 w-4 text-muted-foreground shrink-0" />
+                  <Input
+                    type="date"
+                    min={today}
+                    value={nasiyaDueDate}
+                    onChange={(e) => { setNasiyaDueDate(e.target.value); setNasiyaError(""); }}
+                    className="h-9"
+                    data-testid="input-nasiya-due-date"
+                  />
+                </div>
+              </div>
+              <div>
+                <Label className="text-xs font-medium text-gray-600">Izoh</Label>
+                <div className="flex items-center gap-2 mt-1">
+                  <FileText className="h-4 w-4 text-muted-foreground shrink-0" />
+                  <Input
+                    placeholder="Qo'shimcha izoh..."
+                    value={nasiyaNote}
+                    onChange={(e) => setNasiyaNote(e.target.value)}
+                    className="h-9"
+                    data-testid="input-nasiya-note"
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button variant="outline" onClick={() => setNasiyaDialogOpen(false)} data-testid="button-cancel-nasiya">
+              Bekor qilish
+            </Button>
+            <Button className="bg-orange-500 hover:bg-orange-600" onClick={handleNasiyaConfirm} data-testid="button-confirm-nasiya">
+              <HandCoins className="h-4 w-4 mr-2" />
+              Nasiyaga berish
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

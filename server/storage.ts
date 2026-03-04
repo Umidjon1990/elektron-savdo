@@ -1,6 +1,6 @@
 import { db } from "@db";
-import { users, products, orders, categories, transactions, tenants, expenses, expenseCategories } from "@shared/schema";
-import type { User, InsertUser, Product, InsertProduct, Order, InsertOrder, Category, InsertCategory, Transaction, InsertTransaction, Tenant, InsertTenant, Expense, InsertExpense, ExpenseCategory, InsertExpenseCategory } from "@shared/schema";
+import { users, products, orders, categories, transactions, tenants, expenses, expenseCategories, debtPayments } from "@shared/schema";
+import type { User, InsertUser, Product, InsertProduct, Order, InsertOrder, Category, InsertCategory, Transaction, InsertTransaction, Tenant, InsertTenant, Expense, InsertExpense, ExpenseCategory, InsertExpenseCategory, DebtPayment, InsertDebtPayment } from "@shared/schema";
 import { eq, desc, sql, and, inArray, gte, lte } from "drizzle-orm";
 
 export interface IStorage {
@@ -64,6 +64,12 @@ export interface IStorage {
   createExpense(expense: InsertExpense): Promise<Expense>;
   updateExpense(id: string, data: Partial<InsertExpense>, tenantId?: string): Promise<Expense | undefined>;
   deleteExpense(id: string, tenantId?: string): Promise<boolean>;
+
+  // Debt payments
+  getDebtTransactions(tenantId: string): Promise<Transaction[]>;
+  getDebtPayments(transactionId: string, tenantId?: string): Promise<DebtPayment[]>;
+  createDebtPayment(payment: InsertDebtPayment): Promise<DebtPayment>;
+  updateTransactionDebt(id: string, paidAmount: number, debtStatus: string, tenantId?: string): Promise<Transaction | undefined>;
 
   // Financial summary
   getFinancialSummary(tenantId: string, dateFrom: Date, dateTo: Date): Promise<{ revenue: number; expensesTotal: number; profit: number; totalProfit: number; paymentBreakdown: Record<string, number>; transactionCount: number }>;
@@ -432,6 +438,38 @@ export class DatabaseStorage implements IStorage {
       : eq(expenses.id, id);
     const result = await db.delete(expenses).where(condition);
     return (result.rowCount ?? 0) > 0;
+  }
+
+  // Debt
+  async getDebtTransactions(tenantId: string): Promise<Transaction[]> {
+    return db.select().from(transactions).where(
+      and(
+        eq(transactions.tenantId, tenantId),
+        sql`${transactions.paymentMethod} = 'nasiya'`,
+        sql`${transactions.status} != 'voided'`
+      )
+    ).orderBy(desc(transactions.date));
+  }
+
+  async getDebtPayments(transactionId: string, tenantId?: string): Promise<DebtPayment[]> {
+    const conditions = [eq(debtPayments.transactionId, transactionId)];
+    if (tenantId) conditions.push(eq(debtPayments.tenantId, tenantId));
+    return db.select().from(debtPayments).where(and(...conditions)).orderBy(desc(debtPayments.date));
+  }
+
+  async createDebtPayment(payment: InsertDebtPayment): Promise<DebtPayment> {
+    const [created] = await db.insert(debtPayments).values(payment).returning();
+    return created;
+  }
+
+  async updateTransactionDebt(id: string, paidAmount: number, debtStatus: string, tenantId?: string): Promise<Transaction | undefined> {
+    const conditions = [eq(transactions.id, id)];
+    if (tenantId) conditions.push(eq(transactions.tenantId, tenantId));
+    const [updated] = await db.update(transactions)
+      .set({ paidAmount, debtStatus })
+      .where(and(...conditions))
+      .returning();
+    return updated;
   }
 
   // Financial summary

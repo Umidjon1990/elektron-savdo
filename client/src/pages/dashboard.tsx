@@ -241,7 +241,7 @@ export default function Dashboard() {
 
   const clearCart = () => setCart([]);
 
-  const handleCheckout = async (method: string = "cash", customerData?: { customerName?: string; customerPhone?: string; customerInfo?: Record<string, string> }) => {
+  const handleCheckout = async (method: string = "cash", customerData?: { customerName?: string; customerPhone?: string; customerInfo?: Record<string, string> }, nasiyaData?: { dueDate: string }) => {
     const total = cart.reduce((acc, item) => {
       const itemTotal = item.product.price * item.quantity;
       const discount = item.discount || 0;
@@ -249,7 +249,7 @@ export default function Dashboard() {
     }, 0);
     
     try {
-      const transaction = await addTransaction(cart, total, method, customerData);
+      const transaction = await addTransaction(cart, total, method, customerData, nasiyaData);
       
       cart.forEach(item => {
         updateStock(item.product.id, -item.quantity);

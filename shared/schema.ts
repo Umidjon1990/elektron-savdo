@@ -97,6 +97,18 @@ export const transactions = pgTable("transactions", {
   customerName: text("customer_name"),
   customerPhone: text("customer_phone"),
   customerInfo: json("customer_info").$type<Record<string, string>>(),
+  dueDate: timestamp("due_date"),
+  paidAmount: integer("paid_amount").notNull().default(0),
+  debtStatus: text("debt_status").default("none"),
+});
+
+export const debtPayments = pgTable("debt_payments", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  tenantId: varchar("tenant_id").references(() => tenants.id),
+  transactionId: varchar("transaction_id").references(() => transactions.id),
+  amount: integer("amount").notNull(),
+  date: timestamp("date").notNull(),
+  note: text("note"),
 });
 
 export const expenseCategories = pgTable("expense_categories", {
@@ -143,6 +155,10 @@ export const insertCategorySchema = createInsertSchema(categories).omit({
 });
 
 export const insertTransactionSchema = createInsertSchema(transactions);
+
+export const insertDebtPaymentSchema = createInsertSchema(debtPayments).omit({
+  id: true,
+});
 
 export const insertExpenseCategorySchema = createInsertSchema(expenseCategories).omit({
   id: true,
@@ -193,3 +209,6 @@ export type ExpenseCategory = typeof expenseCategories.$inferSelect;
 
 export type InsertExpense = z.infer<typeof insertExpenseSchema>;
 export type Expense = typeof expenses.$inferSelect;
+
+export type InsertDebtPayment = z.infer<typeof insertDebtPaymentSchema>;
+export type DebtPayment = typeof debtPayments.$inferSelect;

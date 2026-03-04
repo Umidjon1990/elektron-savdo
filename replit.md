@@ -92,6 +92,9 @@ Key backend files:
 14. **Receipt Logo**: Per-tenant receipt logo upload with fallback to store initial
 15. **Product Description & Metadata**: `description` text column + `metadata` JSON for custom product fields
 16. **PWA Standalone Mode**: overscroll-behavior:none, safe-area-insets, no pull-to-refresh in standalone mode
+17. **Nasiya (Credit/Debt) System**: When selecting "Nasiya" payment, customer name/phone required, due date picker, debt tracking with partial payments
+18. **Debt Payments**: `debt_payments` table tracks each payment against a nasiya transaction, `paidAmount`/`debtStatus` on transactions
+19. **Enhanced Customers Page**: Tabs (Hammasi/Qarzdorlar/To'lganlar/Muddati yaqin), debt cards with progress bars, inline payment dialog, search by name/phone
 
 ### Tenant Configuration (JSON columns on tenants table)
 - `payment_methods`: Array of `{id, name}` - custom payment methods for POS

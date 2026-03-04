@@ -106,7 +106,10 @@ export async function syncTransactionsFromServer(): Promise<CachedTransaction[]>
           status: txn.status || 'completed',
           customerName: txn.customerName,
           customerPhone: txn.customerPhone,
-          customerInfo: txn.customerInfo
+          customerInfo: txn.customerInfo,
+          dueDate: txn.dueDate,
+          paidAmount: txn.paidAmount || 0,
+          debtStatus: txn.debtStatus || "none",
         });
       }
     }
@@ -165,7 +168,10 @@ export async function syncPendingTransactions(): Promise<void> {
           status: txn.status || "completed",
           customerName: txn.customerName,
           customerPhone: txn.customerPhone,
-          customerInfo: txn.customerInfo
+          customerInfo: txn.customerInfo,
+          dueDate: txn.dueDate,
+          paidAmount: txn.paidAmount || 0,
+          debtStatus: txn.debtStatus || "none",
         })
       });
       

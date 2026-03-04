@@ -98,8 +98,31 @@ class ErrorBoundary extends React.Component<
   }
 }
 
+function ExpiredPage({ message }: { message: string }) {
+  const { logout } = useAuth();
+  return (
+    <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: "linear-gradient(135deg, #f8fafc, #e2e8f0)" }}>
+      <div style={{ textAlign: "center", maxWidth: 400, padding: 40, background: "white", borderRadius: 16, boxShadow: "0 4px 24px rgba(0,0,0,0.08)" }}>
+        <div style={{ width: 64, height: 64, borderRadius: "50%", background: "#fef2f2", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 16px" }}>
+          <span style={{ fontSize: 28 }}>⏰</span>
+        </div>
+        <h2 style={{ fontSize: 20, fontWeight: 700, color: "#1e293b", marginBottom: 8 }}>Muddat tugagan</h2>
+        <p style={{ color: "#64748b", fontSize: 14, lineHeight: 1.6, marginBottom: 24 }}>{message}</p>
+        <p style={{ color: "#64748b", fontSize: 13, marginBottom: 24 }}>Obunani yangilash uchun admin bilan bog'laning.</p>
+        <button
+          onClick={logout}
+          style={{ padding: "10px 32px", background: "#4f46e5", color: "white", border: "none", borderRadius: 8, cursor: "pointer", fontWeight: 600, fontSize: 14 }}
+          data-testid="button-expired-logout"
+        >
+          Chiqish
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function ProtectedRoute({ component: Component }: { component: React.ComponentType }) {
-  const { isAuthenticated, isLoading, tenant } = useAuth();
+  const { isAuthenticated, isLoading, tenant, isExpired, expiredMessage } = useAuth();
   
   useEffect(() => {
     if (isAuthenticated) {
@@ -109,6 +132,10 @@ function ProtectedRoute({ component: Component }: { component: React.ComponentTy
 
   if (isLoading) {
     return <PageLoader />;
+  }
+
+  if (isExpired) {
+    return <ExpiredPage message={expiredMessage} />;
   }
   
   if (!isAuthenticated) {
@@ -121,7 +148,7 @@ function ProtectedRoute({ component: Component }: { component: React.ComponentTy
 }
 
 function SlugProtectedRoute({ component: Component, slug }: { component: React.ComponentType; slug: string }) {
-  const { isAuthenticated, isLoading, tenant } = useAuth();
+  const { isAuthenticated, isLoading, tenant, isExpired, expiredMessage } = useAuth();
   
   useEffect(() => {
     if (isAuthenticated) {
@@ -131,6 +158,10 @@ function SlugProtectedRoute({ component: Component, slug }: { component: React.C
 
   if (isLoading) {
     return <PageLoader />;
+  }
+
+  if (isExpired) {
+    return <ExpiredPage message={expiredMessage} />;
   }
   
   if (!isAuthenticated) {

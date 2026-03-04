@@ -1,6 +1,7 @@
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import type { Request, Response, NextFunction } from "express";
+import { getTenantById } from "./tenant";
 
 const JWT_SECRET = process.env.JWT_SECRET || "kitoblar-olami-jwt-secret-2024-dev-only";
 if (process.env.NODE_ENV === "production" && !process.env.JWT_SECRET) {
@@ -44,7 +45,7 @@ declare global {
   }
 }
 
-export function authMiddleware(req: Request, res: Response, next: NextFunction) {
+export async function authMiddleware(req: Request, res: Response, next: NextFunction) {
   const authHeader = req.headers.authorization;
   if (!authHeader || !authHeader.startsWith("Bearer ")) {
     return res.status(401).json({ error: "Avtorizatsiya talab qilinadi" });
@@ -57,7 +58,22 @@ export function authMiddleware(req: Request, res: Response, next: NextFunction) 
   }
 
   req.user = payload;
-  req.tenantId = payload.tenantId; // JWT always overrides header for tenant isolation
+  req.tenantId = payload.tenantId;
+
+  if (!payload.isSuper && payload.tenantId) {
+    const tenant = await getTenantById(payload.tenantId);
+    if (tenant) {
+      if (tenant.status === "suspended") {
+        return res.status(403).json({ error: "Do'koningiz to'xtatilgan. Admin bilan bog'laning.", expired: true });
+      }
+      if (tenant.trialEnd && new Date(tenant.trialEnd) < new Date()) {
+        if (tenant.plan === "trial" || tenant.plan === "free") {
+          return res.status(403).json({ error: "Sinov muddatingiz tugagan. Obunani yangilang.", expired: true });
+        }
+      }
+    }
+  }
+
   next();
 }
 

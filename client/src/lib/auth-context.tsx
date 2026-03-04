@@ -30,6 +30,8 @@ interface AuthContextType {
   logout: () => void;
   isAuthenticated: boolean;
   isLoading: boolean;
+  isExpired: boolean;
+  expiredMessage: string;
   refreshUser: () => Promise<void>;
 }
 
@@ -62,6 +64,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [tenant, setTenant] = useState<TenantInfo | null>(null);
   const [token, setToken] = useState<string | null>(getAuthToken());
   const [isLoading, setIsLoading] = useState(true);
+  const [isExpired, setIsExpired] = useState(false);
+  const [expiredMessage, setExpiredMessage] = useState("");
   const [, setLocation] = useLocation();
 
   const refreshUser = useCallback(async () => {
@@ -88,6 +92,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setUser(data.user);
         setTenant(data.tenant);
         setToken(savedToken);
+        setIsExpired(false);
+        setExpiredMessage("");
+      } else if (res.status === 403) {
+        const data = await res.json().catch(() => ({}));
+        if (data.expired) {
+          setIsExpired(true);
+          setExpiredMessage(data.error || "Sinov muddatingiz tugagan");
+        } else {
+          localStorage.removeItem(TOKEN_KEY);
+          setToken(null);
+          setUser(null);
+          setTenant(null);
+        }
       } else {
         localStorage.removeItem(TOKEN_KEY);
         setToken(null);
@@ -198,6 +215,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         logout,
         isAuthenticated: !!user,
         isLoading,
+        isExpired,
+        expiredMessage,
         refreshUser,
       }}
     >

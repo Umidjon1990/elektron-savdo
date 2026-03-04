@@ -64,7 +64,10 @@ export function TransactionProvider({ children }: { children: ReactNode }) {
         totalProfit: t.totalProfit || 0,
         paymentMethod: t.paymentMethod,
         synced: t.synced,
-        status: t.status || "completed"
+        status: t.status || "completed",
+        customerName: t.customerName,
+        customerPhone: t.customerPhone,
+        customerInfo: t.customerInfo
       }));
       setTransactions(mapped);
       setPendingCount(cached.filter(t => !t.synced).length);

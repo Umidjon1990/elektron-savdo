@@ -463,7 +463,20 @@ export async function registerRoutes(
       if (!barcode) {
         barcode = `AUTO-${Date.now()}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`;
       }
-      const validatedData = insertProductSchema.parse({ ...req.body, barcode, tenantId: req.tenantId });
+      const body = {
+        ...req.body,
+        barcode,
+        tenantId: req.tenantId,
+        author: req.body.author || "",
+        image: req.body.image || "https://images.unsplash.com/photo-1543002588-bfa74002ed7e?auto=format&fit=crop&q=80&w=300&h=400",
+        category: req.body.category || "Boshqa",
+        costPrice: Number(req.body.costPrice) || 0,
+        price: Number(req.body.price) || 0,
+        stock: Number(req.body.stock) || 0,
+        barcodePrice: req.body.barcodePrice ? Number(req.body.barcodePrice) : null,
+        wholesalePrice: req.body.wholesalePrice ? Number(req.body.wholesalePrice) : null,
+      };
+      const validatedData = insertProductSchema.parse(body);
       const product = await storage.createProduct(validatedData);
       res.status(201).json(product);
     } catch (error: any) {
@@ -480,11 +493,21 @@ export async function registerRoutes(
 
   app.patch("/api/products/:id", authMiddleware, async (req, res) => {
     try {
-      const product = await storage.updateProduct(req.params.id, req.body, req.tenantId);
+      const data = { ...req.body };
+      if (data.price !== undefined) data.price = Number(data.price) || 0;
+      if (data.costPrice !== undefined) data.costPrice = Number(data.costPrice) || 0;
+      if (data.stock !== undefined) data.stock = Number(data.stock) || 0;
+      if (data.barcodePrice !== undefined) data.barcodePrice = data.barcodePrice ? Number(data.barcodePrice) : null;
+      if (data.wholesalePrice !== undefined) data.wholesalePrice = data.wholesalePrice ? Number(data.wholesalePrice) : null;
+      const product = await storage.updateProduct(req.params.id, data, req.tenantId);
       if (!product) return res.status(404).json({ error: "Product not found" });
       res.json(product);
-    } catch (error) {
-      res.status(500).json({ error: "Failed to update product" });
+    } catch (error: any) {
+      console.error("Error updating product:", error);
+      if (error?.code === '23505') {
+        return res.status(400).json({ error: "Bu shtrix kod allaqachon mavjud" });
+      }
+      res.status(500).json({ error: "Mahsulotni yangilashda xatolik" });
     }
   });
 
@@ -537,7 +560,17 @@ export async function registerRoutes(
       const tenant = await getTenantBySlug(req.params.slug);
       if (!tenant) return res.status(404).json({ error: "Do'kon topilmadi" });
       const tenantId = tenant.id;
-      const validatedData = insertOrderSchema.parse({ ...req.body, tenantId });
+      const orderBody = {
+        ...req.body,
+        tenantId,
+        totalAmount: Number(req.body.totalAmount) || 0,
+        customerName: req.body.customerName || "",
+        customerPhone: req.body.customerPhone || "",
+        paymentMethod: req.body.paymentMethod || "cash",
+        deliveryType: req.body.deliveryType || "pickup",
+        status: req.body.status || "new",
+      };
+      const validatedData = insertOrderSchema.parse(orderBody);
       const order = await storage.createOrder(validatedData);
 
       const botToken = tenant.telegramBotToken || process.env.TELEGRAM_BOT_TOKEN;
@@ -567,7 +600,17 @@ export async function registerRoutes(
       const tenantId = req.tenantId;
       if (!tenantId) return res.status(400).json({ error: "Tenant aniqlanmadi" });
 
-      const validatedData = insertOrderSchema.parse({ ...req.body, tenantId });
+      const orderBody = {
+        ...req.body,
+        tenantId,
+        totalAmount: Number(req.body.totalAmount) || 0,
+        customerName: req.body.customerName || "",
+        customerPhone: req.body.customerPhone || "",
+        paymentMethod: req.body.paymentMethod || "cash",
+        deliveryType: req.body.deliveryType || "pickup",
+        status: req.body.status || "new",
+      };
+      const validatedData = insertOrderSchema.parse(orderBody);
       const order = await storage.createOrder(validatedData);
       
       const tenant = await getTenantById(tenantId);
@@ -721,15 +764,23 @@ export async function registerRoutes(
       const tenantId = req.tenantId;
       if (!tenantId) return res.status(400).json({ error: "Tenant aniqlanmadi" });
       const data = {
-        ...req.body,
+        id: req.body.id || crypto.randomUUID(),
         tenantId,
-        date: new Date(req.body.date)
+        date: new Date(req.body.date),
+        items: req.body.items || [],
+        totalAmount: Number(req.body.totalAmount) || 0,
+        totalProfit: Number(req.body.totalProfit) || 0,
+        paymentMethod: req.body.paymentMethod || "cash",
+        status: req.body.status || "completed",
+        customerName: req.body.customerName || null,
+        customerPhone: req.body.customerPhone || null,
+        customerInfo: req.body.customerInfo || null,
       };
       const transaction = await storage.createTransaction(data);
       res.status(201).json(transaction);
     } catch (error) {
       console.error("Error creating transaction:", error);
-      res.status(400).json({ error: "Invalid transaction data" });
+      res.status(400).json({ error: "Tranzaksiyani saqlashda xatolik" });
     }
   });
 

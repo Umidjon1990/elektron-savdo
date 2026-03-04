@@ -148,13 +148,21 @@ export async function syncPendingTransactions(): Promise<void> {
           id: txn.id,
           date: txn.date,
           items: txn.items.map(item => ({
-            productId: item.product.id,
-            productName: item.product.name,
+            product: {
+              id: item.product.id,
+              name: item.product.name,
+              price: item.product.price,
+              costPrice: item.product.costPrice || 0,
+              stock: item.product.stock,
+              barcode: item.product.barcode
+            },
             quantity: item.quantity,
-            price: item.product.price
+            discount: item.discount || 0
           })),
           totalAmount: txn.totalAmount,
+          totalProfit: txn.totalProfit || 0,
           paymentMethod: txn.paymentMethod,
+          status: txn.status || "completed",
           customerName: txn.customerName,
           customerPhone: txn.customerPhone,
           customerInfo: txn.customerInfo

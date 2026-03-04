@@ -41,7 +41,7 @@ export const products = pgTable("products", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   tenantId: varchar("tenant_id").references(() => tenants.id),
   name: text("name").notNull(),
-  author: text("author").notNull(),
+  author: text("author").notNull().default(""),
   price: integer("price").notNull(),
   costPrice: integer("cost_price").notNull().default(0),
   barcodePrice: integer("barcode_price"),

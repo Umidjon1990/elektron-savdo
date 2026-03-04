@@ -110,6 +110,7 @@ export default function Inventory() {
     videoUrl: "",
     isNew: false
   });
+  const [customFieldValues, setCustomFieldValues] = useState<Record<string, string>>({});
   
   const fileInputRef = useRef<HTMLInputElement>(null);
   
@@ -138,6 +139,7 @@ export default function Inventory() {
       setStep(1);
       setEditingId(null);
       setNewProduct({ name: "", author: "", price: "", costPrice: "", barcodePrice: "", wholesalePrice: "", stock: "", category: "", barcode: "", image: "", videoUrl: "", isNew: false });
+      setCustomFieldValues({});
     }
   }, [isAddDialogOpen]);
   
@@ -157,7 +159,11 @@ export default function Inventory() {
       videoUrl: product.videoUrl || "",
       isNew: product.isNew || false
     });
-    setStep(2); // Go directly to details step
+    setCustomFieldValues({
+      description: (product as any).description || "",
+      ...((product as any).metadata || {}),
+    });
+    setStep(2);
     setIsAddDialogOpen(true);
   };
 
@@ -280,6 +286,13 @@ export default function Inventory() {
     e.preventDefault();
     
     try {
+      const extraMetadata: Record<string, string> = {};
+      for (const [key, val] of Object.entries(customFieldValues)) {
+        if (key !== "name" && key !== "author" && key !== "description" && val) {
+          extraMetadata[key] = val;
+        }
+      }
+
       if (editingId) {
         await updateProduct(editingId, {
           name: newProduct.name,
@@ -291,8 +304,10 @@ export default function Inventory() {
           stock: Number(newProduct.stock),
           category: newProduct.category || categories[0]?.name || "Boshqa",
           barcode: newProduct.barcode.trim(),
+          description: customFieldValues.description || "",
           image: newProduct.image,
           videoUrl: newProduct.videoUrl || undefined,
+          metadata: Object.keys(extraMetadata).length > 0 ? extraMetadata : undefined,
           isNew: newProduct.isNew
         });
         toast({
@@ -311,8 +326,10 @@ export default function Inventory() {
           stock: Number(newProduct.stock),
           category: newProduct.category || categories[0]?.name || "Boshqa",
           barcode: newProduct.barcode.trim(),
+          description: customFieldValues.description || "",
           image: newProduct.image || "https://images.unsplash.com/photo-1543002588-bfa74002ed7e?auto=format&fit=crop&q=80&w=300&h=400",
           videoUrl: newProduct.videoUrl || undefined,
+          metadata: Object.keys(extraMetadata).length > 0 ? extraMetadata : undefined,
           isNew: newProduct.isNew
         });
         toast({
@@ -550,35 +567,40 @@ export default function Inventory() {
                         </div>
 
                         <div className="grid grid-cols-2 gap-4">
-                          {productFields.map((field: any, idx: number) => (
-                            <div key={field.key} className={`space-y-2 ${idx === 0 ? 'col-span-2' : 'col-span-2 sm:col-span-1'}`}>
-                              <Label htmlFor={field.key}>{field.label}</Label>
-                              <div className="flex gap-2">
-                                <Input 
-                                  id={field.key} 
-                                  required={field.required !== false}
-                                  value={field.key === "name" ? newProduct.name : field.key === "author" ? newProduct.author : ""}
-                                  onChange={(e) => {
-                                    if (field.key === "name") setNewProduct({...newProduct, name: e.target.value});
-                                    else if (field.key === "author") setNewProduct({...newProduct, author: e.target.value});
-                                  }}
-                                  placeholder={field.label}
-                                  className={idx === 0 ? "font-medium" : ""}
-                                />
-                                {(field.key === "name" || field.key === "author") && (
-                                  <Button 
-                                    type="button" 
-                                    variant="outline" 
-                                    size="icon"
-                                    title="Kamera orqali o'qish"
-                                    onClick={() => openScanner("text", field.key as "name" | "author")}
-                                  >
-                                    <ScanText className="h-4 w-4" />
-                                  </Button>
-                                )}
+                          {productFields.map((field: any, idx: number) => {
+                            const isBuiltIn = field.key === "name" || field.key === "author";
+                            const fieldValue = field.key === "name" ? newProduct.name : field.key === "author" ? newProduct.author : (customFieldValues[field.key] || "");
+                            return (
+                              <div key={field.key} className={`space-y-2 ${idx === 0 ? 'col-span-2' : 'col-span-2 sm:col-span-1'}`}>
+                                <Label htmlFor={field.key}>{field.label}</Label>
+                                <div className="flex gap-2">
+                                  <Input 
+                                    id={field.key} 
+                                    required={field.required !== false}
+                                    value={fieldValue}
+                                    onChange={(e) => {
+                                      if (field.key === "name") setNewProduct(prev => ({...prev, name: e.target.value}));
+                                      else if (field.key === "author") setNewProduct(prev => ({...prev, author: e.target.value}));
+                                      else setCustomFieldValues(prev => ({...prev, [field.key]: e.target.value}));
+                                    }}
+                                    placeholder={field.label}
+                                    className={idx === 0 ? "font-medium" : ""}
+                                  />
+                                  {isBuiltIn && (
+                                    <Button 
+                                      type="button" 
+                                      variant="outline" 
+                                      size="icon"
+                                      title="Kamera orqali o'qish"
+                                      onClick={() => openScanner("text", field.key as "name" | "author")}
+                                    >
+                                      <ScanText className="h-4 w-4" />
+                                    </Button>
+                                  )}
+                                </div>
                               </div>
-                            </div>
-                          ))}
+                            );
+                          })}
                           <div className="space-y-2 col-span-2 sm:col-span-1">
                             <Label htmlFor="category">Kategoriya</Label>
                             <Select 

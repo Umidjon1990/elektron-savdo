@@ -14,8 +14,10 @@ export interface Product {
   stock: number;
   category: string;
   barcode: string;
+  description?: string;
   image: string;
   videoUrl?: string;
+  metadata?: Record<string, string>;
   sortOrder?: number;
   isNew?: boolean;
 }

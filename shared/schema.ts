@@ -49,8 +49,10 @@ export const products = pgTable("products", {
   stock: integer("stock").notNull(),
   category: text("category").notNull(),
   barcode: text("barcode").notNull(),
+  description: text("description").default(""),
   image: text("image").notNull(),
   videoUrl: text("video_url"),
+  metadata: json("metadata").$type<Record<string, string>>(),
   sortOrder: integer("sort_order").notNull().default(0),
   isNew: boolean("is_new").notNull().default(false),
 }, (table) => [

@@ -88,6 +88,8 @@ Key backend files:
 12. **Multiple Price Types**: Regular price, barcode price (for labels), wholesale price
 13. **Barcode Label Printing**: JsBarcode with configurable label dimensions, font zoom slider (50-200%), barcodePrice support
 14. **Receipt Logo**: Per-tenant receipt logo upload with fallback to store initial
+15. **Product Description & Metadata**: `description` text column + `metadata` JSON for custom product fields
+16. **PWA Standalone Mode**: overscroll-behavior:none, safe-area-insets, no pull-to-refresh in standalone mode
 
 ### Tenant Configuration (JSON columns on tenants table)
 - `payment_methods`: Array of `{id, name}` - custom payment methods for POS

@@ -85,9 +85,16 @@ class ErrorBoundary extends React.Component<
   }
   render() {
     if (this.state.hasError) {
+      const errMsg = this.state.error?.message || "Noma'lum xatolik";
+      const errStack = this.state.error?.stack || "";
       return (
         <div style={{ padding: 40, textAlign: "center" }}>
           <h2 style={{ marginBottom: 16 }}>Xatolik yuz berdi</h2>
+          <p style={{ fontSize: 12, color: "#ef4444", marginBottom: 16, maxWidth: 600, margin: "0 auto 16px", wordBreak: "break-word" }}>{errMsg}</p>
+          <details style={{ fontSize: 11, color: "#64748b", marginBottom: 16, textAlign: "left", maxWidth: 600, margin: "0 auto 16px" }}>
+            <summary>Batafsil</summary>
+            <pre style={{ whiteSpace: "pre-wrap", fontSize: 10 }}>{errStack}</pre>
+          </details>
           <button
             onClick={() => this.setState({ hasError: false, error: null })}
             style={{ padding: "8px 24px", background: "#3b82f6", color: "#fff", border: "none", borderRadius: 8, cursor: "pointer", marginRight: 8 }}

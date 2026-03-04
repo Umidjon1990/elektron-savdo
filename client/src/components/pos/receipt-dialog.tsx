@@ -173,8 +173,6 @@ export function ReceiptDialog({ transaction, isOpen, onClose }: ReceiptDialogPro
   });
 
   const receiptLogo = tenantSettings?.receiptLogo || tenantSettings?.logo;
-  
-  if (!transaction) return null;
 
   const getPaymentLabel = (method: string) => {
     if (tenantSettings?.paymentMethods) {
@@ -207,6 +205,7 @@ export function ReceiptDialog({ transaction, isOpen, onClose }: ReceiptDialogPro
   };
 
   useEffect(() => {
+    if (!transaction) return;
     if (receiptLogo) {
       const logoImg = new Image();
       logoImg.src = receiptLogo;
@@ -216,9 +215,11 @@ export function ReceiptDialog({ transaction, isOpen, onClose }: ReceiptDialogPro
       const qrImg = new Image();
       qrImg.src = `https://api.qrserver.com/v1/create-qr-code/?size=100x100&data=https://t.me/${settings.telegramUsername}&color=000000`;
     }
-  }, [settings.telegramUsername, receiptLogo]);
+  }, [settings.telegramUsername, receiptLogo, transaction]);
 
   useEffect(() => {
+    if (!isOpen || !transaction) return;
+    
     let printContainer = document.getElementById('receipt-print-container');
     if (!printContainer) {
       printContainer = document.createElement('div');
@@ -227,76 +228,76 @@ export function ReceiptDialog({ transaction, isOpen, onClose }: ReceiptDialogPro
       document.body.appendChild(printContainer);
     }
     
-    if (isOpen && transaction) {
-      try {
-        const logoHtml = receiptLogo
-          ? `<img src="${receiptLogo}" alt="Logo" style="width:45px;height:45px;display:block;margin:0 auto 4px;object-fit:contain;">`
-          : `<div style="width:45px;height:45px;border-radius:50%;background:#eef2ff;display:flex;align-items:center;justify-content:center;margin:0 auto 4px;"><span style="font-size:24px;font-weight:900;color:#4f46e5;">${(settings.storeName || 'S').charAt(0).toUpperCase()}</span></div>`;
+    try {
+      const logoHtml = receiptLogo
+        ? `<img src="${receiptLogo}" alt="Logo" style="width:45px;height:45px;display:block;margin:0 auto 4px;object-fit:contain;">`
+        : `<div style="width:45px;height:45px;border-radius:50%;background:#eef2ff;display:flex;align-items:center;justify-content:center;margin:0 auto 4px;"><span style="font-size:24px;font-weight:900;color:#4f46e5;">${(settings.storeName || 'S').charAt(0).toUpperCase()}</span></div>`;
 
-        const customerHtml = (transaction.customerName || transaction.customerPhone) ? `
-          <div style="border-top:1px dashed #666;margin:4px 0;"></div>
-          <div style="font-size:10px;color:#000;margin-bottom:4px;">
-            ${transaction.customerName ? `<p style="margin:0;font-weight:600;">Mijoz: ${transaction.customerName}</p>` : ''}
-            ${transaction.customerPhone ? `<p style="margin:0;font-weight:600;">Tel: ${transaction.customerPhone}</p>` : ''}
-            ${transaction.customerInfo && typeof transaction.customerInfo === 'object' ? Object.values(transaction.customerInfo).map(v => `<p style="margin:0;font-weight:600;">${String(v || '')}</p>`).join('') : ''}
-          </div>
-        ` : '';
+      const customerHtml = (transaction.customerName || transaction.customerPhone) ? `
+        <div style="border-top:1px dashed #666;margin:4px 0;"></div>
+        <div style="font-size:10px;color:#000;margin-bottom:4px;">
+          ${transaction.customerName ? `<p style="margin:0;font-weight:600;">Mijoz: ${transaction.customerName}</p>` : ''}
+          ${transaction.customerPhone ? `<p style="margin:0;font-weight:600;">Tel: ${transaction.customerPhone}</p>` : ''}
+          ${transaction.customerInfo && typeof transaction.customerInfo === 'object' ? Object.values(transaction.customerInfo).map(v => `<p style="margin:0;font-weight:600;">${String(v || '')}</p>`).join('') : ''}
+        </div>
+      ` : '';
 
-        const safeItems = (transaction.items || []).filter((item: any) => item && item.product);
+      const safeItems = (transaction.items || []).filter((item: any) => item && item.product);
 
-        printContainer.innerHTML = `
-          <div style="text-align:center;margin-bottom:8px;">
-            ${logoHtml}
-            <h2 style="font-size:14px;font-weight:900;margin:0;color:#000;">${(settings.storeName || '').toUpperCase()}</h2>
-            <p style="font-size:10px;color:#000;margin:2px 0;font-weight:600;">${settings.storeAddress || ''}</p>
-            <p style="font-size:10px;color:#000;margin:0;font-weight:600;">${settings.storePhone || ''}</p>
-          </div>
-          <div style="border-top:1px dashed #000;margin:6px 0;"></div>
-          <div style="font-size:10px;color:#000;margin-bottom:6px;font-weight:600;text-align:center;">
-            <p style="margin:0;">Chek: ${(transaction.id || '').slice(0, 8)}</p>
-            <p style="margin:2px 0 0;">Sana: ${new Date(transaction.date).toLocaleDateString()}</p>
-          </div>
-          ${customerHtml}
-          <div style="border-top:1px dashed #000;margin:6px 0;"></div>
-          <div style="margin-bottom:6px;">
-            ${safeItems.map((item: any) => `
-              <div style="margin-bottom:4px;color:#000;">
-                <div style="font-size:11px;font-weight:700;">${item.product.name || ''}</div>
-                <div style="display:flex;justify-content:space-between;font-size:10px;">
-                  <span style="font-weight:600;">${item.quantity} x ${Number(item.product.price || 0).toLocaleString()}</span>
-                  <span style="font-weight:700;font-family:monospace;">${(item.quantity * Number(item.product.price || 0)).toLocaleString()}</span>
-                </div>
+      printContainer.innerHTML = `
+        <div style="text-align:center;margin-bottom:8px;">
+          ${logoHtml}
+          <h2 style="font-size:14px;font-weight:900;margin:0;color:#000;">${(settings.storeName || '').toUpperCase()}</h2>
+          <p style="font-size:10px;color:#000;margin:2px 0;font-weight:600;">${settings.storeAddress || ''}</p>
+          <p style="font-size:10px;color:#000;margin:0;font-weight:600;">${settings.storePhone || ''}</p>
+        </div>
+        <div style="border-top:1px dashed #000;margin:6px 0;"></div>
+        <div style="font-size:10px;color:#000;margin-bottom:6px;font-weight:600;text-align:center;">
+          <p style="margin:0;">Chek: ${(transaction.id || '').slice(0, 8)}</p>
+          <p style="margin:2px 0 0;">Sana: ${new Date(transaction.date).toLocaleDateString()}</p>
+        </div>
+        ${customerHtml}
+        <div style="border-top:1px dashed #000;margin:6px 0;"></div>
+        <div style="margin-bottom:6px;">
+          ${safeItems.map((item: any) => `
+            <div style="margin-bottom:4px;color:#000;">
+              <div style="font-size:11px;font-weight:700;">${item.product.name || ''}</div>
+              <div style="display:flex;justify-content:space-between;font-size:10px;">
+                <span style="font-weight:600;">${item.quantity} x ${Number(item.product.price || 0).toLocaleString()}</span>
+                <span style="font-weight:700;font-family:monospace;">${(item.quantity * Number(item.product.price || 0)).toLocaleString()}</span>
               </div>
-            `).join('')}
-          </div>
-          <div style="border-top:1px dashed #000;margin:6px 0;"></div>
-          <table style="width:100%;font-size:11px;color:#000;margin-bottom:6px;">
-            <tr>
-              <td style="font-weight:600;">Jami:</td>
-              <td style="text-align:right;font-family:monospace;font-weight:600;">${Number(transaction.totalAmount || 0).toLocaleString()} so'm</td>
-            </tr>
-            <tr>
-              <td style="font-size:13px;font-weight:900;">TO'LANDI:</td>
-              <td style="text-align:right;font-family:monospace;font-size:13px;font-weight:900;">${Number(transaction.totalAmount || 0).toLocaleString()} so'm</td>
-            </tr>
-            <tr>
-              <td colspan="2" style="text-align:right;font-size:9px;font-weight:600;">To'lov: ${getPaymentLabel(transaction.paymentMethod)}</td>
-            </tr>
-          </table>
-          ${settings.telegramUsername ? `
-          <div style="text-align:center;margin:10px 0;">
-            <img src="https://api.qrserver.com/v1/create-qr-code/?size=100x100&data=https://t.me/${settings.telegramUsername}&color=000000" alt="QR" style="width:60px;height:60px;display:block;margin:0 auto;">
-          </div>` : ''}
-          <div style="text-align:center;">
-            <p style="font-size:10px;color:#000;margin:0;font-weight:700;">${settings.receiptFooter || ''}</p>
-            ${settings.telegramUsername ? `<p style="font-size:9px;color:#000;margin:2px 0 0;font-weight:600;">Telegram: @${settings.telegramUsername}</p>` : ''}
-          </div>
-        `;
-      } catch (err) {
-        console.error("Receipt print error:", err);
-      }
+            </div>
+          `).join('')}
+        </div>
+        <div style="border-top:1px dashed #000;margin:6px 0;"></div>
+        <table style="width:100%;font-size:11px;color:#000;margin-bottom:6px;">
+          <tr>
+            <td style="font-weight:600;">Jami:</td>
+            <td style="text-align:right;font-family:monospace;font-weight:600;">${Number(transaction.totalAmount || 0).toLocaleString()} so'm</td>
+          </tr>
+          <tr>
+            <td style="font-size:13px;font-weight:900;">TO'LANDI:</td>
+            <td style="text-align:right;font-family:monospace;font-size:13px;font-weight:900;">${Number(transaction.totalAmount || 0).toLocaleString()} so'm</td>
+          </tr>
+          <tr>
+            <td colspan="2" style="text-align:right;font-size:9px;font-weight:600;">To'lov: ${getPaymentLabel(transaction.paymentMethod || 'cash')}</td>
+          </tr>
+        </table>
+        ${settings.telegramUsername ? `
+        <div style="text-align:center;margin:10px 0;">
+          <img src="https://api.qrserver.com/v1/create-qr-code/?size=100x100&data=https://t.me/${settings.telegramUsername}&color=000000" alt="QR" style="width:60px;height:60px;display:block;margin:0 auto;">
+        </div>` : ''}
+        <div style="text-align:center;">
+          <p style="font-size:10px;color:#000;margin:0;font-weight:700;">${settings.receiptFooter || ''}</p>
+          ${settings.telegramUsername ? `<p style="font-size:9px;color:#000;margin:2px 0 0;font-weight:600;">Telegram: @${settings.telegramUsername}</p>` : ''}
+        </div>
+      `;
+    } catch (err) {
+      console.error("Receipt print error:", err);
     }
   }, [isOpen, transaction, settings, receiptLogo, tenantSettings]);
+
+  if (!transaction) return null;
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>

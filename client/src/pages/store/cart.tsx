@@ -175,10 +175,6 @@ export default function CartPage() {
                   <span className="text-slate-500">Mahsulotlar ({items.reduce((a, b) => a + b.quantity, 0)})</span>
                   <span className="font-medium">{total.toLocaleString()} so'm</span>
                 </div>
-                <div className="flex justify-between text-sm">
-                  <span className="text-slate-500">Yetkazib berish</span>
-                  <span className="font-medium text-green-600">Bepul</span>
-                </div>
                 <Separator />
                 <div className="flex justify-between text-lg font-bold">
                   <span>Jami</span>

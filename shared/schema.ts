@@ -50,6 +50,7 @@ export const products = pgTable("products", {
   stock: integer("stock").notNull(),
   category: text("category").notNull(),
   barcode: text("barcode").notNull(),
+  supplier: text("supplier").default(""),
   description: text("description").default(""),
   image: text("image").notNull(),
   videoUrl: text("video_url"),

@@ -1,11 +1,11 @@
 import { useState, useRef, useEffect } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { SidebarNav } from "@/components/layout/sidebar-nav";
 import { useProducts } from "@/lib/product-context";
 import { useAuth } from "@/lib/auth-context";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Search, Plus, Filter, MoreHorizontal, ScanBarcode, ArrowRight, Check, X, RotateCcw, PackagePlus, ScanText, Upload, Image as ImageIcon, Loader2, Youtube, Trash2, ChevronUp, ChevronDown, GripVertical, Printer } from "lucide-react";
+import { Search, Plus, Filter, MoreHorizontal, ScanBarcode, ArrowRight, Check, X, RotateCcw, PackagePlus, ScanText, Upload, Image as ImageIcon, Loader2, Youtube, Trash2, ChevronUp, ChevronDown, GripVertical, Printer, Truck } from "lucide-react";
 import BarcodePrintDialog from "@/components/barcode-print";
 import { ScannerOverlay } from "@/components/pos/scanner-overlay";
 import { KNOWN_BOOKS_DB } from "@/data/mock-external-books";
@@ -51,6 +51,7 @@ import { cn } from "@/lib/utils";
 export default function Inventory() {
   const { products, addProduct, updateStock, updateProduct, deleteProduct } = useProducts();
   const { token } = useAuth();
+  const queryClient = useQueryClient();
   const [searchQuery, setSearchQuery] = useState("");
   
   const { data: categories = [] } = useQuery<Category[]>({
@@ -82,7 +83,7 @@ export default function Inventory() {
 
   const formVisibility: Record<string, boolean> = {
     costPrice: true, barcodePrice: true, wholesalePrice: true,
-    description: true, videoUrl: true, isNew: true, category: true, author: true,
+    description: true, videoUrl: true, isNew: true, category: true, author: true, supplier: true,
     ...(tenantSettings?.productFormVisibility || {}),
   };
   const isFieldVisible = (key: string) => formVisibility[key] !== false;
@@ -115,8 +116,10 @@ export default function Inventory() {
     barcode: "",
     image: "",
     videoUrl: "",
+    supplier: "",
     isNew: false
   });
+  const [newCategoryName, setNewCategoryName] = useState("");
   const [customFieldValues, setCustomFieldValues] = useState<Record<string, string>>({});
   
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -145,7 +148,7 @@ export default function Inventory() {
     if (!isAddDialogOpen) {
       setStep(1);
       setEditingId(null);
-      setNewProduct({ name: "", author: "", price: "", costPrice: "", barcodePrice: "", wholesalePrice: "", stock: "", category: "", barcode: "", image: "", videoUrl: "", isNew: false });
+      setNewProduct({ name: "", author: "", price: "", costPrice: "", barcodePrice: "", wholesalePrice: "", stock: "", category: "", barcode: "", image: "", videoUrl: "", supplier: "", isNew: false });
       setCustomFieldValues({});
     }
   }, [isAddDialogOpen]);
@@ -164,6 +167,7 @@ export default function Inventory() {
       barcode: product.barcode,
       image: product.image,
       videoUrl: product.videoUrl || "",
+      supplier: (product as any).supplier || "",
       isNew: product.isNew || false
     });
     setCustomFieldValues({
@@ -311,6 +315,7 @@ export default function Inventory() {
           stock: Number(newProduct.stock),
           category: newProduct.category || categories[0]?.name || "Boshqa",
           barcode: newProduct.barcode.trim(),
+          supplier: newProduct.supplier || "",
           description: customFieldValues.description || "",
           image: newProduct.image,
           videoUrl: newProduct.videoUrl || undefined,
@@ -333,6 +338,7 @@ export default function Inventory() {
           stock: Number(newProduct.stock),
           category: newProduct.category || categories[0]?.name || "Boshqa",
           barcode: newProduct.barcode.trim(),
+          supplier: newProduct.supplier || "",
           description: customFieldValues.description || "",
           image: newProduct.image || "https://images.unsplash.com/photo-1543002588-bfa74002ed7e?auto=format&fit=crop&q=80&w=300&h=400",
           videoUrl: newProduct.videoUrl || undefined,
@@ -612,19 +618,85 @@ export default function Inventory() {
                           })}
                           {isFieldVisible("category") && <div className="space-y-2 col-span-2 sm:col-span-1">
                             <Label htmlFor="category">Kategoriya</Label>
-                            <Select 
-                              value={newProduct.category} 
-                              onValueChange={(val) => setNewProduct({...newProduct, category: val})}
-                            >
-                              <SelectTrigger>
-                                <SelectValue placeholder="Tanlang" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                {categories.map(c => (
-                                  <SelectItem key={c.id} value={c.name}>{c.name}</SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
+                            <div className="flex gap-1">
+                              <Select 
+                                value={newProduct.category} 
+                                onValueChange={(val) => setNewProduct({...newProduct, category: val})}
+                              >
+                                <SelectTrigger className="flex-1">
+                                  <SelectValue placeholder="Tanlang" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {categories.map(c => (
+                                    <SelectItem key={c.id} value={c.name}>{c.name}</SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                              <Dialog>
+                                <DialogTrigger asChild>
+                                  <Button type="button" variant="outline" size="icon" className="shrink-0" title="Yangi kategoriya qo'shish" data-testid="button-add-inline-category">
+                                    <Plus className="h-4 w-4" />
+                                  </Button>
+                                </DialogTrigger>
+                                <DialogContent className="sm:max-w-sm" onClick={(e) => e.stopPropagation()}>
+                                  <DialogHeader>
+                                    <DialogTitle>Yangi kategoriya</DialogTitle>
+                                  </DialogHeader>
+                                  <div className="space-y-3">
+                                    <Input
+                                      placeholder="Kategoriya nomi..."
+                                      value={newCategoryName}
+                                      onChange={(e) => setNewCategoryName(e.target.value)}
+                                      onKeyDown={(e) => e.key === "Enter" && e.preventDefault()}
+                                      data-testid="input-inline-category-name"
+                                    />
+                                  </div>
+                                  <DialogFooter>
+                                    <Button
+                                      type="button"
+                                      disabled={!newCategoryName.trim()}
+                                      onClick={async () => {
+                                        if (!newCategoryName.trim()) return;
+                                        try {
+                                          const res = await fetch("/api/categories", {
+                                            method: "POST",
+                                            headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+                                            body: JSON.stringify({ name: newCategoryName.trim() }),
+                                          });
+                                          if (res.ok) {
+                                            setNewProduct(prev => ({ ...prev, category: newCategoryName.trim() }));
+                                            setNewCategoryName("");
+                                            queryClient.invalidateQueries({ queryKey: ["/api/categories"] });
+                                            toast({ title: "Kategoriya qo'shildi", className: "bg-green-500 text-white border-none", duration: 2000 });
+                                          } else {
+                                            toast({ title: "Xatolik", variant: "destructive" });
+                                          }
+                                        } catch (err) {
+                                          console.error(err);
+                                          toast({ title: "Xatolik", variant: "destructive" });
+                                        }
+                                      }}
+                                      data-testid="button-save-inline-category"
+                                    >
+                                      Qo'shish
+                                    </Button>
+                                  </DialogFooter>
+                                </DialogContent>
+                              </Dialog>
+                            </div>
+                          </div>}
+                          {isFieldVisible("supplier") && <div className="space-y-2 col-span-2 sm:col-span-1">
+                            <Label htmlFor="supplier" className="flex items-center gap-1.5">
+                              <Truck className="h-3.5 w-3.5 text-muted-foreground" />
+                              Yetkazib beruvchi
+                            </Label>
+                            <Input
+                              id="supplier"
+                              placeholder="Kim dan kelgan?"
+                              value={newProduct.supplier}
+                              onChange={(e) => setNewProduct({...newProduct, supplier: e.target.value})}
+                              data-testid="input-supplier"
+                            />
                           </div>}
                         </div>
 

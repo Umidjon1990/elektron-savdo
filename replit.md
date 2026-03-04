@@ -86,6 +86,8 @@ Key backend files:
 10. **Configurable Product Fields**: Per-tenant custom product form fields
 11. **Customer Data on Transactions**: Optional customer info (name, phone, custom fields) attached to each sale
 12. **Multiple Price Types**: Regular price, barcode price (for labels), wholesale price
+15. **Supplier Tracking**: `supplier` text column on products table, configurable visibility via productFormVisibility
+16. **Inline Category Creation**: "+" button next to category dropdown in product form for quick category addition
 13. **Barcode Label Printing**: JsBarcode with configurable label dimensions, font zoom slider (50-200%), barcodePrice support
 14. **Receipt Logo**: Per-tenant receipt logo upload with fallback to store initial
 15. **Product Description & Metadata**: `description` text column + `metadata` JSON for custom product fields

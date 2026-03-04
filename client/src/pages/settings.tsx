@@ -91,6 +91,7 @@ export default function SettingsPage() {
     { key: "isNew", label: "\"YANGI\" belgisi" },
     { key: "category", label: "Kategoriya" },
     { key: "author", label: "Muallif / Brend" },
+    { key: "supplier", label: "Yetkazib beruvchi (ta'minotchi)" },
   ];
 
   const [receiptLogo, setReceiptLogo] = useState<string>("");

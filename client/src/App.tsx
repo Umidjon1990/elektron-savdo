@@ -80,17 +80,32 @@ class ErrorBoundary extends React.Component<
   static getDerivedStateFromError(error: Error) {
     return { hasError: true, error };
   }
+  componentDidCatch(error: Error) {
+    const msg = error.message || "";
+    if (
+      msg.includes("Failed to fetch dynamically imported module") ||
+      msg.includes("Importing a module script failed") ||
+      msg.includes("Loading chunk") ||
+      msg.includes("Loading CSS chunk")
+    ) {
+      const reloaded = sessionStorage.getItem("chunk_reload");
+      if (!reloaded) {
+        sessionStorage.setItem("chunk_reload", "1");
+        window.location.reload();
+        return;
+      }
+      sessionStorage.removeItem("chunk_reload");
+    }
+  }
   render() {
     if (this.state.hasError) {
       return (
         <div style={{ padding: 40, textAlign: "center" }}>
           <h2 style={{ color: "red" }}>Xatolik yuz berdi</h2>
-          <pre style={{ whiteSpace: "pre-wrap", color: "#666", fontSize: 12, maxWidth: 600, margin: "16px auto" }}>
-            {this.state.error?.message}
-            {"\n"}
-            {this.state.error?.stack}
-          </pre>
-          <button onClick={() => window.location.reload()} style={{ padding: "8px 24px", background: "#4f46e5", color: "white", border: "none", borderRadius: 8, cursor: "pointer" }}>
+          <p style={{ color: "#666", fontSize: 14, margin: "12px 0" }}>
+            Sahifa yangilanmoqda, iltimos kutib turing...
+          </p>
+          <button onClick={() => { sessionStorage.removeItem("chunk_reload"); window.location.reload(); }} style={{ padding: "8px 24px", background: "#4f46e5", color: "white", border: "none", borderRadius: 8, cursor: "pointer" }}>
             Qayta yuklash
           </button>
         </div>

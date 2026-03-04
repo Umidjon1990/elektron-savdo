@@ -119,6 +119,8 @@ Key backend files:
 - SlugProtectedRoute ensures tenant ownership validation
 - Legacy /admin/* routes auto-redirect to /store/:slug/admin/* when tenant exists
 - SidebarNav dynamically generates slug-based navigation links
+- Finance module: expense_categories, expenses tables, CRUD APIs, summary/daily-breakdown endpoints, finance page with KPI cards, BarChart, PieChart, expense management
+- Product form visibility settings: `productFormVisibility` JSON on tenants table, toggle switches in settings page to show/hide fields (costPrice, barcodePrice, wholesalePrice, description, videoUrl, isNew, category, author)
 
 ## External Dependencies
 

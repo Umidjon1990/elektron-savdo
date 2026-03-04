@@ -11,7 +11,7 @@ import { useSettings } from "@/lib/settings-context";
 import { useAuth } from "@/lib/auth-context";
 import { useUpload } from "@/hooks/use-upload";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Store, Bell, Printer, Database, Shield, Palette, Receipt, Link2, Copy, Check, ExternalLink, Bot, Send, CreditCard, Plus, Trash2, Edit2, X, Package, Users, Image as ImageIcon, Upload, Loader2 } from "lucide-react";
+import { Store, Bell, Printer, Database, Shield, Palette, Receipt, Link2, Copy, Check, ExternalLink, Bot, Send, CreditCard, Plus, Trash2, Edit2, X, Package, Users, Image as ImageIcon, Upload, Loader2, Eye } from "lucide-react";
 
 interface PaymentMethod {
   id: string;
@@ -70,6 +70,29 @@ export default function SettingsPage() {
   const [customerFields, setCustomerFields] = useState<CustomerField[]>(DEFAULT_CUSTOMER_FIELDS);
   const [newCustomerFieldLabel, setNewCustomerFieldLabel] = useState("");
 
+  const defaultFormVisibility: Record<string, boolean> = {
+    costPrice: true,
+    barcodePrice: true,
+    wholesalePrice: true,
+    description: true,
+    videoUrl: true,
+    isNew: true,
+    category: true,
+    author: true,
+  };
+  const [productFormVisibility, setProductFormVisibility] = useState<Record<string, boolean>>(defaultFormVisibility);
+
+  const FORM_VISIBILITY_OPTIONS = [
+    { key: "costPrice", label: "Tan narxi (kelish narxi)" },
+    { key: "barcodePrice", label: "Barkod narxi" },
+    { key: "wholesalePrice", label: "Ulgurchi narx" },
+    { key: "description", label: "Izoh / Tavsif" },
+    { key: "videoUrl", label: "YouTube video" },
+    { key: "isNew", label: "\"YANGI\" belgisi" },
+    { key: "category", label: "Kategoriya" },
+    { key: "author", label: "Muallif / Brend" },
+  ];
+
   const [receiptLogo, setReceiptLogo] = useState<string>("");
 
   const logoInputRef = useRef<HTMLInputElement>(null);
@@ -98,6 +121,7 @@ export default function SettingsPage() {
       if (data.productFields) setProductFields(data.productFields);
       if (data.customerFields) setCustomerFields(data.customerFields);
       if (data.receiptLogo) setReceiptLogo(data.receiptLogo);
+      if (data.productFormVisibility) setProductFormVisibility({ ...defaultFormVisibility, ...data.productFormVisibility });
       return data;
     },
     enabled: !!token,
@@ -423,6 +447,32 @@ export default function SettingsPage() {
                     Qo'shish
                   </Button>
                 </div>
+              </CardContent>
+            </Card>
+
+            <Card className="border-teal-200">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-teal-800">
+                  <Eye className="h-5 w-5" />
+                  Tovar formasining ko'rinishi
+                </CardTitle>
+                <CardDescription>Tovar qo'shish/tahrirlash formasida qaysi maydonlar ko'rinishini belgilang</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-2">
+                {FORM_VISIBILITY_OPTIONS.map(opt => (
+                  <div key={opt.key} className="flex items-center justify-between p-2.5 bg-gray-50 rounded-lg" data-testid={`visibility-${opt.key}`}>
+                    <span className="text-sm font-medium">{opt.label}</span>
+                    <Switch
+                      checked={productFormVisibility[opt.key] !== false}
+                      onCheckedChange={(checked) => {
+                        const updated = { ...productFormVisibility, [opt.key]: checked };
+                        setProductFormVisibility(updated);
+                        saveConfigMutation.mutate({ productFormVisibility: updated });
+                      }}
+                      data-testid={`switch-visibility-${opt.key}`}
+                    />
+                  </div>
+                ))}
               </CardContent>
             </Card>
 

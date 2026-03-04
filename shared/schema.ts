@@ -23,6 +23,7 @@ export const tenants = pgTable("tenants", {
   productFields: json("product_fields").$type<Array<{key: string, label: string, required?: boolean}>>(),
   customerFields: json("customer_fields").$type<Array<{key: string, label: string}>>(),
   receiptLogo: text("receipt_logo"),
+  productFormVisibility: json("product_form_visibility").$type<Record<string, boolean>>(),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 

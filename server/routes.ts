@@ -246,7 +246,7 @@ export async function registerRoutes(
       if (req.user!.role !== "owner") {
         return res.status(403).json({ error: "Faqat do'kon egasi uchun" });
       }
-      const allowedFields = ["name", "brandColor", "logo", "telegramBotToken", "telegramChatId", "paymentMethods", "productFields", "customerFields", "receiptLogo"];
+      const allowedFields = ["name", "brandColor", "logo", "telegramBotToken", "telegramChatId", "paymentMethods", "productFields", "customerFields", "receiptLogo", "productFormVisibility"];
       const data: Record<string, any> = {};
       for (const key of allowedFields) {
         if (req.body[key] !== undefined) data[key] = req.body[key];

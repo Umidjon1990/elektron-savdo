@@ -79,6 +79,13 @@ export default function Inventory() {
     { key: "name", label: "Tovar nomi", required: true },
     { key: "description", label: "Tavsif", required: false },
   ];
+
+  const formVisibility: Record<string, boolean> = {
+    costPrice: true, barcodePrice: true, wholesalePrice: true,
+    description: true, videoUrl: true, isNew: true, category: true, author: true,
+    ...(tenantSettings?.productFormVisibility || {}),
+  };
+  const isFieldVisible = (key: string) => formVisibility[key] !== false;
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   
   // Scanner States
@@ -569,6 +576,8 @@ export default function Inventory() {
                         <div className="grid grid-cols-2 gap-4">
                           {productFields.map((field: any, idx: number) => {
                             const isBuiltIn = field.key === "name" || field.key === "author";
+                            if (field.key === "author" && !isFieldVisible("author")) return null;
+                            if (field.key === "description" && !isFieldVisible("description")) return null;
                             const fieldValue = field.key === "name" ? newProduct.name : field.key === "author" ? newProduct.author : (customFieldValues[field.key] || "");
                             return (
                               <div key={field.key} className={`space-y-2 ${idx === 0 ? 'col-span-2' : 'col-span-2 sm:col-span-1'}`}>
@@ -601,7 +610,7 @@ export default function Inventory() {
                               </div>
                             );
                           })}
-                          <div className="space-y-2 col-span-2 sm:col-span-1">
+                          {isFieldVisible("category") && <div className="space-y-2 col-span-2 sm:col-span-1">
                             <Label htmlFor="category">Kategoriya</Label>
                             <Select 
                               value={newProduct.category} 
@@ -616,12 +625,13 @@ export default function Inventory() {
                                 ))}
                               </SelectContent>
                             </Select>
-                          </div>
+                          </div>}
                         </div>
 
                         <div className="bg-gray-50 p-4 rounded-lg space-y-3">
                           <Label className="text-sm font-semibold text-gray-700">Narxlar</Label>
                           <div className="grid grid-cols-2 gap-3">
+                            {isFieldVisible("costPrice") && (
                             <div className="space-y-1">
                               <Label htmlFor="costPrice" className="text-xs text-muted-foreground">Tan narxi (so'm)</Label>
                               <Input 
@@ -634,6 +644,7 @@ export default function Inventory() {
                                 className="bg-white h-9"
                               />
                             </div>
+                            )}
                             <div className="space-y-1">
                               <Label htmlFor="price" className="text-xs text-muted-foreground">Sotish narxi (so'm)</Label>
                               <Input 
@@ -645,6 +656,7 @@ export default function Inventory() {
                                 className="bg-white h-9"
                               />
                             </div>
+                            {isFieldVisible("barcodePrice") && (
                             <div className="space-y-1">
                               <Label htmlFor="barcodePrice" className="text-xs text-muted-foreground">Barkod narxi (so'm)</Label>
                               <Input 
@@ -656,6 +668,8 @@ export default function Inventory() {
                                 className="bg-white h-9"
                               />
                             </div>
+                            )}
+                            {isFieldVisible("wholesalePrice") && (
                             <div className="space-y-1">
                               <Label htmlFor="wholesalePrice" className="text-xs text-muted-foreground">Ulgurchi narx (so'm)</Label>
                               <Input 
@@ -667,6 +681,7 @@ export default function Inventory() {
                                 className="bg-white h-9"
                               />
                             </div>
+                            )}
                           </div>
                           <div className="space-y-1">
                             <Label htmlFor="stock" className="text-xs text-muted-foreground">Soni (dona)</Label>
@@ -681,6 +696,7 @@ export default function Inventory() {
                           </div>
                         </div>
 
+                        {isFieldVisible("videoUrl") && (
                         <div className="space-y-2">
                           <Label htmlFor="videoUrl" className="flex items-center gap-2">
                             <Youtube className="h-4 w-4 text-red-500" />
@@ -696,7 +712,9 @@ export default function Inventory() {
                           />
                           <p className="text-xs text-muted-foreground">Video qo'shsangiz, tovar kartasida "Batafsil video" tugmasi ko'rinadi</p>
                         </div>
+                        )}
 
+                        {isFieldVisible("isNew") && (
                         <div className="flex items-center gap-3 p-3 rounded-lg border border-dashed border-green-300 bg-green-50">
                           <input
                             type="checkbox"
@@ -711,6 +729,7 @@ export default function Inventory() {
                             <p className="text-xs text-green-600 mt-0.5">Bu mahsulot do'konda alohida dizayn bilan ajralib ko'rinadi</p>
                           </Label>
                         </div>
+                        )}
                       </div>
                       <DialogFooter className="gap-2">
                         <Button type="button" variant="outline" onClick={() => setIsAddDialogOpen(false)}>Bekor qilish</Button>

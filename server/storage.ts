@@ -1,6 +1,6 @@
 import { db } from "@db";
-import { users, products, orders, categories, transactions, tenants, expenses, expenseCategories, debtPayments, cashRegisterEntries, customers, deliveries, auditLogs } from "@shared/schema";
-import type { User, InsertUser, Product, InsertProduct, Order, InsertOrder, Category, InsertCategory, Transaction, InsertTransaction, Tenant, InsertTenant, Expense, InsertExpense, ExpenseCategory, InsertExpenseCategory, DebtPayment, InsertDebtPayment, CashRegisterEntry, InsertCashRegisterEntry, Customer, InsertCustomer, Delivery, InsertDelivery, AuditLog, InsertAuditLog } from "@shared/schema";
+import { users, products, orders, categories, transactions, tenants, expenses, expenseCategories, incomeCategories, debtPayments, cashRegisterEntries, customers, deliveries, auditLogs } from "@shared/schema";
+import type { User, InsertUser, Product, InsertProduct, Order, InsertOrder, Category, InsertCategory, Transaction, InsertTransaction, Tenant, InsertTenant, Expense, InsertExpense, ExpenseCategory, InsertExpenseCategory, IncomeCategory, InsertIncomeCategory, DebtPayment, InsertDebtPayment, CashRegisterEntry, InsertCashRegisterEntry, Customer, InsertCustomer, Delivery, InsertDelivery, AuditLog, InsertAuditLog } from "@shared/schema";
 import { eq, desc, sql, and, inArray, gte, lte, or, ilike } from "drizzle-orm";
 
 export interface IStorage {
@@ -58,6 +58,11 @@ export interface IStorage {
   updateExpenseCategory(id: string, data: Partial<InsertExpenseCategory>, tenantId?: string): Promise<ExpenseCategory | undefined>;
   deleteExpenseCategory(id: string, tenantId?: string): Promise<boolean>;
 
+  getIncomeCategories(tenantId: string): Promise<IncomeCategory[]>;
+  createIncomeCategory(cat: InsertIncomeCategory): Promise<IncomeCategory>;
+  updateIncomeCategory(id: string, data: Partial<InsertIncomeCategory>, tenantId?: string): Promise<IncomeCategory | undefined>;
+  deleteIncomeCategory(id: string, tenantId?: string): Promise<boolean>;
+
   // Expenses (tenant-scoped)
   getExpenses(tenantId: string, dateFrom?: Date, dateTo?: Date, categoryId?: string): Promise<Expense[]>;
   getExpense(id: string, tenantId?: string): Promise<Expense | undefined>;
@@ -74,6 +79,7 @@ export interface IStorage {
   // Cash Register Entries (kirim/chiqim journal)
   getCashRegisterEntries(tenantId: string, type?: string, dateFrom?: Date, dateTo?: Date): Promise<CashRegisterEntry[]>;
   createCashRegisterEntry(entry: InsertCashRegisterEntry): Promise<CashRegisterEntry>;
+  updateCashRegisterEntry(id: string, data: Partial<InsertCashRegisterEntry>, tenantId?: string): Promise<CashRegisterEntry | undefined>;
   deleteCashRegisterEntry(id: string, tenantId?: string): Promise<boolean>;
   getCashRegisterBalance(tenantId: string, dateFrom?: Date, dateTo?: Date): Promise<{ cash: number; card: number; nasiya: number; withdrawn: number; totalIncome: number; totalExpense: number; total: number }>;
 
@@ -425,6 +431,33 @@ export class DatabaseStorage implements IStorage {
       ? and(eq(expenseCategories.id, id), eq(expenseCategories.tenantId, tenantId))
       : eq(expenseCategories.id, id);
     const result = await db.delete(expenseCategories).where(condition);
+    return (result as any).rowCount > 0;
+  }
+
+  async getIncomeCategories(tenantId: string): Promise<IncomeCategory[]> {
+    return await db.select().from(incomeCategories)
+      .where(eq(incomeCategories.tenantId, tenantId))
+      .orderBy(incomeCategories.sortOrder);
+  }
+
+  async createIncomeCategory(cat: InsertIncomeCategory): Promise<IncomeCategory> {
+    const [newCat] = await db.insert(incomeCategories).values(cat).returning();
+    return newCat;
+  }
+
+  async updateIncomeCategory(id: string, data: Partial<InsertIncomeCategory>, tenantId?: string): Promise<IncomeCategory | undefined> {
+    const condition = tenantId
+      ? and(eq(incomeCategories.id, id), eq(incomeCategories.tenantId, tenantId))
+      : eq(incomeCategories.id, id);
+    const [updated] = await db.update(incomeCategories).set(data).where(condition).returning();
+    return updated;
+  }
+
+  async deleteIncomeCategory(id: string, tenantId?: string): Promise<boolean> {
+    const condition = tenantId
+      ? and(eq(incomeCategories.id, id), eq(incomeCategories.tenantId, tenantId))
+      : eq(incomeCategories.id, id);
+    const result = await db.delete(incomeCategories).where(condition);
     return (result.rowCount ?? 0) > 0;
   }
 
@@ -514,6 +547,14 @@ export class DatabaseStorage implements IStorage {
   async createCashRegisterEntry(entry: InsertCashRegisterEntry): Promise<CashRegisterEntry> {
     const [created] = await db.insert(cashRegisterEntries).values(entry).returning();
     return created;
+  }
+
+  async updateCashRegisterEntry(id: string, data: Partial<InsertCashRegisterEntry>, tenantId?: string): Promise<CashRegisterEntry | undefined> {
+    const condition = tenantId
+      ? and(eq(cashRegisterEntries.id, id), eq(cashRegisterEntries.tenantId, tenantId))
+      : eq(cashRegisterEntries.id, id);
+    const [updated] = await db.update(cashRegisterEntries).set(data).where(condition).returning();
+    return updated;
   }
 
   async deleteCashRegisterEntry(id: string, tenantId?: string): Promise<boolean> {

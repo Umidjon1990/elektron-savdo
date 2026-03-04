@@ -1,7 +1,7 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { insertProductSchema, insertOrderSchema, insertCategorySchema, insertTransactionSchema, registerTenantSchema, loginSchema, insertExpenseSchema, insertExpenseCategorySchema, insertCashRegisterEntrySchema, insertCustomerSchema, insertDeliverySchema } from "@shared/schema";
+import { insertProductSchema, insertOrderSchema, insertCategorySchema, insertTransactionSchema, registerTenantSchema, loginSchema, insertExpenseSchema, insertExpenseCategorySchema, insertIncomeCategorySchema, insertCashRegisterEntrySchema, insertCustomerSchema, insertDeliverySchema } from "@shared/schema";
 import { registerR2Routes } from "./integrations/r2-routes";
 import { sendTelegramNotification } from "./telegram";
 import { authMiddleware, optionalAuth, superAdminOnly, hashPassword, comparePassword, generateToken } from "./auth";
@@ -890,6 +890,47 @@ export async function registerRoutes(
     }
   });
 
+  // ============ INCOME CATEGORIES ============
+
+  app.get("/api/income-categories", authMiddleware, async (req, res) => {
+    try {
+      const cats = await storage.getIncomeCategories(req.tenantId!);
+      res.json(cats);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch income categories" });
+    }
+  });
+
+  app.post("/api/income-categories", authMiddleware, async (req, res) => {
+    try {
+      const data = insertIncomeCategorySchema.parse({ ...req.body, tenantId: req.tenantId });
+      const cat = await storage.createIncomeCategory(data);
+      res.json(cat);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to create income category" });
+    }
+  });
+
+  app.patch("/api/income-categories/:id", authMiddleware, async (req, res) => {
+    try {
+      const updated = await storage.updateIncomeCategory(req.params.id, req.body, req.tenantId);
+      if (!updated) return res.status(404).json({ error: "Category not found" });
+      res.json(updated);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to update income category" });
+    }
+  });
+
+  app.delete("/api/income-categories/:id", authMiddleware, async (req, res) => {
+    try {
+      const deleted = await storage.deleteIncomeCategory(req.params.id, req.tenantId);
+      if (!deleted) return res.status(404).json({ error: "Category not found" });
+      res.json({ success: true });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to delete income category" });
+    }
+  });
+
   // ============ EXPENSES ============
 
   app.get("/api/expenses", authMiddleware, async (req, res) => {
@@ -980,6 +1021,16 @@ export async function registerRoutes(
     } catch (error: any) {
       console.error("Error creating cash register entry:", error);
       res.status(400).json({ error: "Kiritishda xatolik" });
+    }
+  });
+
+  app.patch("/api/cash-register/entries/:id", authMiddleware, async (req, res) => {
+    try {
+      const updated = await storage.updateCashRegisterEntry(req.params.id, req.body, req.tenantId);
+      if (!updated) return res.status(404).json({ error: "Entry not found" });
+      res.json(updated);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to update entry" });
     }
   });
 

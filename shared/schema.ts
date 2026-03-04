@@ -136,6 +136,15 @@ export const expenseCategories = pgTable("expense_categories", {
   sortOrder: integer("sort_order").notNull().default(0),
 });
 
+export const incomeCategories = pgTable("income_categories", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  tenantId: varchar("tenant_id").references(() => tenants.id),
+  name: text("name").notNull(),
+  icon: text("icon").notNull().default("ArrowDown"),
+  color: text("color").notNull().default("#22c55e"),
+  sortOrder: integer("sort_order").notNull().default(0),
+});
+
 export const expenses = pgTable("expenses", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   tenantId: varchar("tenant_id").references(() => tenants.id),
@@ -219,6 +228,10 @@ export const insertExpenseCategorySchema = createInsertSchema(expenseCategories)
   id: true,
 });
 
+export const insertIncomeCategorySchema = createInsertSchema(incomeCategories).omit({
+  id: true,
+});
+
 export const insertExpenseSchema = createInsertSchema(expenses).omit({
   id: true,
   createdAt: true,
@@ -281,6 +294,9 @@ export type Transaction = typeof transactions.$inferSelect;
 
 export type InsertExpenseCategory = z.infer<typeof insertExpenseCategorySchema>;
 export type ExpenseCategory = typeof expenseCategories.$inferSelect;
+
+export type InsertIncomeCategory = z.infer<typeof insertIncomeCategorySchema>;
+export type IncomeCategory = typeof incomeCategories.$inferSelect;
 
 export type InsertExpense = z.infer<typeof insertExpenseSchema>;
 export type Expense = typeof expenses.$inferSelect;

@@ -26,7 +26,7 @@ import {
 } from "recharts";
 
 const ICON_MAP: Record<string, any> = {
-  Home, Briefcase, Truck, Zap, ShoppingBag, Megaphone, Receipt, Users, Tag, Settings, MoreHorizontal, Wallet, Building
+  Home, Briefcase, Truck, Zap, ShoppingBag, Megaphone, Receipt, Users, Tag, Settings, MoreHorizontal, Wallet, Building, Landmark, HandCoins, ArrowDown, CreditCard, DollarSign, CircleDollarSign
 };
 
 const DEFAULT_CATEGORIES = [
@@ -39,12 +39,12 @@ const DEFAULT_CATEGORIES = [
   { name: "Boshqa", icon: "MoreHorizontal", color: "#6b7280" },
 ];
 
-const INCOME_CATEGORIES = [
-  "Inkassatsiya qaytimi",
-  "Qarz qaytdi",
-  "Investor pul kiritdi",
-  "Bank o'tkazma",
-  "Boshqa kirim",
+const DEFAULT_INCOME_CATEGORIES = [
+  { name: "Inkassatsiya qaytimi", icon: "Landmark", color: "#3b82f6" },
+  { name: "Qarz qaytdi", icon: "HandCoins", color: "#f59e0b" },
+  { name: "Investor pul kiritdi", icon: "Briefcase", color: "#8b5cf6" },
+  { name: "Bank o'tkazma", icon: "Building", color: "#14b8a6" },
+  { name: "Boshqa kirim", icon: "MoreHorizontal", color: "#6b7280" },
 ];
 
 const PAYMENT_COLORS: Record<string, string> = {
@@ -92,6 +92,10 @@ export default function FinancePage() {
   const [editingCat, setEditingCat] = useState<any>(null);
   const [showCategories, setShowCategories] = useState(false);
   const [incomeDialogOpen, setIncomeDialogOpen] = useState(false);
+  const [editingIncome, setEditingIncome] = useState<any>(null);
+  const [showIncomeCategories, setShowIncomeCategories] = useState(false);
+  const [incomeCatDialogOpen, setIncomeCatDialogOpen] = useState(false);
+  const [editingIncomeCat, setEditingIncomeCat] = useState<any>(null);
   const [payDialogOpen, setPayDialogOpen] = useState(false);
   const [selectedDebt, setSelectedDebt] = useState<any>(null);
   const [payAmount, setPayAmount] = useState("");
@@ -245,6 +249,16 @@ export default function FinancePage() {
     enabled: !!token,
   });
 
+  const { data: incomeCats = [] } = useQuery<any[]>({
+    queryKey: ["income-categories"],
+    queryFn: async () => {
+      const res = await fetch("/api/income-categories", { headers });
+      if (!res.ok) throw new Error("Failed");
+      return res.json();
+    },
+    enabled: !!token,
+  });
+
   const { data: debtTransactions = [] } = useQuery<any[]>({
     queryKey: ["debts"],
     queryFn: async () => {
@@ -271,6 +285,22 @@ export default function FinancePage() {
     }
   }, [token, categories.length]);
 
+  useEffect(() => {
+    if (token && incomeCats.length === 0) {
+      const initDefaults = async () => {
+        const res = await fetch("/api/income-categories", { headers });
+        const existing = await res.json();
+        if (existing.length === 0) {
+          for (const cat of DEFAULT_INCOME_CATEGORIES) {
+            await fetch("/api/income-categories", { method: "POST", headers, body: JSON.stringify(cat) });
+          }
+          queryClient.invalidateQueries({ queryKey: ["income-categories"] });
+        }
+      };
+      initDefaults().catch(console.error);
+    }
+  }, [token, incomeCats.length]);
+
   const invalidateAll = () => {
     queryClient.invalidateQueries({ queryKey: ["expenses"] });
     queryClient.invalidateQueries({ queryKey: ["finance-summary"] });
@@ -278,6 +308,7 @@ export default function FinancePage() {
     queryClient.invalidateQueries({ queryKey: ["cash-balance"] });
     queryClient.invalidateQueries({ queryKey: ["cash-entries"] });
     queryClient.invalidateQueries({ queryKey: ["debts"] });
+    queryClient.invalidateQueries({ queryKey: ["income-categories"] });
   };
 
   const createExpense = useMutation({
@@ -338,7 +369,42 @@ export default function FinancePage() {
       if (!res.ok) throw new Error("Failed");
       return res.json();
     },
-    onSuccess: () => { invalidateAll(); setIncomeDialogOpen(false); toast({ title: "Kirim qo'shildi" }); },
+    onSuccess: () => { invalidateAll(); setIncomeDialogOpen(false); setEditingIncome(null); toast({ title: "Kirim qo'shildi" }); },
+  });
+
+  const updateIncomeEntry = useMutation({
+    mutationFn: async ({ id, data }: { id: string; data: any }) => {
+      const res = await fetch(`/api/cash-register/entries/${id}`, { method: "PATCH", headers, body: JSON.stringify(data) });
+      if (!res.ok) throw new Error("Failed");
+      return res.json();
+    },
+    onSuccess: () => { invalidateAll(); setIncomeDialogOpen(false); setEditingIncome(null); toast({ title: "Kirim yangilandi" }); },
+  });
+
+  const createIncomeCat = useMutation({
+    mutationFn: async (data: any) => {
+      const res = await fetch("/api/income-categories", { method: "POST", headers, body: JSON.stringify(data) });
+      if (!res.ok) throw new Error("Failed");
+      return res.json();
+    },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["income-categories"] }); setIncomeCatDialogOpen(false); setEditingIncomeCat(null); toast({ title: "Kategoriya qo'shildi" }); },
+  });
+
+  const updateIncomeCat = useMutation({
+    mutationFn: async ({ id, data }: { id: string; data: any }) => {
+      const res = await fetch(`/api/income-categories/${id}`, { method: "PATCH", headers, body: JSON.stringify(data) });
+      if (!res.ok) throw new Error("Failed");
+      return res.json();
+    },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["income-categories"] }); setIncomeCatDialogOpen(false); setEditingIncomeCat(null); toast({ title: "Kategoriya yangilandi" }); },
+  });
+
+  const deleteIncomeCat = useMutation({
+    mutationFn: async (id: string) => {
+      const res = await fetch(`/api/income-categories/${id}`, { method: "DELETE", headers });
+      if (!res.ok) throw new Error("Failed");
+    },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["income-categories"] }); toast({ title: "Kategoriya o'chirildi" }); },
   });
 
   const deleteEntry = useMutation({
@@ -570,19 +636,33 @@ export default function FinancePage() {
             </>
           )}
 
-          {activeMenu === "kirim" && (
+          {activeMenu === "kirim" && (() => {
+            const incomeEntries = cashEntries.filter((e: any) => e.type === "income");
+            const getIncomeCatById = (id: string) => incomeCats.find((c: any) => c.id === id);
+            const catIncomes = incomeCats.map((cat: any) => {
+              const total = incomeEntries.filter((e: any) => e.categoryName === cat.name).reduce((s: number, e: any) => s + e.amount, 0);
+              return { name: cat.name, value: total, color: cat.color };
+            }).filter((c: any) => c.value > 0);
+            const incTotal = incomeEntries.reduce((s: number, e: any) => s + e.amount, 0);
+            return (
             <>
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between flex-wrap gap-2">
                 <h2 className="text-base font-semibold flex items-center gap-2">
                   <ArrowDownCircle className="h-5 w-5 text-green-600" />
                   Kirimlar — {periodLabel}
                 </h2>
-                <Button size="sm" onClick={() => setIncomeDialogOpen(true)} className="gap-1" data-testid="button-add-income">
-                  <Plus className="h-4 w-4" /> Kirim qo'shish
-                </Button>
+                <div className="flex gap-2">
+                  <Button size="sm" variant="outline" onClick={() => setShowIncomeCategories(!showIncomeCategories)} className="text-xs gap-1" data-testid="button-toggle-income-categories">
+                    <Settings className="h-3 w-3" /> Kategoriyalar
+                    <ChevronDown className={`h-3 w-3 transition-transform ${showIncomeCategories ? "rotate-180" : ""}`} />
+                  </Button>
+                  <Button size="sm" onClick={() => { setEditingIncome(null); setIncomeDialogOpen(true); }} className="gap-1" data-testid="button-add-income">
+                    <Plus className="h-4 w-4" /> Kirim qo'shish
+                  </Button>
+                </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
                 <Card className="border-0 shadow-sm bg-gradient-to-br from-green-500 to-emerald-600 text-white">
                   <CardContent className="p-4">
                     <p className="text-[10px] opacity-80 font-medium">Savdodan tushum</p>
@@ -593,22 +673,87 @@ export default function FinancePage() {
                 <Card className="border-0 shadow-sm bg-gradient-to-br from-blue-500 to-indigo-600 text-white">
                   <CardContent className="p-4">
                     <p className="text-[10px] opacity-80 font-medium">Qo'shimcha kirim</p>
-                    <p className="text-xl font-bold">{(balance?.totalIncome || 0).toLocaleString()}</p>
-                    <p className="text-[10px] opacity-70">{cashEntries.filter((e: any) => e.type === "income").length} ta kirim</p>
+                    <p className="text-xl font-bold">{incTotal.toLocaleString()}</p>
+                    <p className="text-[10px] opacity-70">{incomeEntries.length} ta kirim</p>
                   </CardContent>
                 </Card>
+                {catIncomes.slice(0, 1).map((c: any, i: number) => (
+                  <Card key={i} className="border-0 shadow-sm">
+                    <CardContent className="p-4">
+                      <p className="text-[10px] text-gray-500 font-medium">{c.name}</p>
+                      <p className="text-lg font-bold">{c.value.toLocaleString()}</p>
+                      <div className="h-1.5 bg-gray-100 rounded-full mt-2">
+                        <div className="h-full rounded-full" style={{ width: `${incTotal > 0 ? Math.round((c.value / incTotal) * 100) : 0}%`, backgroundColor: c.color }} />
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
               </div>
+
+              {showIncomeCategories && (
+                <Card className="border-0 shadow-sm">
+                  <CardContent className="p-4">
+                    <div className="flex items-center justify-between mb-3">
+                      <p className="text-xs font-semibold text-gray-600">Kirim kategoriyalari</p>
+                      <Button size="sm" variant="outline" onClick={() => { setEditingIncomeCat(null); setIncomeCatDialogOpen(true); }} className="text-xs gap-1 h-7" data-testid="button-add-income-category">
+                        <Plus className="h-3 w-3" /> Yangi
+                      </Button>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {incomeCats.map((cat: any) => {
+                        const IconComp = ICON_MAP[cat.icon] || ArrowDown;
+                        return (
+                          <div key={cat.id} className="flex items-center gap-1.5 bg-gray-50 border rounded-lg px-2.5 py-1.5 text-xs group" data-testid={`income-category-${cat.id}`}>
+                            <IconComp className="h-3.5 w-3.5" style={{ color: cat.color }} />
+                            <span className="font-medium">{cat.name}</span>
+                            <button onClick={() => { setEditingIncomeCat(cat); setIncomeCatDialogOpen(true); }} className="opacity-0 group-hover:opacity-100 transition-opacity" data-testid={`button-edit-income-category-${cat.id}`}>
+                              <Pencil className="h-3 w-3 text-gray-400 hover:text-blue-500" />
+                            </button>
+                            <button onClick={() => { if (confirm("O'chirishni tasdiqlaysizmi?")) deleteIncomeCat.mutate(cat.id); }} className="opacity-0 group-hover:opacity-100 transition-opacity" data-testid={`button-delete-income-category-${cat.id}`}>
+                              <Trash2 className="h-3 w-3 text-gray-400 hover:text-red-500" />
+                            </button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+
+              {catIncomes.length > 0 && (
+                <Card className="border-0 shadow-sm">
+                  <CardHeader className="pb-2"><CardTitle className="text-sm font-semibold">Kirim taqsimoti</CardTitle></CardHeader>
+                  <CardContent>
+                    <div className="h-48">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <PieChart>
+                          <Pie data={catIncomes} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={65} innerRadius={32}>
+                            {catIncomes.map((entry: any, index: number) => (
+                              <Cell key={index} fill={entry.color || PIE_COLORS[index % PIE_COLORS.length]} />
+                            ))}
+                          </Pie>
+                          <Tooltip formatter={(value: number) => value.toLocaleString() + " so'm"} />
+                          <Legend wrapperStyle={{ fontSize: 10 }} />
+                        </PieChart>
+                      </ResponsiveContainer>
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
 
               <Card className="border-0 shadow-sm">
                 <CardContent className="p-0">
-                  {cashEntries.filter((e: any) => e.type === "income").length === 0 ? (
+                  {incomeEntries.length === 0 ? (
                     <div className="text-center py-8 text-sm text-gray-400">Qo'shimcha kirim yo'q</div>
                   ) : (
                     <div className="divide-y">
-                      {cashEntries.filter((e: any) => e.type === "income").map((entry: any) => (
-                        <div key={entry.id} className="flex items-center gap-3 p-3 hover:bg-gray-50 group" data-testid={`income-${entry.id}`}>
-                          <div className="w-9 h-9 rounded-lg bg-green-50 flex items-center justify-center shrink-0">
-                            <ArrowDown className="h-4 w-4 text-green-600" />
+                      {incomeEntries.map((entry: any) => {
+                        const cat = incomeCats.find((c: any) => c.name === entry.categoryName);
+                        const IconComp = cat ? (ICON_MAP[cat.icon] || ArrowDown) : ArrowDown;
+                        return (
+                        <div key={entry.id} className="flex items-center gap-3 p-3 hover:bg-gray-50 group transition-colors" data-testid={`income-${entry.id}`}>
+                          <div className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0" style={{ backgroundColor: (cat?.color || "#22c55e") + "15" }}>
+                            <IconComp className="h-4 w-4" style={{ color: cat?.color || "#22c55e" }} />
                           </div>
                           <div className="flex-1 min-w-0">
                             <p className="text-sm font-medium">{entry.categoryName || "Kirim"}</p>
@@ -618,18 +763,24 @@ export default function FinancePage() {
                             <p className="text-sm font-bold text-green-600">+{entry.amount.toLocaleString()}</p>
                             <p className="text-[10px] text-gray-400">{formatDateTime(entry.date)}</p>
                           </div>
-                          <button onClick={() => { if (confirm("Bekor qilishni tasdiqlaysizmi?")) deleteEntry.mutate(entry.id); }}
-                            className="opacity-0 group-hover:opacity-100 transition-opacity" data-testid={`button-delete-income-${entry.id}`}>
-                            <Trash2 className="h-3.5 w-3.5 text-gray-400 hover:text-red-500" />
-                          </button>
+                          <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <button onClick={() => { setEditingIncome(entry); setIncomeDialogOpen(true); }} data-testid={`button-edit-income-${entry.id}`}>
+                              <Pencil className="h-3.5 w-3.5 text-gray-400 hover:text-blue-500" />
+                            </button>
+                            <button onClick={() => { if (confirm("O'chirishni tasdiqlaysizmi?")) deleteEntry.mutate(entry.id); }} data-testid={`button-delete-income-${entry.id}`}>
+                              <Trash2 className="h-3.5 w-3.5 text-gray-400 hover:text-red-500" />
+                            </button>
+                          </div>
                         </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   )}
                 </CardContent>
               </Card>
             </>
-          )}
+            );
+          })()}
 
           {activeMenu === "chiqim" && (
             <>
@@ -1035,9 +1186,20 @@ export default function FinancePage() {
 
       <IncomeDialog
         isOpen={incomeDialogOpen}
-        onClose={() => setIncomeDialogOpen(false)}
+        onClose={() => { setIncomeDialogOpen(false); setEditingIncome(null); }}
         onSave={(data: any) => createIncome.mutate(data)}
-        isLoading={createIncome.isPending}
+        onUpdate={({ id, data }: { id: string; data: any }) => updateIncomeEntry.mutate({ id, data })}
+        isLoading={createIncome.isPending || updateIncomeEntry.isPending}
+        income={editingIncome}
+        categories={incomeCats}
+      />
+
+      <CategoryDialog
+        isOpen={incomeCatDialogOpen}
+        onClose={() => { setIncomeCatDialogOpen(false); setEditingIncomeCat(null); }}
+        category={editingIncomeCat}
+        onSave={(data: any) => { editingIncomeCat ? updateIncomeCat.mutate({ id: editingIncomeCat.id, data }) : createIncomeCat.mutate(data); }}
+        isLoading={createIncomeCat.isPending || updateIncomeCat.isPending}
       />
 
       <Dialog open={payDialogOpen} onOpenChange={setPayDialogOpen}>
@@ -1135,38 +1297,45 @@ function ExpenseDialog({ isOpen, onClose, expense, categories, onSave, isLoading
   );
 }
 
-function IncomeDialog({ isOpen, onClose, onSave, isLoading }: any) {
+function IncomeDialog({ isOpen, onClose, onSave, onUpdate, isLoading, income, categories }: any) {
   const [amount, setAmount] = useState("");
-  const [categoryName, setCategoryName] = useState(INCOME_CATEGORIES[0]);
+  const [categoryName, setCategoryName] = useState("");
   const [counterparty, setCounterparty] = useState("");
   const [paymentType, setPaymentType] = useState("cash");
   const [note, setNote] = useState("");
   const [date, setDate] = useState(new Date().toISOString().split("T")[0]);
 
   useEffect(() => {
-    if (isOpen) {
+    if (income) {
+      setAmount(String(income.amount));
+      setCategoryName(income.categoryName || (categories?.[0]?.name || ""));
+      setCounterparty(income.counterparty || "");
+      setPaymentType(income.paymentType || "cash");
+      setNote(income.note || "");
+      setDate(new Date(income.date).toISOString().split("T")[0]);
+    } else {
       setAmount("");
-      setCategoryName(INCOME_CATEGORIES[0]);
+      setCategoryName(categories?.[0]?.name || "");
       setCounterparty("");
       setPaymentType("cash");
       setNote("");
       setDate(new Date().toISOString().split("T")[0]);
     }
-  }, [isOpen]);
+  }, [income, isOpen, categories]);
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2"><ArrowDownCircle className="h-5 w-5 text-green-600" /> Yangi kirim</DialogTitle>
+          <DialogTitle className="flex items-center gap-2"><ArrowDownCircle className="h-5 w-5 text-green-600" /> {income ? "Kirimni tahrirlash" : "Yangi kirim"}</DialogTitle>
         </DialogHeader>
         <div className="space-y-4">
           <div>
-            <Label>Nimadan</Label>
+            <Label>Nimadan (kategoriya)</Label>
             <Select value={categoryName} onValueChange={setCategoryName}>
-              <SelectTrigger data-testid="select-income-category"><SelectValue /></SelectTrigger>
+              <SelectTrigger data-testid="select-income-category"><SelectValue placeholder="Tanlang..." /></SelectTrigger>
               <SelectContent>
-                {INCOME_CATEGORIES.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+                {(categories || []).map((c: any) => <SelectItem key={c.id} value={c.name}>{c.name}</SelectItem>)}
               </SelectContent>
             </Select>
           </div>
@@ -1203,10 +1372,15 @@ function IncomeDialog({ isOpen, onClose, onSave, isLoading }: any) {
           <Button variant="outline" onClick={onClose}>Bekor qilish</Button>
           <Button onClick={() => {
             const amt = parseInt(amount);
-            if (!amt || amt <= 0) return;
-            onSave({ amount: amt, categoryName, counterparty, paymentType, note, date });
+            if (!amt || amt <= 0 || !categoryName) return;
+            const data = { amount: amt, categoryName, counterparty, paymentType, note, date };
+            if (income) {
+              onUpdate({ id: income.id, data });
+            } else {
+              onSave(data);
+            }
           }} disabled={isLoading || !amount || parseInt(amount) <= 0} data-testid="button-save-income">
-            Qo'shish
+            {income ? "Saqlash" : "Qo'shish"}
           </Button>
         </DialogFooter>
       </DialogContent>

@@ -423,7 +423,7 @@ export default function History() {
                             </div>
                             <div>
                               <p className={`text-sm font-medium ${t.status === 'voided' ? 'text-red-600 line-through' : 'text-slate-800'}`}>
-                                {t.items.length} x Mahsulot
+                                {(t.items || []).length} x Mahsulot
                               </p>
                               <p className="text-xs text-slate-500">
                                 {new Date(t.date).toLocaleTimeString('uz-UZ', { hour: '2-digit', minute: '2-digit' })}

@@ -147,7 +147,7 @@ export async function syncPendingTransactions(): Promise<void> {
         body: JSON.stringify({
           id: txn.id,
           date: txn.date,
-          items: txn.items.map(item => ({
+          items: (txn.items || []).filter(item => item && item.product).map(item => ({
             product: {
               id: item.product.id,
               name: item.product.name,

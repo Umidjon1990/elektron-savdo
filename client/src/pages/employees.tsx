@@ -1,7 +1,27 @@
-import { useState, useEffect, useRef, useMemo } from "react";
+import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/lib/auth-context";
 import { SidebarNav } from "@/components/layout/sidebar-nav";
+
+let faceModelsLoaded = false;
+let faceModelsLoading = false;
+async function ensureFaceModels() {
+  if (faceModelsLoaded) return;
+  if (faceModelsLoading) {
+    while (!faceModelsLoaded) await new Promise(r => setTimeout(r, 100));
+    return;
+  }
+  faceModelsLoading = true;
+  const faceapi = await import("face-api.js");
+  const MODEL_URL = "/models";
+  await Promise.all([
+    faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL),
+    faceapi.nets.faceLandmark68TinyNet.loadFromUri(MODEL_URL),
+    faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL),
+  ]);
+  faceModelsLoaded = true;
+  faceModelsLoading = false;
+}
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -322,6 +342,7 @@ export default function EmployeesPage() {
     setFaceStatus("Yuz aniqlanmoqda...");
 
     try {
+      await ensureFaceModels();
       const faceapi = await import("face-api.js");
       const img = await faceapi.fetchImage(dataUrl);
       const detection = await faceapi

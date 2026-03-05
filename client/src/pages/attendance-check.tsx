@@ -404,7 +404,7 @@ export default function AttendanceCheckPage() {
         )}
 
         <Card className="overflow-hidden">
-          <div className={`relative bg-black aspect-[3/4] flex items-center justify-center transition-all duration-300 ${faceDetected ? "ring-4 ring-green-400 ring-inset" : "ring-4 ring-transparent"}`}>
+          <div className="relative bg-black aspect-[3/4] flex items-center justify-center">
             <video
               ref={videoRef}
               className="w-full h-full object-cover"
@@ -413,16 +413,46 @@ export default function AttendanceCheckPage() {
               data-testid="video-camera"
             />
             <canvas ref={canvasRef} className="hidden" />
+
+            <svg className="absolute inset-0 w-full h-full pointer-events-none" viewBox="0 0 300 400" preserveAspectRatio="xMidYMid slice">
+              <defs>
+                <mask id="ovalMask">
+                  <rect width="300" height="400" fill="white" />
+                  <ellipse cx="150" cy="175" rx="85" ry="115" fill="black" />
+                </mask>
+              </defs>
+              <rect width="300" height="400" fill="rgba(0,0,0,0.55)" mask="url(#ovalMask)" />
+              <ellipse
+                cx="150" cy="175" rx="85" ry="115"
+                fill="none"
+                strokeWidth="3"
+                className={`transition-all duration-500 ${faceDetected ? "stroke-green-400" : "stroke-white/60"}`}
+                strokeDasharray={faceDetected ? "0" : "12 6"}
+              />
+              {faceDetected && (
+                <>
+                  <ellipse cx="150" cy="175" rx="85" ry="115" fill="none" strokeWidth="6" className="stroke-green-400/30" />
+                  <ellipse cx="150" cy="175" rx="90" ry="120" fill="none" strokeWidth="2" className="stroke-green-400/20" />
+                </>
+              )}
+            </svg>
+
+            <div className="absolute bottom-16 left-0 right-0 text-center pointer-events-none">
+              <span className={`px-4 py-1.5 rounded-full text-xs font-medium ${faceDetected ? "bg-green-500/90 text-white" : "bg-black/50 text-white/80"}`}>
+                {faceDetected ? "✓ Yuz aniqlandi" : "Yuzingizni oval ichiga joylashtiring"}
+              </span>
+            </div>
+
             {step === "submitting" && (
-              <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
+              <div className="absolute inset-0 bg-black/50 flex items-center justify-center z-10">
                 <Loader2 className="h-10 w-10 animate-spin text-white" />
               </div>
             )}
-            <div className="absolute top-3 left-3 right-3 flex justify-between">
+            <div className="absolute top-3 left-3 right-3 flex justify-between z-10">
               <div className={`px-3 py-1.5 rounded-full text-xs font-medium flex items-center gap-1.5 ${faceDetected ? "bg-green-500/90 text-white" : "bg-gray-800/70 text-gray-200"}`}
                 data-testid="badge-face-status">
                 <Camera className="h-3.5 w-3.5" />
-                {faceDetected ? "Yuz aniqlandi ✓" : "Yuzni aniqlash..."}
+                {faceDetected ? `Yuz ✓ ${faceScore ? faceScore + "%" : ""}` : "Yuzni aniqlash..."}
               </div>
               <div className={`px-3 py-1.5 rounded-full text-xs font-medium flex items-center gap-1.5 ${locationVerified ? "bg-green-500/90 text-white" : locationError ? "bg-red-500/90 text-white" : locationLoading ? "bg-yellow-500/90 text-white" : "bg-gray-800/70 text-gray-200"}`}
                 data-testid="badge-location-status">

@@ -1338,8 +1338,23 @@ export default function EmployeesPage() {
                 )}
                 {capturingFace && (
                   <div className="space-y-2">
-                    <video ref={videoRef} className="w-full rounded-lg bg-black" autoPlay muted playsInline />
-                    <canvas ref={canvasRef} className="hidden" />
+                    <div className="relative rounded-lg overflow-hidden bg-black">
+                      <video ref={videoRef} className="w-full" autoPlay muted playsInline />
+                      <canvas ref={canvasRef} className="hidden" />
+                      <svg className="absolute inset-0 w-full h-full pointer-events-none" viewBox="0 0 300 300" preserveAspectRatio="xMidYMid slice">
+                        <defs>
+                          <mask id="ovalMaskAdmin">
+                            <rect width="300" height="300" fill="white" />
+                            <ellipse cx="150" cy="140" rx="75" ry="100" fill="black" />
+                          </mask>
+                        </defs>
+                        <rect width="300" height="300" fill="rgba(0,0,0,0.5)" mask="url(#ovalMaskAdmin)" />
+                        <ellipse cx="150" cy="140" rx="75" ry="100" fill="none" strokeWidth="2.5" stroke="rgba(255,255,255,0.5)" strokeDasharray="10 5" />
+                      </svg>
+                      <div className="absolute bottom-2 left-0 right-0 text-center pointer-events-none">
+                        <span className="px-3 py-1 rounded-full text-[10px] bg-black/50 text-white/80">Yuzni oval ichiga joylashtiring</span>
+                      </div>
+                    </div>
                     <Button size="sm" onClick={capturePhoto} className="w-full" data-testid="button-capture-face">
                       <Camera className="h-4 w-4 mr-1" /> Rasmga olish
                     </Button>

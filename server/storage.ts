@@ -92,7 +92,7 @@ export interface IStorage {
   deleteCustomer(id: string, tenantId?: string): Promise<boolean>;
 
   // Deliveries
-  getDeliveries(tenantId: string, filters?: { status?: string; courier?: string; dateFrom?: Date; dateTo?: Date }): Promise<Delivery[]>;
+  getDeliveries(tenantId: string, filters?: { status?: string; courier?: string; courierId?: string; dateFrom?: Date; dateTo?: Date }): Promise<Delivery[]>;
   getDeliveriesByOrder(orderId: string, tenantId?: string): Promise<Delivery[]>;
   createDelivery(delivery: InsertDelivery): Promise<Delivery>;
   updateDelivery(id: string, data: Partial<InsertDelivery>, tenantId?: string): Promise<Delivery | undefined>;
@@ -768,10 +768,11 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Deliveries
-  async getDeliveries(tenantId: string, filters?: { status?: string; courier?: string; dateFrom?: Date; dateTo?: Date }): Promise<Delivery[]> {
+  async getDeliveries(tenantId: string, filters?: { status?: string; courier?: string; courierId?: string; dateFrom?: Date; dateTo?: Date }): Promise<Delivery[]> {
     const conditions = [eq(deliveries.tenantId, tenantId)];
     if (filters?.status) conditions.push(eq(deliveries.status, filters.status));
-    if (filters?.courier) conditions.push(ilike(deliveries.courier, `%${filters.courier}%`));
+    if (filters?.courierId) conditions.push(eq(deliveries.courierId, filters.courierId));
+    else if (filters?.courier) conditions.push(ilike(deliveries.courier, `%${filters.courier}%`));
     if (filters?.dateFrom) conditions.push(gte(deliveries.createdAt, filters.dateFrom));
     if (filters?.dateTo) conditions.push(lte(deliveries.createdAt, filters.dateTo));
     return db.select().from(deliveries).where(and(...conditions)).orderBy(desc(deliveries.createdAt));

@@ -87,6 +87,7 @@ interface OrderType {
   paymentStatus: string;
   deliveryType: string;
   courier: string;
+  courierId: string | null;
   statusHistory?: Array<{ status: string; date: string; userId?: string; note?: string }>;
   createdAt: string;
 }
@@ -107,7 +108,6 @@ export function OrdersTab() {
   const [deliveryFilter, setDeliveryFilter] = useState("all");
   const [dateRange, setDateRange] = useState<string>("all");
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
-  const [courierInput, setCourierInput] = useState("");
 
   const dateParams = useMemo(() => {
     const now = new Date();
@@ -142,6 +142,16 @@ export function OrdersTab() {
     enabled: !!selectedOrderId,
   });
 
+  type CourierItem = { id: string; name: string; phone: string };
+  const { data: couriersList = [] } = useQuery<CourierItem[]>({
+    queryKey: ["couriers"],
+    queryFn: async () => {
+      const res = await fetch("/api/couriers", { headers: getAuthHeaders() });
+      if (!res.ok) throw new Error("Failed to fetch couriers");
+      return res.json();
+    },
+  });
+
   const { data: auditLogs = [] } = useQuery<AuditLog[]>({
     queryKey: ["audit-logs", selectedOrderId],
     queryFn: async () => {
@@ -170,11 +180,11 @@ export function OrdersTab() {
   });
 
   const courierMutation = useMutation({
-    mutationFn: async ({ id, courier }: { id: string; courier: string }) => {
+    mutationFn: async ({ id, courierId, courier }: { id: string; courierId: string | null; courier: string }) => {
       const res = await fetch(`/api/orders/${id}`, {
         method: "PATCH",
         headers: { ...getAuthHeaders(), "Content-Type": "application/json" },
-        body: JSON.stringify({ courier }),
+        body: JSON.stringify({ courier, courierId }),
       });
       if (!res.ok) throw new Error("Failed to update courier");
       return res.json();
@@ -212,7 +222,7 @@ export function OrdersTab() {
   const openSheet = (id: string) => {
     setSelectedOrderId(id);
     const order = orders.find((o) => o.id === id);
-    if (order) setCourierInput(order.courier || "");
+    // courier is now handled via dropdown
   };
 
   return (
@@ -459,26 +469,37 @@ export function OrdersTab() {
               <div className="space-y-2">
                 <h3 className="font-semibold text-sm text-slate-700 flex items-center gap-2">
                   <Truck className="h-4 w-4" />
-                  Kuryer
+                  Kuryer tayinlash
                 </h3>
-                <div className="flex gap-2">
-                  <Input
-                    value={courierInput}
-                    onChange={(e) => setCourierInput(e.target.value)}
-                    placeholder="Kuryer ismi..."
-                    data-testid="input-courier"
-                  />
-                  <Button
-                    size="sm"
-                    onClick={() => {
-                      if (detail) courierMutation.mutate({ id: detail.id, courier: courierInput });
-                    }}
-                    disabled={courierMutation.isPending}
-                    data-testid="button-save-courier"
-                  >
-                    Saqlash
-                  </Button>
-                </div>
+                <Select
+                  value={detail.courierId || "none"}
+                  onValueChange={(val) => {
+                    if (val === "none") {
+                      courierMutation.mutate({ id: detail.id, courierId: null, courier: "" });
+                    } else {
+                      const courier = couriersList.find(c => c.id === val);
+                      if (courier) {
+                        courierMutation.mutate({ id: detail.id, courierId: val, courier: courier.name });
+                      }
+                    }
+                  }}
+                >
+                  <SelectTrigger className="w-full" data-testid="select-courier">
+                    <SelectValue placeholder="Kuriyer tanlang" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">Tanlanmagan</SelectItem>
+                    {couriersList.map(c => (
+                      <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {detail.courier && !detail.courierId && (
+                  <p className="text-xs text-gray-500">Joriy kuriyer: {detail.courier} (ro'yxatdan tanlang)</p>
+                )}
+                {couriersList.length === 0 && (
+                  <p className="text-xs text-amber-600">Kuriyerlar topilmadi. Xodimlar bo'limida kuriyer qo'shing.</p>
+                )}
               </div>
 
               {validNext.length > 0 && (

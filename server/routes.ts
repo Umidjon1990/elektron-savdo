@@ -1115,9 +1115,21 @@ export async function registerRoutes(
     }
   });
 
+  app.get("/api/couriers", authMiddleware, async (req, res) => {
+    try {
+      const staff = await storage.getStaffMembers(req.tenantId!);
+      const couriers = staff
+        .filter(s => s.isCourier && s.isActive)
+        .map(s => ({ id: s.id, name: s.name, phone: s.phone, isActive: s.isActive }));
+      res.json(couriers);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch couriers" });
+    }
+  });
+
   app.post("/api/staff", authMiddleware, async (req, res) => {
     try {
-      const { name, phone, username, password, faceDescriptor, facePhoto, locationLat, locationLng, locationRadius, locationName } = req.body;
+      const { name, phone, username, password, faceDescriptor, facePhoto, locationLat, locationLng, locationRadius, locationName, hourlyRate, isCourier } = req.body;
       if (!name || !username || !password) {
         return res.status(400).json({ error: "Name, username and password are required" });
       }
@@ -1137,6 +1149,8 @@ export async function registerRoutes(
         locationLng: locationLng || null,
         locationRadius: locationRadius || 100,
         locationName: locationName || "",
+        hourlyRate: hourlyRate || 0,
+        isCourier: isCourier || false,
         isActive: true,
       });
       res.json({ ...staff, password: undefined });
@@ -1648,10 +1662,17 @@ export async function registerRoutes(
 
   app.patch("/api/orders/:id", authMiddleware, async (req, res) => {
     try {
-      const allowedFields = ["address", "courier", "paymentStatus", "debtAmount", "deliveryType", "paymentMethod", "deliveryScheduledAt", "customerName", "customerPhone"];
+      const allowedFields = ["address", "courier", "courierId", "paymentStatus", "debtAmount", "deliveryType", "paymentMethod", "deliveryScheduledAt", "customerName", "customerPhone"];
       const data: Record<string, any> = {};
       for (const key of allowedFields) {
         if (req.body[key] !== undefined) data[key] = req.body[key];
+      }
+      if (data.courierId) {
+        const courierStaff = await storage.getStaffMember(data.courierId, req.tenantId);
+        if (!courierStaff || !courierStaff.isCourier) {
+          return res.status(400).json({ error: "Noto'g'ri kuriyer ID" });
+        }
+        if (!data.courier) data.courier = courierStaff.name;
       }
       const updated = await storage.updateOrder(req.params.id, data, req.tenantId);
       if (!updated) return res.status(404).json({ error: "Buyurtma topilmadi" });
@@ -1723,6 +1744,7 @@ export async function registerRoutes(
             customerId: "",
             address: order.address || "",
             courier: order.courier || "",
+            courierId: order.courierId || null,
             scheduledAt: order.deliveryScheduledAt || null,
             status: "pending",
             note: "",
@@ -1758,7 +1780,8 @@ export async function registerRoutes(
     try {
       const filters: any = {};
       if (req.query.status) filters.status = req.query.status;
-      if (req.query.courier) filters.courier = req.query.courier;
+      if (req.query.courierId) filters.courierId = req.query.courierId;
+      else if (req.query.courier) filters.courier = req.query.courier;
       if (req.query.from) filters.dateFrom = new Date(req.query.from as string);
       if (req.query.to) filters.dateTo = new Date(req.query.to as string);
       const deliveriesList = await storage.getDeliveries(req.tenantId!, filters);
@@ -1783,11 +1806,23 @@ export async function registerRoutes(
 
   app.patch("/api/deliveries/:id", authMiddleware, async (req, res) => {
     try {
-      const { status, note, courier } = req.body;
+      const { status, note, courier, courierId } = req.body;
       const data: any = {};
       if (status) data.status = status;
       if (note !== undefined) data.note = note;
       if (courier !== undefined) data.courier = courier;
+      if (courierId !== undefined) {
+        if (courierId) {
+          const courierStaff = await storage.getStaffMember(courierId, req.tenantId);
+          if (!courierStaff || !courierStaff.isCourier) {
+            return res.status(400).json({ error: "Noto'g'ri kuriyer ID" });
+          }
+          data.courierId = courierId;
+          if (!courier) data.courier = courierStaff.name;
+        } else {
+          data.courierId = null;
+        }
+      }
       if (status === "delivered") data.completedAt = new Date();
 
       const updated = await storage.updateDelivery(req.params.id, data, req.tenantId);

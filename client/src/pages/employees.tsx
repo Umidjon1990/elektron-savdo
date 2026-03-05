@@ -1,7 +1,9 @@
-import { useState, useEffect, useRef, useMemo, useCallback } from "react";
+import { useState, useEffect, useRef, useMemo, useCallback, Fragment } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/lib/auth-context";
 import { SidebarNav } from "@/components/layout/sidebar-nav";
+import { format } from "date-fns";
+import { Checkbox } from "@/components/ui/checkbox";
 
 let faceModelsLoaded = false;
 let faceModelsLoading = false;
@@ -33,7 +35,8 @@ import { useToast } from "@/hooks/use-toast";
 import {
   UserCheck, Users, Plus, Pencil, Trash2, Copy, Camera, MapPin,
   Clock, CheckCircle2, XCircle, CalendarDays, Timer, AlertTriangle,
-  Eye, EyeOff, Phone, User, Lock, Globe, Loader2
+  Eye, EyeOff, Phone, User, Lock, Globe, Loader2, Truck, Package,
+  Search
 } from "lucide-react";
 
 type StaffMember = {
@@ -50,6 +53,7 @@ type StaffMember = {
   locationRadius: number;
   locationName: string | null;
   hourlyRate: number;
+  isCourier: boolean;
   isActive: boolean;
   createdAt: string;
 };
@@ -105,7 +109,7 @@ export default function EmployeesPage() {
   const { token } = useAuth();
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  const [activeTab, setActiveTab] = useState<"staff" | "attendance" | "salary">("staff");
+  const [activeTab, setActiveTab] = useState<"staff" | "attendance" | "salary" | "couriers" | "deliveries">("staff");
   const [staffDialogOpen, setStaffDialogOpen] = useState(false);
   const [editingStaff, setEditingStaff] = useState<StaffMember | null>(null);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
@@ -120,6 +124,7 @@ export default function EmployeesPage() {
   const [formLocationRadius, setFormLocationRadius] = useState("100");
   const [formLocationName, setFormLocationName] = useState("");
   const [formHourlyRate, setFormHourlyRate] = useState("0");
+  const [formIsCourier, setFormIsCourier] = useState(false);
   const [formFacePhoto, setFormFacePhoto] = useState("");
   const [formFaceDescriptor, setFormFaceDescriptor] = useState<number[] | null>(null);
   const [capturingFace, setCapturingFace] = useState(false);
@@ -133,6 +138,10 @@ export default function EmployeesPage() {
   const [attStaffFilter, setAttStaffFilter] = useState<string>("all");
   const [salaryPeriod, setSalaryPeriod] = useState<"daily" | "weekly" | "monthly">("monthly");
   const [salaryStaffFilter, setSalaryStaffFilter] = useState<string>("all");
+  const [deliveryDateRange, setDeliveryDateRange] = useState("today");
+  const [deliveryStatusFilter, setDeliveryStatusFilter] = useState("all");
+  const [deliveryCourierFilter, setDeliveryCourierFilter] = useState("all");
+  const [expandedDeliveryId, setExpandedDeliveryId] = useState<string | null>(null);
 
   const headers = { Authorization: `Bearer ${token}`, "Content-Type": "application/json" };
 
@@ -216,6 +225,54 @@ export default function EmployeesPage() {
     enabled: !!token && activeTab === "salary",
   });
 
+  const getDeliveryDateRange = () => {
+    const now = new Date();
+    const to = now.toISOString();
+    let from: Date;
+    if (deliveryDateRange === "week") { from = new Date(now); from.setDate(from.getDate() - 7); }
+    else if (deliveryDateRange === "month") { from = new Date(now); from.setMonth(from.getMonth() - 1); }
+    else { from = new Date(now.getFullYear(), now.getMonth(), now.getDate()); }
+    return { from: from.toISOString(), to };
+  };
+
+  type DeliveryItem = {
+    id: string; orderId: string; customerId: string; address: string;
+    courier: string; courierId: string | null; scheduledAt: string | null;
+    completedAt: string | null; status: string; note: string; createdAt: string;
+    order?: { id: string; customerName: string; customerPhone: string; items: any[]; totalAmount: number; status: string; paymentMethod: string };
+  };
+
+  const { data: deliveriesList = [], isLoading: deliveriesLoading } = useQuery<DeliveryItem[]>({
+    queryKey: ["deliveries", deliveryStatusFilter, deliveryCourierFilter, deliveryDateRange],
+    queryFn: async () => {
+      const { from, to } = getDeliveryDateRange();
+      const params = new URLSearchParams();
+      if (deliveryStatusFilter !== "all") params.set("status", deliveryStatusFilter);
+      if (deliveryCourierFilter !== "all") params.set("courierId", deliveryCourierFilter);
+      params.set("from", from);
+      params.set("to", to);
+      const res = await fetch(`/api/deliveries?${params.toString()}`, { headers });
+      if (!res.ok) throw new Error("Failed");
+      return res.json();
+    },
+    enabled: !!token && (activeTab === "deliveries" || activeTab === "couriers"),
+  });
+
+  const updateDeliveryMutation = useMutation({
+    mutationFn: async ({ id, data }: { id: string; data: any }) => {
+      const res = await fetch(`/api/deliveries/${id}`, { method: "PATCH", headers, body: JSON.stringify(data) });
+      if (!res.ok) throw new Error("Failed");
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["deliveries"] });
+      toast({ title: "Yetkazish yangilandi" });
+    },
+    onError: () => toast({ title: "Xatolik", variant: "destructive" }),
+  });
+
+  const couriersList = useMemo(() => staffList.filter(s => s.isCourier && s.isActive), [staffList]);
+
   const createStaff = useMutation({
     mutationFn: async (data: any) => {
       const res = await fetch("/api/staff", { method: "POST", headers, body: JSON.stringify(data) });
@@ -274,6 +331,7 @@ export default function EmployeesPage() {
     setFormLocationRadius("100");
     setFormLocationName("");
     setFormHourlyRate("0");
+    setFormIsCourier(false);
     setFormFacePhoto("");
     setFormFaceDescriptor(null);
     setCapturingFace(false);
@@ -293,6 +351,7 @@ export default function EmployeesPage() {
     setFormLocationRadius(String(staff.locationRadius));
     setFormLocationName(staff.locationName || "");
     setFormHourlyRate(String(staff.hourlyRate || 0));
+    setFormIsCourier(staff.isCourier || false);
     setFormFacePhoto(staff.facePhoto || "");
     setFormFaceDescriptor(staff.faceDescriptor || null);
     setStaffDialogOpen(true);
@@ -312,6 +371,7 @@ export default function EmployeesPage() {
       locationRadius: parseInt(formLocationRadius) || 100,
       locationName: formLocationName || null,
       hourlyRate: parseInt(formHourlyRate) || 0,
+      isCourier: formIsCourier,
       facePhoto: formFacePhoto || null,
       faceDescriptor: formFaceDescriptor || null,
     };
@@ -487,6 +547,8 @@ export default function EmployeesPage() {
           <div className="flex gap-1 py-1">
             {[
               { key: "staff" as const, label: "Xodimlar", icon: Users },
+              { key: "couriers" as const, label: "Kuriyerlar", icon: UserCheck },
+              { key: "deliveries" as const, label: "Yetkazish", icon: Truck },
               { key: "attendance" as const, label: "Davomat", icon: CalendarDays },
               { key: "salary" as const, label: "Oylik", icon: Timer },
             ].map(tab => {
@@ -584,6 +646,11 @@ export default function EmployeesPage() {
                                 <Badge variant={staff.isActive ? "default" : "secondary"} className="text-[10px] shrink-0">
                                   {staff.isActive ? "Faol" : "Nofaol"}
                                 </Badge>
+                                {staff.isCourier && (
+                                  <Badge variant="outline" className="text-[10px] shrink-0 bg-purple-50 text-purple-700 border-purple-200">
+                                    <Truck className="h-2.5 w-2.5 mr-0.5" /> Kuriyer
+                                  </Badge>
+                                )}
                               </div>
                               {staff.phone && (
                                 <p className="text-xs text-gray-500 flex items-center gap-1 mt-0.5">
@@ -910,6 +977,266 @@ export default function EmployeesPage() {
               )}
             </div>
           )}
+
+          {activeTab === "couriers" && (
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                <Card>
+                  <CardContent className="p-4 text-center">
+                    <Truck className="h-5 w-5 mx-auto mb-1 text-purple-500" />
+                    <p className="text-2xl font-bold" data-testid="text-couriers-total">{couriersList.length}</p>
+                    <p className="text-xs text-gray-500">Jami kuriyerlar</p>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardContent className="p-4 text-center">
+                    <CheckCircle2 className="h-5 w-5 mx-auto mb-1 text-green-500" />
+                    <p className="text-2xl font-bold text-green-600" data-testid="text-couriers-delivered">
+                      {deliveriesList.filter(d => d.status === "delivered").length}
+                    </p>
+                    <p className="text-xs text-gray-500">Yetkazilgan</p>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardContent className="p-4 text-center">
+                    <Clock className="h-5 w-5 mx-auto mb-1 text-yellow-500" />
+                    <p className="text-2xl font-bold text-yellow-600" data-testid="text-couriers-pending">
+                      {deliveriesList.filter(d => d.status === "pending").length}
+                    </p>
+                    <p className="text-xs text-gray-500">Kutilmoqda</p>
+                  </CardContent>
+                </Card>
+              </div>
+
+              <div className="flex justify-between items-center">
+                <h2 className="text-base font-semibold">Kuriyerlar ro'yxati</h2>
+                <Button onClick={() => { closeDialog(); setFormIsCourier(true); setStaffDialogOpen(true); }} data-testid="button-add-courier">
+                  <Plus className="h-4 w-4 mr-1" /> Kuriyer qo'shish
+                </Button>
+              </div>
+
+              {couriersList.length === 0 ? (
+                <Card>
+                  <CardContent className="p-8 text-center text-gray-500">
+                    <Truck className="h-12 w-12 mx-auto mb-3 text-gray-300" />
+                    <p className="font-medium">Hali kuriyer qo'shilmagan</p>
+                    <p className="text-sm mt-1">Xodim qo'shishda "Kuriyer" belgilang yoki yangi kuriyer qo'shing</p>
+                  </CardContent>
+                </Card>
+              ) : (
+                <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
+                  {couriersList.map(staff => (
+                    <Card key={staff.id} data-testid={`card-courier-${staff.id}`}>
+                      <CardContent className="p-4">
+                        <div className="flex items-start gap-3">
+                          <div className="w-10 h-10 rounded-full bg-purple-100 flex items-center justify-center shrink-0">
+                            <Truck className="h-5 w-5 text-purple-600" />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <h3 className="font-semibold text-sm">{staff.name}</h3>
+                            {staff.phone && (
+                              <p className="text-xs text-gray-500 flex items-center gap-1 mt-0.5">
+                                <Phone className="h-3 w-3" /> {staff.phone}
+                              </p>
+                            )}
+                            <Badge variant="default" className="text-[10px] mt-1">Faol</Badge>
+                          </div>
+                          <div className="flex gap-1">
+                            <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => openEditDialog(staff)}>
+                              <Pencil className="h-3.5 w-3.5" />
+                            </Button>
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {activeTab === "deliveries" && (
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                {[
+                  { label: "Jami", value: deliveriesList.length, icon: Package, color: "text-blue-600" },
+                  { label: "Kutilmoqda", value: deliveriesList.filter(d => d.status === "pending").length, icon: Clock, color: "text-yellow-600" },
+                  { label: "Yetkazildi", value: deliveriesList.filter(d => d.status === "delivered").length, icon: CheckCircle2, color: "text-green-600" },
+                  { label: "Muvaffaqiyatsiz", value: deliveriesList.filter(d => d.status === "failed").length, icon: XCircle, color: "text-red-600" },
+                ].map(kpi => (
+                  <Card key={kpi.label}>
+                    <CardContent className="p-4 text-center">
+                      <kpi.icon className={`h-5 w-5 mx-auto mb-1 ${kpi.color}`} />
+                      <p className={`text-2xl font-bold ${kpi.color}`}>{kpi.value}</p>
+                      <p className="text-xs text-gray-500">{kpi.label}</p>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+
+              <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center justify-between">
+                <div className="flex gap-2">
+                  {(["today", "week", "month"] as const).map(p => (
+                    <button
+                      key={p}
+                      onClick={() => setDeliveryDateRange(p)}
+                      className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${
+                        deliveryDateRange === p ? "bg-primary text-white shadow" : "bg-gray-100 text-gray-500 hover:text-gray-700"
+                      }`}
+                      data-testid={`button-delivery-period-${p}`}
+                    >
+                      {p === "today" ? "Bugun" : p === "week" ? "Hafta" : "Oy"}
+                    </button>
+                  ))}
+                </div>
+                <div className="flex gap-2">
+                  <Select value={deliveryStatusFilter} onValueChange={setDeliveryStatusFilter}>
+                    <SelectTrigger className="w-36 h-8 text-xs">
+                      <SelectValue placeholder="Status" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Hammasi</SelectItem>
+                      <SelectItem value="pending">Kutilmoqda</SelectItem>
+                      <SelectItem value="delivered">Yetkazildi</SelectItem>
+                      <SelectItem value="failed">Muvaffaqiyatsiz</SelectItem>
+                      <SelectItem value="returned">Qaytarildi</SelectItem>
+                      <SelectItem value="cancelled">Bekor</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <Select value={deliveryCourierFilter} onValueChange={setDeliveryCourierFilter}>
+                    <SelectTrigger className="w-40 h-8 text-xs">
+                      <SelectValue placeholder="Kuriyer" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Barcha kuriyerlar</SelectItem>
+                      {couriersList.map(c => (
+                        <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              {deliveriesLoading ? (
+                <div className="flex justify-center py-8">
+                  <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary" />
+                </div>
+              ) : deliveriesList.length === 0 ? (
+                <Card>
+                  <CardContent className="p-8 text-center text-gray-500">
+                    <Truck className="h-12 w-12 mx-auto mb-3 text-gray-300" />
+                    <p className="font-medium">Yetkazib berishlar topilmadi</p>
+                  </CardContent>
+                </Card>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm" data-testid="table-deliveries-emp">
+                    <thead>
+                      <tr className="border-b bg-gray-50">
+                        <th className="text-left p-3 font-medium text-gray-600">Sana</th>
+                        <th className="text-left p-3 font-medium text-gray-600">Buyurtma</th>
+                        <th className="text-left p-3 font-medium text-gray-600">Mijoz</th>
+                        <th className="text-left p-3 font-medium text-gray-600">Manzil</th>
+                        <th className="text-left p-3 font-medium text-gray-600">Kuriyer</th>
+                        <th className="text-left p-3 font-medium text-gray-600">Status</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {deliveriesList.map(delivery => {
+                        const isExpanded = expandedDeliveryId === delivery.id;
+                        const statusColors: Record<string, string> = {
+                          pending: "bg-yellow-100 text-yellow-700",
+                          delivered: "bg-green-100 text-green-700",
+                          failed: "bg-red-100 text-red-700",
+                          returned: "bg-orange-100 text-orange-700",
+                          cancelled: "bg-gray-100 text-gray-700",
+                        };
+                        const statusLabels: Record<string, string> = {
+                          pending: "Kutilmoqda", delivered: "Yetkazildi", failed: "Muvaffaqiyatsiz",
+                          returned: "Qaytarildi", cancelled: "Bekor",
+                        };
+                        return (
+                          <Fragment key={delivery.id}>
+                            <tr
+                              className="border-b hover:bg-gray-50 cursor-pointer"
+                              onClick={() => setExpandedDeliveryId(isExpanded ? null : delivery.id)}
+                              data-testid={`row-delivery-emp-${delivery.id}`}
+                            >
+                              <td className="p-3 text-gray-500">{delivery.createdAt ? format(new Date(delivery.createdAt), "dd.MM HH:mm") : "—"}</td>
+                              <td className="p-3 font-medium">#{delivery.orderId?.slice(-6) || "—"}</td>
+                              <td className="p-3">{delivery.order?.customerName || "—"}</td>
+                              <td className="p-3 text-gray-500 max-w-[150px] truncate">{delivery.address || "—"}</td>
+                              <td className="p-3">{delivery.courier || "—"}</td>
+                              <td className="p-3">
+                                <Badge variant="outline" className={`text-[10px] ${statusColors[delivery.status] || ""}`}>
+                                  {statusLabels[delivery.status] || delivery.status}
+                                </Badge>
+                              </td>
+                            </tr>
+                            {isExpanded && (
+                              <tr>
+                                <td colSpan={6} className="bg-gray-50 p-4">
+                                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                    <div>
+                                      <p className="text-xs text-gray-500 mb-1">Mijoz</p>
+                                      <p className="text-sm font-medium">{delivery.order?.customerName || "—"}</p>
+                                      <p className="text-sm text-gray-500">{delivery.order?.customerPhone || ""}</p>
+                                      <p className="text-sm">{(delivery.order?.totalAmount || 0).toLocaleString()} so'm</p>
+                                    </div>
+                                    <div>
+                                      <p className="text-xs text-gray-500 mb-1">Kuriyer tayinlash</p>
+                                      <Select
+                                        value={delivery.courierId || "none"}
+                                        onValueChange={(val) => {
+                                          const courier = couriersList.find(c => c.id === val);
+                                          updateDeliveryMutation.mutate({
+                                            id: delivery.id,
+                                            data: { courierId: val === "none" ? null : val, courier: courier?.name || "" },
+                                          });
+                                        }}
+                                      >
+                                        <SelectTrigger className="w-full" data-testid={`select-courier-${delivery.id}`}>
+                                          <SelectValue placeholder="Kuriyer tanlang" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                          <SelectItem value="none">Tanlanmagan</SelectItem>
+                                          {couriersList.map(c => (
+                                            <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                                          ))}
+                                        </SelectContent>
+                                      </Select>
+                                    </div>
+                                    <div>
+                                      <p className="text-xs text-gray-500 mb-1">Status o'zgartirish</p>
+                                      <Select
+                                        value={delivery.status}
+                                        onValueChange={(val) => updateDeliveryMutation.mutate({ id: delivery.id, data: { status: val } })}
+                                      >
+                                        <SelectTrigger className="w-full" data-testid={`select-status-emp-${delivery.id}`}>
+                                          <SelectValue />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                          <SelectItem value="pending">Kutilmoqda</SelectItem>
+                                          <SelectItem value="delivered">Yetkazildi</SelectItem>
+                                          <SelectItem value="failed">Muvaffaqiyatsiz</SelectItem>
+                                          <SelectItem value="returned">Qaytarildi</SelectItem>
+                                          <SelectItem value="cancelled">Bekor qilingan</SelectItem>
+                                        </SelectContent>
+                                      </Select>
+                                    </div>
+                                  </div>
+                                </td>
+                              </tr>
+                            )}
+                          </Fragment>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </div>
 
@@ -949,6 +1276,11 @@ export default function EmployeesPage() {
                   {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                 </button>
               </div>
+            </div>
+
+            <div className="flex items-center gap-3">
+              <Checkbox id="isCourier" checked={formIsCourier} onCheckedChange={(v) => setFormIsCourier(!!v)} data-testid="checkbox-is-courier" />
+              <Label htmlFor="isCourier" className="cursor-pointer">Kuriyer (yetkazib beruvchi)</Label>
             </div>
 
             <div>

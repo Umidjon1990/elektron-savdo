@@ -86,6 +86,7 @@ export const orders = pgTable("orders", {
   paymentStatus: text("payment_status").notNull().default("unpaid"),
   debtAmount: integer("debt_amount").notNull().default(0),
   courier: text("courier").default(""),
+  courierId: varchar("courier_id"),
   statusHistory: json("status_history").$type<Array<{status: string, date: string, userId?: string, note?: string}>>().default([]),
   deliveryScheduledAt: timestamp("delivery_scheduled_at"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
@@ -162,6 +163,7 @@ export const deliveries = pgTable("deliveries", {
   customerId: varchar("customer_id"),
   address: text("address").default(""),
   courier: text("courier").default(""),
+  courierId: varchar("courier_id"),
   scheduledAt: timestamp("scheduled_at"),
   completedAt: timestamp("completed_at"),
   status: text("status").notNull().default("pending"),
@@ -228,6 +230,7 @@ export const staffMembers = pgTable("staff_members", {
   locationRadius: integer("location_radius").notNull().default(100),
   locationName: text("location_name").default(""),
   hourlyRate: integer("hourly_rate").notNull().default(0),
+  isCourier: boolean("is_courier").notNull().default(false),
   isActive: boolean("is_active").notNull().default(true),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });

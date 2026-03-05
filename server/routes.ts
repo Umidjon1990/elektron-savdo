@@ -1250,15 +1250,20 @@ export async function registerRoutes(
           const dayKey = new Date(r.date).toISOString().split("T")[0];
           if (!dailyMap.has(dayKey)) dailyMap.set(dayKey, { checkIn: null, checkOut: null });
           const day = dailyMap.get(dayKey)!;
-          if (r.type === "check_in" && !day.checkIn) day.checkIn = new Date(r.date);
-          if (r.type === "check_out") day.checkOut = new Date(r.date);
+          const rDate = new Date(r.date);
+          if (r.type === "check_in") {
+            if (!day.checkIn || rDate < day.checkIn) day.checkIn = rDate;
+          }
+          if (r.type === "check_out") {
+            if (!day.checkOut || rDate > day.checkOut) day.checkOut = rDate;
+          }
         }
 
         let totalHours = 0;
         const days: Array<{ date: string; checkIn: string | null; checkOut: string | null; hours: number; earned: number }> = [];
         for (const [dayKey, day] of dailyMap) {
           let hours = 0;
-          if (day.checkIn && day.checkOut) {
+          if (day.checkIn && day.checkOut && day.checkOut > day.checkIn) {
             hours = Math.round((day.checkOut.getTime() - day.checkIn.getTime()) / (1000 * 60 * 60) * 100) / 100;
           }
           totalHours += hours;
@@ -1417,14 +1422,19 @@ export async function registerRoutes(
         const dayKey = new Date(r.date).toISOString().split("T")[0];
         if (!dailyMap.has(dayKey)) dailyMap.set(dayKey, { checkIn: null, checkOut: null });
         const day = dailyMap.get(dayKey)!;
-        if (r.type === "check_in" && !day.checkIn) day.checkIn = new Date(r.date);
-        if (r.type === "check_out") day.checkOut = new Date(r.date);
+        const rDate = new Date(r.date);
+        if (r.type === "check_in") {
+          if (!day.checkIn || rDate < day.checkIn) day.checkIn = rDate;
+        }
+        if (r.type === "check_out") {
+          if (!day.checkOut || rDate > day.checkOut) day.checkOut = rDate;
+        }
       }
       let totalHours = 0;
       const days: Array<{ date: string; checkIn: string | null; checkOut: string | null; hours: number; earned: number }> = [];
       for (const [dayKey, day] of dailyMap) {
         let hours = 0;
-        if (day.checkIn && day.checkOut) {
+        if (day.checkIn && day.checkOut && day.checkOut > day.checkIn) {
           hours = Math.round((day.checkOut.getTime() - day.checkIn.getTime()) / (1000 * 60 * 60) * 100) / 100;
         }
         totalHours += hours;

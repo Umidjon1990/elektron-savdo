@@ -207,6 +207,12 @@ export default function AttendanceCheckPage() {
       setResultAccepted(data.accepted);
       setResultMessage(data.message);
       stopCamera();
+      const [infoRes, salRes] = await Promise.all([
+        fetch(`/api/attendance/check/${token}`).then(r => r.ok ? r.json() : null).catch(() => null),
+        fetch(`/api/attendance/salary/${token}?period=monthly`).then(r => r.ok ? r.json() : null).catch(() => null),
+      ]);
+      if (infoRes) setStaffInfo(infoRes);
+      if (salRes) setSalaryData({ totalHours: salRes.totalHours, totalEarned: salRes.totalEarned, hourlyRate: salRes.hourlyRate, daysWorked: salRes.daysWorked });
       setStep("done");
     } catch (err: any) {
       setErrorMsg(err.message || "Xatolik yuz berdi");
@@ -247,26 +253,81 @@ export default function AttendanceCheckPage() {
 
   if (step === "done") {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100 p-4">
-        <Card className="max-w-sm w-full">
-          <CardContent className="pt-6 text-center">
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-4">
+        <div className="max-w-sm mx-auto space-y-4">
+          <div className="text-center pt-4">
             {resultAccepted ? (
-              <CheckCircle2 className="h-16 w-16 text-green-500 mx-auto mb-4" />
+              <CheckCircle2 className="h-12 w-12 text-green-500 mx-auto mb-2" />
             ) : (
-              <XCircle className="h-16 w-16 text-orange-500 mx-auto mb-4" />
+              <XCircle className="h-12 w-12 text-orange-500 mx-auto mb-2" />
             )}
-            <h2 className="text-lg font-bold text-gray-900 mb-2" data-testid="text-result-title">
+            <h2 className="text-lg font-bold text-gray-900" data-testid="text-result-title">
               {resultAccepted ? "Muvaffaqiyat!" : "Ogohlantirish"}
             </h2>
-            <p className="text-sm text-gray-600 mb-4" data-testid="text-result-message">{resultMessage}</p>
-            <p className="text-xs text-gray-400 mb-4">
-              {new Date().toLocaleString("uz-UZ")}
-            </p>
-            <Button onClick={() => { setStep("camera"); setFaceScore(null); setFaceDetected(false); setLiveDescriptor(null); fetchStaffInfo(); }} data-testid="button-new-record">
-              Yangi yozuv
-            </Button>
-          </CardContent>
-        </Card>
+            <p className="text-sm text-gray-600 mb-1" data-testid="text-result-message">{resultMessage}</p>
+            <p className="text-xs text-gray-400">{new Date().toLocaleString("uz-UZ")}</p>
+          </div>
+
+          <Card>
+            <CardContent className="p-4">
+              <h3 className="font-semibold text-sm mb-1" data-testid="text-cabinet-name">{staffInfo?.name}</h3>
+              <p className="text-xs text-gray-500 mb-3">{staffInfo?.storeName}</p>
+              <p className="text-xs font-medium text-gray-500 mb-2">Bugungi yozuvlar</p>
+              <div className="space-y-2">
+                {staffInfo?.todayRecords?.map((rec, i) => (
+                  <div key={i} className="flex items-center gap-2 text-sm">
+                    {rec.type === "check_in" ? (
+                      <LogIn className="h-4 w-4 text-green-500" />
+                    ) : (
+                      <LogOut className="h-4 w-4 text-blue-500" />
+                    )}
+                    <span>{rec.type === "check_in" ? "Kelish" : "Ketish"}</span>
+                    <span className="text-gray-500">{new Date(rec.date).toLocaleTimeString("uz-UZ", { hour: "2-digit", minute: "2-digit" })}</span>
+                    {rec.faceVerified && rec.locationVerified ? (
+                      <CheckCircle2 className="h-3 w-3 text-green-500 ml-auto" />
+                    ) : (
+                      <XCircle className="h-3 w-3 text-red-500 ml-auto" />
+                    )}
+                  </div>
+                )) || (
+                  <p className="text-xs text-gray-400">Hali yozuv yo'q</p>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+
+          {salaryData && salaryData.hourlyRate > 0 && (
+            <Card className="bg-gradient-to-r from-green-50 to-emerald-50 border-green-200">
+              <CardContent className="p-3">
+                <p className="text-xs font-medium text-green-800 mb-2">Bu oylik daromad</p>
+                <div className="grid grid-cols-3 gap-2 text-center">
+                  <div>
+                    <p className="text-lg font-bold text-green-700">{salaryData.daysWorked}</p>
+                    <p className="text-[10px] text-green-600">Kun</p>
+                  </div>
+                  <div>
+                    <p className="text-lg font-bold text-green-700">{salaryData.totalHours.toFixed(1)}</p>
+                    <p className="text-[10px] text-green-600">Soat</p>
+                  </div>
+                  <div>
+                    <p className="text-lg font-bold text-green-700">{salaryData.totalEarned.toLocaleString()}</p>
+                    <p className="text-[10px] text-green-600">so'm</p>
+                  </div>
+                </div>
+                <p className="text-[10px] text-green-600 text-center mt-1">{salaryData.hourlyRate.toLocaleString()} so'm/soat</p>
+              </CardContent>
+            </Card>
+          )}
+
+          <Button
+            variant="outline"
+            className="w-full"
+            onClick={() => { setStep("camera"); setFaceScore(null); setFaceDetected(false); setLiveDescriptor(null); fetchStaffInfo(); }}
+            data-testid="button-new-record"
+          >
+            <RefreshCw className="h-4 w-4 mr-2" /> Yangi yozuv qilish
+          </Button>
+        </div>
       </div>
     );
   }

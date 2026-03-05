@@ -1221,6 +1221,81 @@ export async function registerRoutes(
     }
   });
 
+  app.get("/api/attendance/salary", authMiddleware, async (req, res) => {
+    try {
+      const { staffId, period } = req.query;
+      const now = new Date();
+      let dateFrom: Date;
+      let dateTo = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+      
+      if (period === "weekly") {
+        dateFrom = new Date(now);
+        dateFrom.setDate(now.getDate() - now.getDay());
+        dateFrom.setHours(0, 0, 0, 0);
+      } else if (period === "monthly") {
+        dateFrom = new Date(now.getFullYear(), now.getMonth(), 1);
+      } else {
+        dateFrom = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      }
+
+      const staff = await storage.getStaffMembers(req.tenantId!);
+      const activeStaff = staff.filter(s => s.isActive);
+      const targetStaff = staffId ? activeStaff.filter(s => s.id === staffId) : activeStaff;
+      
+      const results = await Promise.all(targetStaff.map(async (s) => {
+        const records = await storage.getAttendanceRecords(req.tenantId!, s.id, dateFrom, dateTo);
+        
+        const dailyMap = new Map<string, { checkIn: Date | null; checkOut: Date | null }>();
+        for (const r of records) {
+          const dayKey = new Date(r.date).toISOString().split("T")[0];
+          if (!dailyMap.has(dayKey)) dailyMap.set(dayKey, { checkIn: null, checkOut: null });
+          const day = dailyMap.get(dayKey)!;
+          if (r.type === "check_in" && !day.checkIn) day.checkIn = new Date(r.date);
+          if (r.type === "check_out") day.checkOut = new Date(r.date);
+        }
+
+        let totalHours = 0;
+        const days: Array<{ date: string; checkIn: string | null; checkOut: string | null; hours: number; earned: number }> = [];
+        for (const [dayKey, day] of dailyMap) {
+          let hours = 0;
+          if (day.checkIn && day.checkOut) {
+            hours = Math.round((day.checkOut.getTime() - day.checkIn.getTime()) / (1000 * 60 * 60) * 100) / 100;
+          }
+          totalHours += hours;
+          days.push({
+            date: dayKey,
+            checkIn: day.checkIn?.toISOString() || null,
+            checkOut: day.checkOut?.toISOString() || null,
+            hours,
+            earned: Math.round(hours * (s.hourlyRate || 0)),
+          });
+        }
+        days.sort((a, b) => b.date.localeCompare(a.date));
+
+        return {
+          staffId: s.id,
+          name: s.name,
+          phone: s.phone,
+          hourlyRate: s.hourlyRate || 0,
+          totalHours: Math.round(totalHours * 100) / 100,
+          totalEarned: Math.round(totalHours * (s.hourlyRate || 0)),
+          daysWorked: days.filter(d => d.hours > 0).length,
+          days,
+        };
+      }));
+
+      res.json({
+        period: period || "daily",
+        dateFrom: dateFrom.toISOString(),
+        dateTo: dateTo.toISOString(),
+        staff: results,
+        grandTotal: results.reduce((sum, s) => sum + s.totalEarned, 0),
+      });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to calculate salary" });
+    }
+  });
+
   // Public attendance endpoints (no auth, token-based)
   app.get("/api/attendance/check/:token", async (req, res) => {
     try {
@@ -1316,6 +1391,57 @@ export async function registerRoutes(
       });
     } catch (error) {
       res.status(500).json({ error: "Failed to record attendance" });
+    }
+  });
+
+  app.get("/api/attendance/salary/:token", async (req, res) => {
+    try {
+      const staff = await storage.getStaffByToken(req.params.token);
+      if (!staff || !staff.isActive) return res.status(404).json({ error: "Staff not found" });
+      const { period } = req.query;
+      const now = new Date();
+      let dateFrom: Date;
+      let dateTo = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+      if (period === "weekly") {
+        dateFrom = new Date(now);
+        dateFrom.setDate(now.getDate() - now.getDay());
+        dateFrom.setHours(0, 0, 0, 0);
+      } else if (period === "monthly") {
+        dateFrom = new Date(now.getFullYear(), now.getMonth(), 1);
+      } else {
+        dateFrom = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      }
+      const records = await storage.getAttendanceRecords(staff.tenantId!, staff.id, dateFrom, dateTo);
+      const dailyMap = new Map<string, { checkIn: Date | null; checkOut: Date | null }>();
+      for (const r of records) {
+        const dayKey = new Date(r.date).toISOString().split("T")[0];
+        if (!dailyMap.has(dayKey)) dailyMap.set(dayKey, { checkIn: null, checkOut: null });
+        const day = dailyMap.get(dayKey)!;
+        if (r.type === "check_in" && !day.checkIn) day.checkIn = new Date(r.date);
+        if (r.type === "check_out") day.checkOut = new Date(r.date);
+      }
+      let totalHours = 0;
+      const days: Array<{ date: string; checkIn: string | null; checkOut: string | null; hours: number; earned: number }> = [];
+      for (const [dayKey, day] of dailyMap) {
+        let hours = 0;
+        if (day.checkIn && day.checkOut) {
+          hours = Math.round((day.checkOut.getTime() - day.checkIn.getTime()) / (1000 * 60 * 60) * 100) / 100;
+        }
+        totalHours += hours;
+        days.push({ date: dayKey, checkIn: day.checkIn?.toISOString() || null, checkOut: day.checkOut?.toISOString() || null, hours, earned: Math.round(hours * (staff.hourlyRate || 0)) });
+      }
+      days.sort((a, b) => b.date.localeCompare(a.date));
+      res.json({
+        name: staff.name,
+        hourlyRate: staff.hourlyRate || 0,
+        period: period || "daily",
+        totalHours: Math.round(totalHours * 100) / 100,
+        totalEarned: Math.round(totalHours * (staff.hourlyRate || 0)),
+        daysWorked: days.filter(d => d.hours > 0).length,
+        days,
+      });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to calculate salary" });
     }
   });
 

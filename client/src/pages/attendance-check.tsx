@@ -58,6 +58,7 @@ export default function AttendanceCheckPage() {
 
   const [resultMessage, setResultMessage] = useState("");
   const [resultAccepted, setResultAccepted] = useState(false);
+  const [salaryData, setSalaryData] = useState<{ totalHours: number; totalEarned: number; hourlyRate: number; daysWorked: number } | null>(null);
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -75,6 +76,9 @@ export default function AttendanceCheckPage() {
       const data: StaffInfo = await res.json();
       setStaffInfo(data);
       setStep("camera");
+      fetch(`/api/attendance/salary/${token}?period=monthly`).then(r => r.ok ? r.json() : null).then(s => {
+        if (s) setSalaryData({ totalHours: s.totalHours, totalEarned: s.totalEarned, hourlyRate: s.hourlyRate, daysWorked: s.daysWorked });
+      }).catch(() => {});
     } catch (err: any) {
       setErrorMsg(err.message || "Xatolik yuz berdi");
       setStep("error");
@@ -395,10 +399,36 @@ export default function AttendanceCheckPage() {
           </Button>
         </div>
 
-        <p className="text-center text-xs text-gray-400 pb-4" data-testid="text-current-time">
+        <p className="text-center text-xs text-gray-400" data-testid="text-current-time">
           <Clock className="h-3 w-3 inline mr-1" />
           {new Date().toLocaleTimeString("uz-UZ", { hour: "2-digit", minute: "2-digit" })}
         </p>
+
+        {salaryData && salaryData.hourlyRate > 0 && (
+          <Card className="bg-gradient-to-r from-green-50 to-emerald-50 border-green-200" data-testid="card-salary-info">
+            <CardContent className="p-3">
+              <p className="text-xs font-medium text-green-800 mb-2">Bu oylik daromad</p>
+              <div className="grid grid-cols-3 gap-2 text-center">
+                <div>
+                  <p className="text-lg font-bold text-green-700">{salaryData.daysWorked}</p>
+                  <p className="text-[10px] text-green-600">Kun</p>
+                </div>
+                <div>
+                  <p className="text-lg font-bold text-green-700">{salaryData.totalHours.toFixed(1)}</p>
+                  <p className="text-[10px] text-green-600">Soat</p>
+                </div>
+                <div>
+                  <p className="text-lg font-bold text-green-700">{salaryData.totalEarned.toLocaleString()}</p>
+                  <p className="text-[10px] text-green-600">so'm</p>
+                </div>
+              </div>
+              <p className="text-[10px] text-green-600 text-center mt-1">
+                {salaryData.hourlyRate.toLocaleString()} so'm/soat
+              </p>
+            </CardContent>
+          </Card>
+        )}
+        <div className="pb-4" />
       </div>
     </div>
   );

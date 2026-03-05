@@ -49,6 +49,7 @@ type StaffMember = {
   locationLng: string | null;
   locationRadius: number;
   locationName: string | null;
+  hourlyRate: number;
   isActive: boolean;
   createdAt: string;
 };
@@ -104,7 +105,7 @@ export default function EmployeesPage() {
   const { token } = useAuth();
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  const [activeTab, setActiveTab] = useState<"staff" | "attendance">("staff");
+  const [activeTab, setActiveTab] = useState<"staff" | "attendance" | "salary">("staff");
   const [staffDialogOpen, setStaffDialogOpen] = useState(false);
   const [editingStaff, setEditingStaff] = useState<StaffMember | null>(null);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
@@ -118,6 +119,7 @@ export default function EmployeesPage() {
   const [formLocationLng, setFormLocationLng] = useState("");
   const [formLocationRadius, setFormLocationRadius] = useState("100");
   const [formLocationName, setFormLocationName] = useState("");
+  const [formHourlyRate, setFormHourlyRate] = useState("0");
   const [formFacePhoto, setFormFacePhoto] = useState("");
   const [formFaceDescriptor, setFormFaceDescriptor] = useState<number[] | null>(null);
   const [capturingFace, setCapturingFace] = useState(false);
@@ -129,6 +131,8 @@ export default function EmployeesPage() {
 
   const [attDateFilter, setAttDateFilter] = useState<"today" | "week" | "month">("today");
   const [attStaffFilter, setAttStaffFilter] = useState<string>("all");
+  const [salaryPeriod, setSalaryPeriod] = useState<"daily" | "weekly" | "monthly">("monthly");
+  const [salaryStaffFilter, setSalaryStaffFilter] = useState<string>("all");
 
   const headers = { Authorization: `Bearer ${token}`, "Content-Type": "application/json" };
 
@@ -181,6 +185,35 @@ export default function EmployeesPage() {
       return res.json();
     },
     enabled: !!token,
+  });
+
+  type SalaryData = {
+    period: string;
+    dateFrom: string;
+    dateTo: string;
+    grandTotal: number;
+    staff: Array<{
+      staffId: string;
+      name: string;
+      phone: string;
+      hourlyRate: number;
+      totalHours: number;
+      totalEarned: number;
+      daysWorked: number;
+      days: Array<{ date: string; checkIn: string | null; checkOut: string | null; hours: number; earned: number }>;
+    }>;
+  };
+
+  const { data: salaryData, isLoading: salaryLoading } = useQuery<SalaryData>({
+    queryKey: ["salary", salaryPeriod, salaryStaffFilter],
+    queryFn: async () => {
+      let url = `/api/attendance/salary?period=${salaryPeriod}`;
+      if (salaryStaffFilter !== "all") url += `&staffId=${salaryStaffFilter}`;
+      const res = await fetch(url, { headers });
+      if (!res.ok) throw new Error("Failed");
+      return res.json();
+    },
+    enabled: !!token && activeTab === "salary",
   });
 
   const createStaff = useMutation({
@@ -240,6 +273,7 @@ export default function EmployeesPage() {
     setFormLocationLng("");
     setFormLocationRadius("100");
     setFormLocationName("");
+    setFormHourlyRate("0");
     setFormFacePhoto("");
     setFormFaceDescriptor(null);
     setCapturingFace(false);
@@ -258,6 +292,7 @@ export default function EmployeesPage() {
     setFormLocationLng(staff.locationLng || "");
     setFormLocationRadius(String(staff.locationRadius));
     setFormLocationName(staff.locationName || "");
+    setFormHourlyRate(String(staff.hourlyRate || 0));
     setFormFacePhoto(staff.facePhoto || "");
     setFormFaceDescriptor(staff.faceDescriptor || null);
     setStaffDialogOpen(true);
@@ -276,6 +311,7 @@ export default function EmployeesPage() {
       locationLng: formLocationLng || null,
       locationRadius: parseInt(formLocationRadius) || 100,
       locationName: formLocationName || null,
+      hourlyRate: parseInt(formHourlyRate) || 0,
       facePhoto: formFacePhoto || null,
       faceDescriptor: formFaceDescriptor || null,
     };
@@ -452,6 +488,7 @@ export default function EmployeesPage() {
             {[
               { key: "staff" as const, label: "Xodimlar", icon: Users },
               { key: "attendance" as const, label: "Davomat", icon: CalendarDays },
+              { key: "salary" as const, label: "Oylik", icon: Timer },
             ].map(tab => {
               const Icon = tab.icon;
               return (
@@ -726,6 +763,153 @@ export default function EmployeesPage() {
               )}
             </div>
           )}
+
+          {activeTab === "salary" && (
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                <Card>
+                  <CardContent className="p-4 text-center">
+                    <Users className="h-5 w-5 mx-auto mb-1 text-blue-500" />
+                    <p className="text-2xl font-bold" data-testid="text-salary-staff-count">{salaryData?.staff?.length || 0}</p>
+                    <p className="text-xs text-gray-500">Xodimlar</p>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardContent className="p-4 text-center">
+                    <Clock className="h-5 w-5 mx-auto mb-1 text-green-500" />
+                    <p className="text-2xl font-bold text-green-600" data-testid="text-salary-total-hours">
+                      {salaryData?.staff?.reduce((s, x) => s + x.totalHours, 0).toFixed(1) || "0"}
+                    </p>
+                    <p className="text-xs text-gray-500">Jami soatlar</p>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardContent className="p-4 text-center">
+                    <Timer className="h-5 w-5 mx-auto mb-1 text-purple-500" />
+                    <p className="text-2xl font-bold text-purple-600" data-testid="text-salary-grand-total">
+                      {(salaryData?.grandTotal || 0).toLocaleString()}
+                    </p>
+                    <p className="text-xs text-gray-500">Jami oylik (so'm)</p>
+                  </CardContent>
+                </Card>
+              </div>
+
+              <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center justify-between">
+                <div className="flex bg-gray-100 rounded-lg p-0.5">
+                  {([
+                    { key: "daily" as const, label: "Bugun" },
+                    { key: "weekly" as const, label: "Hafta" },
+                    { key: "monthly" as const, label: "Oy" },
+                  ]).map(p => (
+                    <button
+                      key={p.key}
+                      onClick={() => setSalaryPeriod(p.key)}
+                      className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${
+                        salaryPeriod === p.key ? "bg-white shadow text-primary" : "text-gray-500 hover:text-gray-700"
+                      }`}
+                      data-testid={`button-salary-period-${p.key}`}
+                    >
+                      {p.label}
+                    </button>
+                  ))}
+                </div>
+                <Select value={salaryStaffFilter} onValueChange={setSalaryStaffFilter}>
+                  <SelectTrigger className="w-48 h-8 text-xs" data-testid="select-salary-staff">
+                    <SelectValue placeholder="Xodim tanlang" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Barcha xodimlar</SelectItem>
+                    {staffList.map(s => (
+                      <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {salaryLoading ? (
+                <div className="flex justify-center py-8">
+                  <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary" />
+                </div>
+              ) : !salaryData?.staff?.length ? (
+                <Card>
+                  <CardContent className="p-8 text-center text-gray-500">
+                    <Timer className="h-12 w-12 mx-auto mb-3 text-gray-300" />
+                    <p className="font-medium">Ma'lumot topilmadi</p>
+                  </CardContent>
+                </Card>
+              ) : (
+                <div className="space-y-4">
+                  {salaryData.staff.map(s => (
+                    <Card key={s.staffId} data-testid={`card-salary-${s.staffId}`}>
+                      <CardContent className="p-4">
+                        <div className="flex justify-between items-start mb-3">
+                          <div>
+                            <h3 className="font-semibold text-base">{s.name}</h3>
+                            <p className="text-xs text-gray-500">{s.phone}</p>
+                          </div>
+                          <div className="text-right">
+                            <p className="text-lg font-bold text-green-600" data-testid={`text-earned-${s.staffId}`}>
+                              {s.totalEarned.toLocaleString()} so'm
+                            </p>
+                            <p className="text-xs text-gray-500">{s.hourlyRate.toLocaleString()} so'm/soat</p>
+                          </div>
+                        </div>
+                        <div className="grid grid-cols-3 gap-2 mb-3 text-center">
+                          <div className="bg-blue-50 rounded-lg p-2">
+                            <p className="text-sm font-bold text-blue-700">{s.daysWorked}</p>
+                            <p className="text-[10px] text-blue-600">Kun ishlagan</p>
+                          </div>
+                          <div className="bg-green-50 rounded-lg p-2">
+                            <p className="text-sm font-bold text-green-700">{s.totalHours.toFixed(1)}</p>
+                            <p className="text-[10px] text-green-600">Jami soat</p>
+                          </div>
+                          <div className="bg-purple-50 rounded-lg p-2">
+                            <p className="text-sm font-bold text-purple-700">
+                              {s.daysWorked > 0 ? (s.totalHours / s.daysWorked).toFixed(1) : "0"}
+                            </p>
+                            <p className="text-[10px] text-purple-600">O'rtacha soat/kun</p>
+                          </div>
+                        </div>
+                        {s.days.length > 0 && (
+                          <div className="overflow-x-auto">
+                            <table className="w-full text-xs">
+                              <thead>
+                                <tr className="border-b bg-gray-50">
+                                  <th className="text-left p-2 font-medium">Sana</th>
+                                  <th className="text-left p-2 font-medium">Kelish</th>
+                                  <th className="text-left p-2 font-medium">Ketish</th>
+                                  <th className="text-right p-2 font-medium">Soat</th>
+                                  <th className="text-right p-2 font-medium">Hisob</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {s.days.map(d => (
+                                  <tr key={d.date} className="border-b">
+                                    <td className="p-2">{new Date(d.date).toLocaleDateString("uz-UZ", { day: "2-digit", month: "2-digit" })}</td>
+                                    <td className="p-2 text-green-600">{d.checkIn ? new Date(d.checkIn).toLocaleTimeString("uz-UZ", { hour: "2-digit", minute: "2-digit" }) : "—"}</td>
+                                    <td className="p-2 text-red-600">{d.checkOut ? new Date(d.checkOut).toLocaleTimeString("uz-UZ", { hour: "2-digit", minute: "2-digit" }) : "—"}</td>
+                                    <td className="p-2 text-right font-medium">{d.hours.toFixed(1)}</td>
+                                    <td className="p-2 text-right font-medium text-green-600">{d.earned.toLocaleString()}</td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                              <tfoot>
+                                <tr className="bg-gray-50 font-semibold">
+                                  <td className="p-2" colSpan={3}>Jami</td>
+                                  <td className="p-2 text-right">{s.totalHours.toFixed(1)}</td>
+                                  <td className="p-2 text-right text-green-600">{s.totalEarned.toLocaleString()}</td>
+                                </tr>
+                              </tfoot>
+                            </table>
+                          </div>
+                        )}
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </div>
 
@@ -765,6 +949,12 @@ export default function EmployeesPage() {
                   {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                 </button>
               </div>
+            </div>
+
+            <div>
+              <Label>Soatlik ish haqi (so'm)</Label>
+              <Input type="number" value={formHourlyRate} onChange={e => setFormHourlyRate(e.target.value)} placeholder="15000" data-testid="input-staff-hourly-rate" />
+              <p className="text-xs text-gray-500 mt-1">Masalan: 15000 so'm/soat</p>
             </div>
 
             <div className="border rounded-lg p-3 space-y-3">

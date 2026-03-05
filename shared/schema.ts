@@ -227,6 +227,7 @@ export const staffMembers = pgTable("staff_members", {
   locationLng: text("location_lng"),
   locationRadius: integer("location_radius").notNull().default(100),
   locationName: text("location_name").default(""),
+  hourlyRate: integer("hourly_rate").notNull().default(0),
   isActive: boolean("is_active").notNull().default(true),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });

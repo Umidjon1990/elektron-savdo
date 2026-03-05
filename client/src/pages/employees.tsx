@@ -33,7 +33,7 @@ import { useToast } from "@/hooks/use-toast";
 import {
   UserCheck, Users, Plus, Pencil, Trash2, Copy, Camera, MapPin,
   Clock, CheckCircle2, XCircle, CalendarDays, Timer, AlertTriangle,
-  Eye, EyeOff, Phone, User, Lock, Globe
+  Eye, EyeOff, Phone, User, Lock, Globe, Loader2
 } from "lucide-react";
 
 type StaffMember = {
@@ -290,17 +290,28 @@ export default function EmployeesPage() {
     }
   };
 
+  const [gettingLocation, setGettingLocation] = useState(false);
+
   const handleGetLocation = () => {
     if (!navigator.geolocation) {
       return toast({ title: "Geolokatsiya qo'llab-quvvatlanmaydi", variant: "destructive" });
     }
+    setGettingLocation(true);
     navigator.geolocation.getCurrentPosition(
       (pos) => {
         setFormLocationLat(String(pos.coords.latitude));
         setFormLocationLng(String(pos.coords.longitude));
-        toast({ title: "Joylashuv aniqlandi" });
+        setGettingLocation(false);
+        toast({ title: `Joylashuv aniqlandi: ${pos.coords.latitude.toFixed(6)}, ${pos.coords.longitude.toFixed(6)}` });
       },
-      () => toast({ title: "Joylashuvni aniqlashda xatolik", variant: "destructive" })
+      (err) => {
+        setGettingLocation(false);
+        toast({ 
+          title: err.code === 1 ? "GPS ruxsati berilmadi. Brauzer sozlamalaridan ruxsat bering." : "Joylashuvni aniqlashda xatolik", 
+          variant: "destructive" 
+        });
+      },
+      { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
     );
   };
 
@@ -801,9 +812,18 @@ export default function EmployeesPage() {
                 <Label className="text-xs">Radius (metrda)</Label>
                 <Input type="number" value={formLocationRadius} onChange={e => setFormLocationRadius(e.target.value)} placeholder="100" data-testid="input-location-radius" />
               </div>
-              <Button size="sm" variant="outline" onClick={handleGetLocation} className="w-full" data-testid="button-get-location">
-                <Globe className="h-4 w-4 mr-1" /> Hozirgi joylashuvni ishlatish
+              <Button size="sm" variant="outline" onClick={handleGetLocation} disabled={gettingLocation} className="w-full" data-testid="button-get-location">
+                {gettingLocation ? (
+                  <><Loader2 className="h-4 w-4 mr-1 animate-spin" /> GPS aniqlanmoqda...</>
+                ) : (
+                  <><MapPin className="h-4 w-4 mr-1" /> 📍 Hozirgi joylashuvni aniqlash</>
+                )}
               </Button>
+              {formLocationLat && formLocationLng && (
+                <p className="text-xs text-green-600 text-center">
+                  ✅ Joylashuv belgilangan: {parseFloat(formLocationLat).toFixed(6)}, {parseFloat(formLocationLng).toFixed(6)}
+                </p>
+              )}
             </div>
           </div>
           <DialogFooter className="mt-4">

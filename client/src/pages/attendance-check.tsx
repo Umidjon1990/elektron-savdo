@@ -258,7 +258,7 @@ export default function AttendanceCheckPage() {
             <p className="text-xs text-gray-400 mb-4">
               {new Date().toLocaleString("uz-UZ")}
             </p>
-            <Button onClick={() => { setStep("camera"); setFaceScore(null); setFaceVerified(false); fetchStaffInfo(); }} data-testid="button-new-record">
+            <Button onClick={() => { setStep("camera"); setFaceScore(null); setFaceDetected(false); setLiveDescriptor(null); fetchStaffInfo(); }} data-testid="button-new-record">
               Yangi yozuv
             </Button>
           </CardContent>

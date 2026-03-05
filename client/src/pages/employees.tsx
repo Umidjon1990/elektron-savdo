@@ -17,9 +17,7 @@ async function ensureFaceModels() {
   const faceapi = await import("face-api.js");
   const MODEL_URL = "/models";
   await Promise.all([
-    faceapi.nets.ssdMobilenetv1.loadFromUri(MODEL_URL),
     faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL),
-    faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL),
     faceapi.nets.faceLandmark68TinyNet.loadFromUri(MODEL_URL),
     faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL),
   ]);
@@ -465,13 +463,13 @@ export default function EmployeesPage() {
       const img = await faceapi.fetchImage(dataUrl);
 
       let detection = await faceapi
-        .detectSingleFace(img, new faceapi.SsdMobilenetv1Options({ minConfidence: 0.3 }))
-        .withFaceLandmarks()
+        .detectSingleFace(img, new faceapi.TinyFaceDetectorOptions({ inputSize: 320, scoreThreshold: 0.2 }))
+        .withFaceLandmarks(true)
         .withFaceDescriptor();
 
       if (!detection) {
         detection = await faceapi
-          .detectSingleFace(img, new faceapi.TinyFaceDetectorOptions({ inputSize: 416, scoreThreshold: 0.3 }))
+          .detectSingleFace(img, new faceapi.TinyFaceDetectorOptions({ inputSize: 224, scoreThreshold: 0.15 }))
           .withFaceLandmarks(true)
           .withFaceDescriptor();
       }

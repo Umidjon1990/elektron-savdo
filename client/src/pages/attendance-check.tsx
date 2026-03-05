@@ -30,9 +30,7 @@ async function loadFaceApi() {
   const faceapi = await import("face-api.js");
   const MODEL_URL = "/models";
   await Promise.all([
-    faceapi.nets.ssdMobilenetv1.loadFromUri(MODEL_URL),
     faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL),
-    faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL),
     faceapi.nets.faceLandmark68TinyNet.loadFromUri(MODEL_URL),
     faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL),
   ]);
@@ -113,7 +111,7 @@ export default function AttendanceCheckPage() {
     try {
       await loadFaceApi();
       const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: "user", width: { ideal: 1280 }, height: { ideal: 720 } },
+        video: { facingMode: "user", width: { ideal: 640 }, height: { ideal: 480 } },
       });
       streamRef.current = stream;
       if (videoRef.current) {
@@ -133,23 +131,22 @@ export default function AttendanceCheckPage() {
   const startFaceDetection = () => {
     if (detectionIntervalRef.current) clearInterval(detectionIntervalRef.current);
     let detecting = false;
+
+    const inputSizes = [224, 320, 160];
+    let sizeIndex = 0;
+
     detectionIntervalRef.current = window.setInterval(async () => {
       if (detecting || !videoRef.current || videoRef.current.readyState < 2) return;
       detecting = true;
       try {
         const faceapi = await import("face-api.js");
+        const currentSize = inputSizes[sizeIndex % inputSizes.length];
+        sizeIndex++;
 
-        let detection = await faceapi
-          .detectSingleFace(videoRef.current!, new faceapi.SsdMobilenetv1Options({ minConfidence: 0.3 }))
-          .withFaceLandmarks()
+        const detection = await faceapi
+          .detectSingleFace(videoRef.current!, new faceapi.TinyFaceDetectorOptions({ inputSize: currentSize, scoreThreshold: 0.2 }))
+          .withFaceLandmarks(true)
           .withFaceDescriptor();
-
-        if (!detection) {
-          detection = await faceapi
-            .detectSingleFace(videoRef.current!, new faceapi.TinyFaceDetectorOptions({ inputSize: 416, scoreThreshold: 0.3 }))
-            .withFaceLandmarks(true)
-            .withFaceDescriptor();
-        }
 
         if (detection) {
           noFaceCountRef.current = 0;
@@ -166,13 +163,13 @@ export default function AttendanceCheckPage() {
           setFaceScore(Math.round(score * 100));
         } else {
           noFaceCountRef.current++;
-          if (noFaceCountRef.current > 10) {
+          if (noFaceCountRef.current > 6) {
             setFaceDetected(false);
           }
         }
       } catch {}
       detecting = false;
-    }, 500);
+    }, 700);
   };
 
   useEffect(() => {

@@ -56,6 +56,16 @@ export default function Dashboard() {
     enabled: !!token,
     staleTime: 5 * 60 * 1000,
   });
+
+  const { data: couriersList = [] } = useQuery<Array<{ id: string; name: string; phone: string }>>({
+    queryKey: ["couriers"],
+    queryFn: async () => {
+      const res = await fetch("/api/couriers", { headers: { Authorization: `Bearer ${token}` } });
+      if (!res.ok) return [];
+      return res.json();
+    },
+    enabled: !!token && !!tenantSettings?.deliveryEnabled,
+  });
   
   const { data: categories = [] } = useQuery<Category[]>({
     queryKey: ["/api/categories"],
@@ -241,7 +251,7 @@ export default function Dashboard() {
 
   const clearCart = () => setCart([]);
 
-  const handleCheckout = async (method: string = "cash", customerData?: { customerName?: string; customerPhone?: string; customerInfo?: Record<string, string> }, nasiyaData?: { dueDate: string }) => {
+  const handleCheckout = async (method: string = "cash", customerData?: { customerName?: string; customerPhone?: string; customerInfo?: Record<string, string> }, nasiyaData?: { dueDate: string }, deliveryData?: { courierId: string; courierName: string; address: string; customerName: string; customerPhone: string }) => {
     const total = cart.reduce((acc, item) => {
       const itemTotal = item.product.price * item.quantity;
       const discount = item.discount || 0;
@@ -250,6 +260,45 @@ export default function Dashboard() {
     
     try {
       const transaction = await addTransaction(cart, total, method, customerData, nasiyaData);
+
+      if (deliveryData && token) {
+        try {
+          const orderRes = await fetch("/api/orders", {
+            method: "POST",
+            headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+            body: JSON.stringify({
+              customerName: deliveryData.customerName,
+              customerPhone: deliveryData.customerPhone,
+              address: deliveryData.address,
+              items: cart.map(item => ({ productId: item.product.id, name: item.product.name, price: item.product.price, quantity: item.quantity })),
+              totalAmount: total,
+              status: "confirmed",
+              paymentMethod: method,
+              paymentStatus: "paid",
+              deliveryType: "delivery",
+              courier: deliveryData.courierName,
+              courierId: deliveryData.courierId,
+            }),
+          });
+          if (orderRes.ok) {
+            const order = await orderRes.json();
+            await fetch("/api/deliveries", {
+              method: "POST",
+              headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+              body: JSON.stringify({
+                orderId: order.id,
+                customerId: "",
+                address: deliveryData.address,
+                courier: deliveryData.courierName,
+                courierId: deliveryData.courierId,
+                status: "pending",
+              }),
+            });
+          }
+        } catch (e) {
+          console.error("Delivery creation failed:", e);
+        }
+      }
       
       cart.forEach(item => {
         updateStock(item.product.id, -item.quantity);
@@ -266,7 +315,7 @@ export default function Dashboard() {
       }
 
       toast({
-        title: "To'lov qabul qilindi!",
+        title: deliveryData ? "Buyurtma yaratildi va kuriyerga biriktirildi!" : "To'lov qabul qilindi!",
         description: `Jami summa: ${total.toLocaleString()} so'm`,
         className: "bg-green-500 text-white border-none",
       });
@@ -441,6 +490,8 @@ export default function Dashboard() {
                   onCheckout={handleCheckout}
                   paymentMethods={tenantSettings?.paymentMethods}
                   customerFields={tenantSettings?.customerFields}
+                  deliveryEnabled={tenantSettings?.deliveryEnabled}
+                  couriers={couriersList}
                 />
               </SheetContent>
             </Sheet>
@@ -624,6 +675,8 @@ export default function Dashboard() {
               onCheckout={handleCheckout}
               paymentMethods={tenantSettings?.paymentMethods}
               customerFields={tenantSettings?.customerFields}
+              deliveryEnabled={tenantSettings?.deliveryEnabled}
+              couriers={couriersList}
             />
           </div>
         </div>

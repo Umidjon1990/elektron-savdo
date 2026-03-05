@@ -33,6 +33,7 @@ const importSlugLogin = () => import("@/pages/store/slug-login");
 const importFinance = () => import("@/pages/finance");
 const importEmployees = () => import("@/pages/employees");
 const importAttendanceCheck = () => import("@/pages/attendance-check");
+const importCourierDeliveries = () => import("@/pages/courier-deliveries");
 
 const NotFound = lazy(importNotFound);
 const SuperAdminPage = lazy(importSuperAdmin);
@@ -54,6 +55,7 @@ const CategoriesPage = lazy(importCategories);
 const FinancePage = lazy(importFinance);
 const EmployeesPage = lazy(importEmployees);
 const AttendanceCheckPage = lazy(importAttendanceCheck);
+const CourierDeliveriesPage = lazy(importCourierDeliveries);
 
 function preloadAdminPages() {
   importDashboard();
@@ -252,6 +254,7 @@ function Router() {
       <Route path="/stores" component={StoresListPage} />
       <Route path="/cart" component={CartPage} />
       <Route path="/attendance/:token" component={AttendanceCheckPage} />
+      <Route path="/courier/:token" component={CourierDeliveriesPage} />
       <Route path="/login" component={LoginPage} />
       <Route path="/register" component={RegisterPage} />
       

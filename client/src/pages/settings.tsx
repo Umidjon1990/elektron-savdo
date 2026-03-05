@@ -81,6 +81,7 @@ export default function SettingsPage() {
     author: true,
   };
   const [productFormVisibility, setProductFormVisibility] = useState<Record<string, boolean>>(defaultFormVisibility);
+  const [deliveryEnabled, setDeliveryEnabled] = useState(false);
 
   const FORM_VISIBILITY_OPTIONS = [
     { key: "costPrice", label: "Tan narxi (kelish narxi)" },
@@ -123,6 +124,7 @@ export default function SettingsPage() {
       if (data.customerFields) setCustomerFields(data.customerFields);
       if (data.receiptLogo) setReceiptLogo(data.receiptLogo);
       if (data.productFormVisibility) setProductFormVisibility({ ...defaultFormVisibility, ...data.productFormVisibility });
+      if (data.deliveryEnabled !== undefined) setDeliveryEnabled(data.deliveryEnabled);
       return data;
     },
     enabled: !!token,
@@ -474,6 +476,32 @@ export default function SettingsPage() {
                     />
                   </div>
                 ))}
+              </CardContent>
+            </Card>
+
+            <Card className="border-purple-200">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-purple-800">
+                  <Package className="h-5 w-5" />
+                  Yetkazib berish xizmati
+                </CardTitle>
+                <CardDescription>Kassa sahifasida yetkazib berish imkoniyatini yoqish/o'chirish</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="flex items-center justify-between p-3 bg-purple-50 rounded-lg" data-testid="visibility-delivery">
+                  <div>
+                    <span className="text-sm font-medium">Yetkazib berish xizmati</span>
+                    <p className="text-xs text-gray-500 mt-0.5">Kassada tovar tanlangandan keyin yetkazib berish kartochkasi ko'rinadi</p>
+                  </div>
+                  <Switch
+                    checked={deliveryEnabled}
+                    onCheckedChange={(checked) => {
+                      setDeliveryEnabled(!!checked);
+                      saveConfigMutation.mutate({ deliveryEnabled: !!checked });
+                    }}
+                    data-testid="switch-delivery-enabled"
+                  />
+                </div>
               </CardContent>
             </Card>
 

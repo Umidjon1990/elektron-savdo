@@ -5,7 +5,8 @@ import { Label } from "@/components/ui/label";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { CreditCard, Banknote, QrCode, Trash2, ShoppingBag, HandCoins, ChevronDown, ChevronUp, User, Phone, MapPin, FileText, Plus, CalendarIcon, AlertCircle } from "lucide-react";
+import { CreditCard, Banknote, QrCode, Trash2, ShoppingBag, HandCoins, ChevronDown, ChevronUp, User, Phone, MapPin, FileText, Plus, CalendarIcon, AlertCircle, Truck } from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { CartItem } from "./cart-item";
 import type { CartItem as CartItemType } from "@/pages/dashboard";
 
@@ -19,15 +20,23 @@ interface CustomerField {
   label: string;
 }
 
+interface CourierItem {
+  id: string;
+  name: string;
+  phone: string;
+}
+
 interface CartSidebarProps {
   items: CartItemType[];
   onUpdateQuantity: (id: string, delta: number) => void;
   onUpdateDiscount: (id: string, discount: number) => void;
   onRemove: (id: string) => void;
   onClear: () => void;
-  onCheckout: (method: string, customerData?: { customerName?: string; customerPhone?: string; customerInfo?: Record<string, string> }, nasiyaData?: { dueDate: string }) => void;
+  onCheckout: (method: string, customerData?: { customerName?: string; customerPhone?: string; customerInfo?: Record<string, string> }, nasiyaData?: { dueDate: string }, deliveryData?: { courierId: string; courierName: string; address: string; customerName: string; customerPhone: string }) => void;
   paymentMethods?: PaymentMethod[];
   customerFields?: CustomerField[];
+  deliveryEnabled?: boolean;
+  couriers?: CourierItem[];
 }
 
 const PAYMENT_ICONS: Record<string, React.ReactNode> = {
@@ -62,7 +71,7 @@ const FIELD_ICONS: Record<string, React.ReactNode> = {
   note: <FileText className="h-4 w-4 text-muted-foreground" />,
 };
 
-export function CartSidebar({ items, onUpdateQuantity, onUpdateDiscount, onRemove, onClear, onCheckout, paymentMethods, customerFields }: CartSidebarProps) {
+export function CartSidebar({ items, onUpdateQuantity, onUpdateDiscount, onRemove, onClear, onCheckout, paymentMethods, customerFields, deliveryEnabled, couriers }: CartSidebarProps) {
   const subtotal = items.reduce((acc, item) => acc + (item.product.price * item.quantity), 0);
   const totalDiscount = items.reduce((acc, item) => acc + (item.discount || 0), 0);
   const total = subtotal - totalDiscount;
@@ -70,6 +79,14 @@ export function CartSidebar({ items, onUpdateQuantity, onUpdateDiscount, onRemov
   const [showCustomer, setShowCustomer] = useState(false);
   const [customerData, setCustomerData] = useState<Record<string, string>>({});
   const [selectedMethod, setSelectedMethod] = useState<string | null>(null);
+
+  const [deliveryMode, setDeliveryMode] = useState(false);
+  const [deliveryDialogOpen, setDeliveryDialogOpen] = useState(false);
+  const [deliveryCourierId, setDeliveryCourierId] = useState("");
+  const [deliveryAddress, setDeliveryAddress] = useState("");
+  const [deliveryCustomerName, setDeliveryCustomerName] = useState("");
+  const [deliveryCustomerPhone, setDeliveryCustomerPhone] = useState("");
+  const [deliveryError, setDeliveryError] = useState("");
 
   const [nasiyaDialogOpen, setNasiyaDialogOpen] = useState(false);
   const [nasiyaName, setNasiyaName] = useState("");
@@ -85,6 +102,15 @@ export function CartSidebar({ items, onUpdateQuantity, onUpdateDiscount, onRemov
   const today = new Date().toISOString().split("T")[0];
 
   const handleCheckout = (methodId: string) => {
+    if (deliveryMode) {
+      setDeliveryCustomerName(customerData["name"] || "");
+      setDeliveryCustomerPhone(customerData["phone"] || "");
+      setDeliveryAddress(customerData["address"] || "");
+      setDeliveryError("");
+      setDeliveryDialogOpen(true);
+      return;
+    }
+
     if (methodId === "nasiya") {
       setNasiyaName(customerData["name"] || "");
       setNasiyaPhone(customerData["phone"] || "");
@@ -118,6 +144,7 @@ export function CartSidebar({ items, onUpdateQuantity, onUpdateDiscount, onRemov
     setCustomerData({});
     setShowCustomer(false);
     setSelectedMethod(null);
+    setDeliveryMode(false);
   };
 
   const handleNasiyaConfirm = () => {
@@ -260,6 +287,29 @@ export function CartSidebar({ items, onUpdateQuantity, onUpdateDiscount, onRemov
           </div>
         )}
 
+        {deliveryEnabled && items.length > 0 && (
+          <div
+            onClick={() => setDeliveryMode(!deliveryMode)}
+            className={`flex items-center gap-3 p-3 rounded-xl border-2 cursor-pointer transition-all ${
+              deliveryMode
+                ? "border-purple-500 bg-purple-50 shadow-sm"
+                : "border-gray-200 hover:border-purple-300 hover:bg-purple-50/50"
+            }`}
+            data-testid="card-delivery-toggle"
+          >
+            <div className={`p-2 rounded-lg ${deliveryMode ? "bg-purple-500 text-white" : "bg-gray-100 text-gray-500"}`}>
+              <Truck className="h-5 w-5" />
+            </div>
+            <div className="flex-1">
+              <p className="text-sm font-semibold">Yetkazib berish</p>
+              <p className="text-[10px] text-gray-500">Kuriyerga biriktirish</p>
+            </div>
+            {deliveryMode && (
+              <span className="text-xs font-bold text-purple-600 bg-purple-100 px-2 py-0.5 rounded-full">Tanlandi</span>
+            )}
+          </div>
+        )}
+
         <div className={`grid gap-2 ${methods.length <= 2 ? 'grid-cols-2' : methods.length === 3 ? 'grid-cols-3' : 'grid-cols-2 sm:grid-cols-3'}`}>
           {methods.map(method => {
             const colors = PAYMENT_COLORS[method.id] || { hover: "hover:border-purple-500 hover:bg-purple-50", border: "border-purple-500 bg-purple-50" };
@@ -390,6 +440,129 @@ export function CartSidebar({ items, onUpdateQuantity, onUpdateDiscount, onRemov
             <Button className="bg-orange-500 hover:bg-orange-600" onClick={handleNasiyaConfirm} data-testid="button-confirm-nasiya">
               <HandCoins className="h-4 w-4 mr-2" />
               Nasiyaga berish
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={deliveryDialogOpen} onOpenChange={setDeliveryDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Truck className="h-5 w-5 text-purple-500" />
+              Yetkazib berish
+            </DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <div className="bg-purple-50 border border-purple-200 rounded-lg p-3">
+              <div className="flex justify-between items-center">
+                <span className="text-sm text-purple-700 font-medium">Buyurtma summasi:</span>
+                <span className="text-lg font-bold text-purple-800">{total.toLocaleString()} so'm</span>
+              </div>
+              <div className="flex justify-between items-center mt-1">
+                <span className="text-xs text-purple-600">Tovarlar:</span>
+                <span className="text-xs text-purple-600">{itemCount} dona</span>
+              </div>
+            </div>
+
+            {deliveryError && (
+              <div className="flex items-center gap-2 text-sm text-red-600 bg-red-50 p-2 rounded-lg">
+                <AlertCircle className="h-4 w-4 shrink-0" />
+                {deliveryError}
+              </div>
+            )}
+
+            <div className="space-y-3">
+              <div>
+                <Label className="text-xs font-medium text-gray-600">Mijoz ismi *</Label>
+                <div className="flex items-center gap-2 mt-1">
+                  <User className="h-4 w-4 text-muted-foreground shrink-0" />
+                  <Input
+                    placeholder="Mijoz ismi"
+                    value={deliveryCustomerName}
+                    onChange={(e) => { setDeliveryCustomerName(e.target.value); setDeliveryError(""); }}
+                    className="h-9"
+                    data-testid="input-delivery-name"
+                  />
+                </div>
+              </div>
+              <div>
+                <Label className="text-xs font-medium text-gray-600">Telefon *</Label>
+                <div className="flex items-center gap-2 mt-1">
+                  <Phone className="h-4 w-4 text-muted-foreground shrink-0" />
+                  <Input
+                    placeholder="+998 90 123 45 67"
+                    value={deliveryCustomerPhone}
+                    onChange={(e) => { setDeliveryCustomerPhone(e.target.value); setDeliveryError(""); }}
+                    className="h-9"
+                    data-testid="input-delivery-phone"
+                  />
+                </div>
+              </div>
+              <div>
+                <Label className="text-xs font-medium text-gray-600">Manzil *</Label>
+                <div className="flex items-center gap-2 mt-1">
+                  <MapPin className="h-4 w-4 text-muted-foreground shrink-0" />
+                  <Input
+                    placeholder="MFY, ko'cha, uy"
+                    value={deliveryAddress}
+                    onChange={(e) => { setDeliveryAddress(e.target.value); setDeliveryError(""); }}
+                    className="h-9"
+                    data-testid="input-delivery-address"
+                  />
+                </div>
+              </div>
+              <div>
+                <Label className="text-xs font-medium text-gray-600">Kuriyer *</Label>
+                <Select value={deliveryCourierId} onValueChange={(val) => { setDeliveryCourierId(val); setDeliveryError(""); }}>
+                  <SelectTrigger className="w-full mt-1" data-testid="select-delivery-courier">
+                    <SelectValue placeholder="Kuriyer tanlang" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {(couriers || []).map(c => (
+                      <SelectItem key={c.id} value={c.id}>{c.name} {c.phone ? `(${c.phone})` : ""}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {(!couriers || couriers.length === 0) && (
+                  <p className="text-xs text-amber-600 mt-1">Kuriyerlar topilmadi. Xodimlar bo'limida kuriyer qo'shing.</p>
+                )}
+              </div>
+            </div>
+          </div>
+
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button variant="outline" onClick={() => setDeliveryDialogOpen(false)} data-testid="button-cancel-delivery">
+              Bekor qilish
+            </Button>
+            <Button
+              className="bg-purple-500 hover:bg-purple-600"
+              onClick={() => {
+                if (!deliveryCustomerName.trim()) { setDeliveryError("Mijoz ismi kiritilishi shart"); return; }
+                if (!deliveryCustomerPhone.trim()) { setDeliveryError("Telefon raqam kiritilishi shart"); return; }
+                if (!deliveryAddress.trim()) { setDeliveryError("Manzil kiritilishi shart"); return; }
+                if (!deliveryCourierId) { setDeliveryError("Kuriyer tanlanishi shart"); return; }
+                const courier = (couriers || []).find(c => c.id === deliveryCourierId);
+                onCheckout(
+                  methods[0]?.id || "cash",
+                  { customerName: deliveryCustomerName.trim(), customerPhone: deliveryCustomerPhone.trim(), customerInfo: { address: deliveryAddress.trim() } },
+                  undefined,
+                  { courierId: deliveryCourierId, courierName: courier?.name || "", address: deliveryAddress.trim(), customerName: deliveryCustomerName.trim(), customerPhone: deliveryCustomerPhone.trim() }
+                );
+                setDeliveryDialogOpen(false);
+                setDeliveryMode(false);
+                setDeliveryCustomerName("");
+                setDeliveryCustomerPhone("");
+                setDeliveryAddress("");
+                setDeliveryCourierId("");
+                setCustomerData({});
+                setShowCustomer(false);
+              }}
+              data-testid="button-confirm-delivery"
+            >
+              <Truck className="h-4 w-4 mr-2" />
+              Yetkazib berish
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -246,7 +246,7 @@ export async function registerRoutes(
       if (req.user!.role !== "owner") {
         return res.status(403).json({ error: "Faqat do'kon egasi uchun" });
       }
-      const allowedFields = ["name", "brandColor", "logo", "telegramBotToken", "telegramChatId", "paymentMethods", "productFields", "customerFields", "receiptLogo", "productFormVisibility"];
+      const allowedFields = ["name", "brandColor", "logo", "telegramBotToken", "telegramChatId", "paymentMethods", "productFields", "customerFields", "receiptLogo", "productFormVisibility", "deliveryEnabled"];
       const data: Record<string, any> = {};
       for (const key of allowedFields) {
         if (req.body[key] !== undefined) data[key] = req.body[key];
@@ -1469,6 +1469,66 @@ export async function registerRoutes(
     }
   });
 
+  // ============ COURIER PUBLIC DELIVERIES ============
+
+  app.get("/api/courier/deliveries/:token", async (req, res) => {
+    try {
+      const staff = await storage.getStaffByToken(req.params.token);
+      if (!staff || !staff.isActive || !staff.isCourier) return res.status(404).json({ error: "Kuriyer topilmadi" });
+      const deliveriesList = await storage.getDeliveries(staff.tenantId!, { courierId: staff.id });
+      const activeDeliveries = deliveriesList.filter(d => d.status === "pending" || d.status === "out_for_delivery");
+      const completedDeliveries = deliveriesList.filter(d => d.status === "delivered" || d.status === "confirmed");
+
+      const orderIds = [...new Set([...activeDeliveries, ...completedDeliveries].filter(d => d.orderId).map(d => d.orderId!))];
+      const ordersMap = new Map<string, any>();
+      for (const oid of orderIds) {
+        const o = await storage.getOrder(oid, staff.tenantId);
+        if (o) ordersMap.set(oid, { id: o.id, customerName: o.customerName, customerPhone: o.customerPhone, address: o.address, totalAmount: o.totalAmount, items: o.items, paymentMethod: o.paymentMethod });
+      }
+
+      const tenant = await storage.getTenant(staff.tenantId!);
+
+      res.json({
+        courier: { name: staff.name, phone: staff.phone },
+        storeName: tenant?.name || "",
+        active: activeDeliveries.map(d => ({ ...d, order: d.orderId ? ordersMap.get(d.orderId) || null : null })),
+        completed: completedDeliveries.slice(0, 20).map(d => ({ ...d, order: d.orderId ? ordersMap.get(d.orderId) || null : null })),
+      });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch deliveries" });
+    }
+  });
+
+  app.patch("/api/courier/deliveries/:token/:deliveryId", async (req, res) => {
+    try {
+      const staff = await storage.getStaffByToken(req.params.token);
+      if (!staff || !staff.isActive || !staff.isCourier) return res.status(404).json({ error: "Kuriyer topilmadi" });
+
+      const allDeliveries = await storage.getDeliveries(staff.tenantId!, { courierId: staff.id });
+      const delivery = allDeliveries.find(d => d.id === req.params.deliveryId);
+      if (!delivery) return res.status(404).json({ error: "Yetkazish topilmadi" });
+
+      const { status, note } = req.body;
+      if (status !== "delivered") return res.status(400).json({ error: "Faqat 'delivered' statusi ruxsat etilgan" });
+
+      const updated = await storage.updateDelivery(delivery.id, { status: "delivered", completedAt: new Date(), note: note || "Kuriyer tomonidan yetkazildi" }, staff.tenantId);
+      if (!updated) return res.status(500).json({ error: "Yangilab bo'lmadi" });
+
+      await storage.createAuditLog({
+        tenantId: staff.tenantId!,
+        entityType: "delivery",
+        entityId: delivery.id,
+        action: "courier_delivered",
+        changes: { status: "delivered", courierName: staff.name },
+        userId: staff.id,
+      });
+
+      res.json({ success: true, message: "Yetkazildi deb belgilandi! Admin tasdiqlaydi." });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to update delivery" });
+    }
+  });
+
   // ============ FINANCE SUMMARY ============
 
   app.get("/api/finance/summary", authMiddleware, async (req, res) => {
@@ -1775,6 +1835,26 @@ export async function registerRoutes(
   });
 
   // ============ DELIVERIES API ============
+
+  app.post("/api/deliveries", authMiddleware, async (req, res) => {
+    try {
+      const { orderId, customerId, address, courier, courierId, status, scheduledAt } = req.body;
+      const delivery = await storage.createDelivery({
+        tenantId: req.tenantId!,
+        orderId: orderId || null,
+        customerId: customerId || null,
+        address: address || "",
+        courier: courier || "",
+        courierId: courierId || null,
+        status: status || "pending",
+        note: "",
+        scheduledAt: scheduledAt ? new Date(scheduledAt) : null,
+      });
+      res.json(delivery);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to create delivery" });
+    }
+  });
 
   app.get("/api/deliveries", authMiddleware, async (req, res) => {
     try {

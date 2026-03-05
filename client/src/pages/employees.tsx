@@ -1040,6 +1040,24 @@ export default function EmployeesPage() {
                               </p>
                             )}
                             <Badge variant="default" className="text-[10px] mt-1">Faol</Badge>
+                            {staff.token && (
+                              <div className="flex items-center gap-1 mt-1.5">
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="h-6 text-[10px] px-2"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    const url = `${window.location.origin}/courier/${staff.token}`;
+                                    navigator.clipboard.writeText(url);
+                                    toast({ title: "Kuriyer havolasi nusxalandi!" });
+                                  }}
+                                  data-testid={`button-copy-courier-url-${staff.id}`}
+                                >
+                                  <Copy className="h-3 w-3 mr-1" /> Havola
+                                </Button>
+                              </div>
+                            )}
                           </div>
                           <div className="flex gap-1">
                             <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => openEditDialog(staff)}>
@@ -1098,6 +1116,7 @@ export default function EmployeesPage() {
                       <SelectItem value="all">Hammasi</SelectItem>
                       <SelectItem value="pending">Kutilmoqda</SelectItem>
                       <SelectItem value="delivered">Yetkazildi</SelectItem>
+                      <SelectItem value="confirmed">Tasdiqlangan</SelectItem>
                       <SelectItem value="failed">Muvaffaqiyatsiz</SelectItem>
                       <SelectItem value="returned">Qaytarildi</SelectItem>
                       <SelectItem value="cancelled">Bekor</SelectItem>
@@ -1147,12 +1166,13 @@ export default function EmployeesPage() {
                         const statusColors: Record<string, string> = {
                           pending: "bg-yellow-100 text-yellow-700",
                           delivered: "bg-green-100 text-green-700",
+                          confirmed: "bg-emerald-100 text-emerald-700",
                           failed: "bg-red-100 text-red-700",
                           returned: "bg-orange-100 text-orange-700",
                           cancelled: "bg-gray-100 text-gray-700",
                         };
                         const statusLabels: Record<string, string> = {
-                          pending: "Kutilmoqda", delivered: "Yetkazildi", failed: "Muvaffaqiyatsiz",
+                          pending: "Kutilmoqda", delivered: "Yetkazildi", confirmed: "Tasdiqlangan", failed: "Muvaffaqiyatsiz",
                           returned: "Qaytarildi", cancelled: "Bekor",
                         };
                         return (
@@ -1218,6 +1238,7 @@ export default function EmployeesPage() {
                                         <SelectContent>
                                           <SelectItem value="pending">Kutilmoqda</SelectItem>
                                           <SelectItem value="delivered">Yetkazildi</SelectItem>
+                                          <SelectItem value="confirmed">Tasdiqlangan</SelectItem>
                                           <SelectItem value="failed">Muvaffaqiyatsiz</SelectItem>
                                           <SelectItem value="returned">Qaytarildi</SelectItem>
                                           <SelectItem value="cancelled">Bekor qilingan</SelectItem>

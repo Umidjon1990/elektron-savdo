@@ -1289,79 +1289,89 @@ export default function EmployeesPage() {
               <p className="text-xs text-gray-500 mt-1">Masalan: 15000 so'm/soat</p>
             </div>
 
-            <div className="border rounded-lg p-3 space-y-3">
-              <div className="flex items-center gap-2 text-sm font-medium">
-                <Camera className="h-4 w-4" /> Yuz rasmi (Face ID)
-              </div>
-              {formFacePhoto && !capturingFace && (
-                <div className="flex items-center gap-3">
-                  <img src={formFacePhoto} alt="Face" className="w-16 h-16 rounded-lg object-cover" />
-                  <div>
-                    <p className="text-xs text-green-600">{formFaceDescriptor ? "Yuz descriptor saqlangan" : "Rasm saqlangan"}</p>
-                    <Button size="sm" variant="outline" className="mt-1 h-6 text-xs" onClick={startCamera}>
-                      Qayta olish
+            {!formIsCourier && (
+              <div className="border rounded-lg p-3 space-y-3">
+                <div className="flex items-center gap-2 text-sm font-medium">
+                  <Camera className="h-4 w-4" /> Yuz rasmi (Face ID)
+                </div>
+                {formFacePhoto && !capturingFace && (
+                  <div className="flex items-center gap-3">
+                    <img src={formFacePhoto} alt="Face" className="w-16 h-16 rounded-lg object-cover" />
+                    <div>
+                      <p className="text-xs text-green-600">{formFaceDescriptor ? "Yuz descriptor saqlangan" : "Rasm saqlangan"}</p>
+                      <Button size="sm" variant="outline" className="mt-1 h-6 text-xs" onClick={startCamera}>
+                        Qayta olish
+                      </Button>
+                    </div>
+                  </div>
+                )}
+                {capturingFace && (
+                  <div className="space-y-2">
+                    <video ref={videoRef} className="w-full rounded-lg bg-black" autoPlay muted playsInline />
+                    <canvas ref={canvasRef} className="hidden" />
+                    <Button size="sm" onClick={capturePhoto} className="w-full" data-testid="button-capture-face">
+                      <Camera className="h-4 w-4 mr-1" /> Rasmga olish
                     </Button>
                   </div>
-                </div>
-              )}
-              {capturingFace && (
-                <div className="space-y-2">
-                  <video ref={videoRef} className="w-full rounded-lg bg-black" autoPlay muted playsInline />
-                  <canvas ref={canvasRef} className="hidden" />
-                  <Button size="sm" onClick={capturePhoto} className="w-full" data-testid="button-capture-face">
-                    <Camera className="h-4 w-4 mr-1" /> Rasmga olish
-                  </Button>
-                </div>
-              )}
-              {!formFacePhoto && !capturingFace && (
-                <Button size="sm" variant="outline" onClick={startCamera} className="w-full" data-testid="button-start-camera">
-                  <Camera className="h-4 w-4 mr-1" /> Kamerani ochish
-                </Button>
-              )}
-              {faceStatus && <p className="text-xs text-center text-gray-600">{faceStatus}</p>}
-            </div>
-
-            <div className="border rounded-lg p-3 space-y-3">
-              <div className="flex items-center gap-2 text-sm font-medium">
-                <MapPin className="h-4 w-4" /> Ruxsat etilgan joylashuv
-              </div>
-              <div>
-                <Label className="text-xs">Joylashuv nomi</Label>
-                <Input value={formLocationName} onChange={e => setFormLocationName(e.target.value)} placeholder="Masalan: Asosiy do'kon" data-testid="input-location-name" />
-              </div>
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <Label className="text-xs">Latitude</Label>
-                  <Input value={formLocationLat} onChange={e => setFormLocationLat(e.target.value)} placeholder="41.2995" data-testid="input-location-lat" />
-                </div>
-                <div>
-                  <Label className="text-xs">Longitude</Label>
-                  <Input value={formLocationLng} onChange={e => setFormLocationLng(e.target.value)} placeholder="69.2401" data-testid="input-location-lng" />
-                </div>
-              </div>
-              <div>
-                <Label className="text-xs">Radius (metrda)</Label>
-                <Input type="number" value={formLocationRadius} onChange={e => setFormLocationRadius(e.target.value)} placeholder="100" data-testid="input-location-radius" />
-              </div>
-              <Button size="sm" variant="outline" onClick={handleGetLocation} disabled={gettingLocation} className="w-full" data-testid="button-get-location">
-                {gettingLocation ? (
-                  <><Loader2 className="h-4 w-4 mr-1 animate-spin" /> GPS aniqlanmoqda...</>
-                ) : (
-                  <><MapPin className="h-4 w-4 mr-1" /> Hozirgi joylashuvni aniqlash (GPS)</>
                 )}
-              </Button>
-              <div className="bg-blue-50 border border-blue-200 rounded-md p-2 text-xs text-blue-700 space-y-1">
-                <p className="font-medium">GPS ishlamasa qo'lda kiriting:</p>
-                <p>1. <a href="https://www.google.com/maps" target="_blank" rel="noopener noreferrer" className="underline text-blue-600">Google Maps</a> ni oching</p>
-                <p>2. Do'kon joylashuvini bosing</p>
-                <p>3. Koordinatalarni (masalan: 41.2995, 69.2401) nusxalab yuqoridagi Latitude va Longitude maydonlariga yozing</p>
+                {!formFacePhoto && !capturingFace && (
+                  <Button size="sm" variant="outline" onClick={startCamera} className="w-full" data-testid="button-start-camera">
+                    <Camera className="h-4 w-4 mr-1" /> Kamerani ochish
+                  </Button>
+                )}
+                {faceStatus && <p className="text-xs text-center text-gray-600">{faceStatus}</p>}
               </div>
-              {formLocationLat && formLocationLng && (
-                <p className="text-xs text-green-600 text-center font-medium">
-                  ✅ Joylashuv: {parseFloat(formLocationLat).toFixed(6)}, {parseFloat(formLocationLng).toFixed(6)}
-                </p>
-              )}
-            </div>
+            )}
+
+            {!formIsCourier && (
+              <div className="border rounded-lg p-3 space-y-3">
+                <div className="flex items-center gap-2 text-sm font-medium">
+                  <MapPin className="h-4 w-4" /> Ruxsat etilgan joylashuv
+                </div>
+                <div>
+                  <Label className="text-xs">Joylashuv nomi</Label>
+                  <Input value={formLocationName} onChange={e => setFormLocationName(e.target.value)} placeholder="Masalan: Asosiy do'kon" data-testid="input-location-name" />
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <Label className="text-xs">Latitude</Label>
+                    <Input value={formLocationLat} onChange={e => setFormLocationLat(e.target.value)} placeholder="41.2995" data-testid="input-location-lat" />
+                  </div>
+                  <div>
+                    <Label className="text-xs">Longitude</Label>
+                    <Input value={formLocationLng} onChange={e => setFormLocationLng(e.target.value)} placeholder="69.2401" data-testid="input-location-lng" />
+                  </div>
+                </div>
+                <div>
+                  <Label className="text-xs">Radius (metrda)</Label>
+                  <Input type="number" value={formLocationRadius} onChange={e => setFormLocationRadius(e.target.value)} placeholder="100" data-testid="input-location-radius" />
+                </div>
+                <Button size="sm" variant="outline" onClick={handleGetLocation} disabled={gettingLocation} className="w-full" data-testid="button-get-location">
+                  {gettingLocation ? (
+                    <><Loader2 className="h-4 w-4 mr-1 animate-spin" /> GPS aniqlanmoqda...</>
+                  ) : (
+                    <><MapPin className="h-4 w-4 mr-1" /> Hozirgi joylashuvni aniqlash (GPS)</>
+                  )}
+                </Button>
+                <div className="bg-blue-50 border border-blue-200 rounded-md p-2 text-xs text-blue-700 space-y-1">
+                  <p className="font-medium">GPS ishlamasa qo'lda kiriting:</p>
+                  <p>1. <a href="https://www.google.com/maps" target="_blank" rel="noopener noreferrer" className="underline text-blue-600">Google Maps</a> ni oching</p>
+                  <p>2. Do'kon joylashuvini bosing</p>
+                  <p>3. Koordinatalarni (masalan: 41.2995, 69.2401) nusxalab yuqoridagi Latitude va Longitude maydonlariga yozing</p>
+                </div>
+                {formLocationLat && formLocationLng && (
+                  <p className="text-xs text-green-600 text-center font-medium">
+                    ✅ Joylashuv: {parseFloat(formLocationLat).toFixed(6)}, {parseFloat(formLocationLng).toFixed(6)}
+                  </p>
+                )}
+              </div>
+            )}
+            {formIsCourier && (
+              <div className="bg-purple-50 border border-purple-200 rounded-md p-3 text-xs text-purple-700">
+                <p className="font-medium">Kuriyer uchun GPS joylashuv va Face ID talab qilinmaydi.</p>
+                <p className="mt-1">Kuriyerlar faqat buyurtmalarni yetkazib berish uchun tayinlanadi.</p>
+              </div>
+            )}
           </div>
           <DialogFooter className="mt-4">
             <Button variant="outline" onClick={closeDialog}>Bekor qilish</Button>

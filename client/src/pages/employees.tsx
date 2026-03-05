@@ -297,22 +297,26 @@ export default function EmployeesPage() {
       return toast({ title: "Geolokatsiya qo'llab-quvvatlanmaydi", variant: "destructive" });
     }
     setGettingLocation(true);
-    navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        setFormLocationLat(String(pos.coords.latitude));
-        setFormLocationLng(String(pos.coords.longitude));
-        setGettingLocation(false);
-        toast({ title: `Joylashuv aniqlandi: ${pos.coords.latitude.toFixed(6)}, ${pos.coords.longitude.toFixed(6)}` });
-      },
-      (err) => {
-        setGettingLocation(false);
-        toast({ 
-          title: err.code === 1 ? "GPS ruxsati berilmadi. Brauzer sozlamalaridan ruxsat bering." : "Joylashuvni aniqlashda xatolik", 
-          variant: "destructive" 
-        });
-      },
-      { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
-    );
+    let resolved = false;
+    const onSuccess = (pos: GeolocationPosition) => {
+      if (resolved) return;
+      resolved = true;
+      setFormLocationLat(String(pos.coords.latitude));
+      setFormLocationLng(String(pos.coords.longitude));
+      setGettingLocation(false);
+      toast({ title: `Joylashuv aniqlandi: ${pos.coords.latitude.toFixed(6)}, ${pos.coords.longitude.toFixed(6)}` });
+    };
+    const onError = (err: GeolocationPositionError) => {
+      if (resolved) return;
+      resolved = true;
+      setGettingLocation(false);
+      toast({ 
+        title: err.code === 1 ? "GPS ruxsati berilmadi" : "Joylashuvni aniqlashda xatolik", 
+        variant: "destructive" 
+      });
+    };
+    navigator.geolocation.getCurrentPosition(onSuccess, onError, { enableHighAccuracy: false, timeout: 5000, maximumAge: 60000 });
+    navigator.geolocation.getCurrentPosition(onSuccess, () => {}, { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 });
   };
 
   const startCamera = async () => {

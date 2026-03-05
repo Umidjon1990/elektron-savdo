@@ -50,6 +50,8 @@ export default function AttendanceCheckPage() {
   const [faceScore, setFaceScore] = useState<number | null>(null);
   const [faceDetected, setFaceDetected] = useState(false);
   const [liveDescriptor, setLiveDescriptor] = useState<number[] | null>(null);
+  const [cameraReady, setCameraReady] = useState(false);
+  const [cameraError, setCameraError] = useState("");
   const [locationVerified, setLocationVerified] = useState(false);
   const [locationDistance, setLocationDistance] = useState<number | null>(null);
   const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
@@ -108,23 +110,38 @@ export default function AttendanceCheckPage() {
   const noFaceCountRef = useRef(0);
 
   const startCamera = async () => {
+    setCameraReady(false);
+    setCameraError("");
     try {
-      await loadFaceApi();
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: "user", width: { ideal: 640 }, height: { ideal: 480 } },
-      });
+      let stream: MediaStream;
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: "user", width: { ideal: 640 }, height: { ideal: 480 } },
+        });
+      } catch (e1: any) {
+        try {
+          stream = await navigator.mediaDevices.getUserMedia({ video: true });
+        } catch (e2: any) {
+          setCameraError("Kameraga ruxsat berilmadi. Iltimos, brauzer sozlamalarida kamerani yoqing.");
+          return;
+        }
+      }
       streamRef.current = stream;
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
+        videoRef.current.setAttribute("playsinline", "true");
+        videoRef.current.setAttribute("webkit-playsinline", "true");
         await videoRef.current.play();
+        setCameraReady(true);
       }
       bestDescriptorRef.current = null;
       detectionCountRef.current = 0;
       noFaceCountRef.current = 0;
+
+      await loadFaceApi();
       startFaceDetection();
     } catch (err: any) {
-      setErrorMsg("Kameraga ruxsat berilmadi. Iltimos, kamera ruxsatini yoqing.");
-      setStep("error");
+      setCameraError(err.message || "Kameraga ulanib bo'lmadi");
     }
   };
 
@@ -407,41 +424,65 @@ export default function AttendanceCheckPage() {
               className="w-full h-full object-cover"
               playsInline
               muted
+              autoPlay
               data-testid="video-camera"
+              style={{ WebkitTransform: "scaleX(-1)", transform: "scaleX(-1)" }}
             />
             <canvas ref={canvasRef} className="hidden" />
 
-            <svg className="absolute inset-0 w-full h-full pointer-events-none" viewBox="0 0 300 400" preserveAspectRatio="xMidYMid slice">
-              <defs>
-                <mask id="ovalMask">
-                  <rect width="300" height="400" fill="white" />
-                  <ellipse cx="150" cy="175" rx="85" ry="115" fill="black" />
-                </mask>
-              </defs>
-              <rect width="300" height="400" fill="rgba(0,0,0,0.55)" mask="url(#ovalMask)" />
-              <ellipse
-                cx="150" cy="175" rx="85" ry="115"
-                fill="none"
-                strokeWidth="3"
-                className={`transition-all duration-500 ${faceDetected ? "stroke-green-400" : "stroke-white/60"}`}
-                strokeDasharray={faceDetected ? "0" : "12 6"}
-              />
-              {faceDetected && (
-                <>
-                  <ellipse cx="150" cy="175" rx="85" ry="115" fill="none" strokeWidth="6" className="stroke-green-400/30" />
-                  <ellipse cx="150" cy="175" rx="90" ry="120" fill="none" strokeWidth="2" className="stroke-green-400/20" />
-                </>
-              )}
-            </svg>
+            {cameraError && (
+              <div className="absolute inset-0 flex flex-col items-center justify-center bg-gray-900 z-20 p-6 text-center">
+                <AlertTriangle className="h-12 w-12 text-yellow-400 mb-3" />
+                <p className="text-white text-sm font-medium mb-1">Kamera ochilmadi</p>
+                <p className="text-gray-400 text-xs mb-4">{cameraError}</p>
+                <Button size="sm" onClick={() => { setCameraError(""); startCamera(); }} variant="outline" className="text-white border-white/30">
+                  <RefreshCw className="h-4 w-4 mr-1" /> Qayta urinish
+                </Button>
+              </div>
+            )}
 
-            <div className="absolute bottom-16 left-0 right-0 text-center pointer-events-none">
-              <span className={`px-4 py-1.5 rounded-full text-xs font-medium ${faceDetected ? "bg-green-500/90 text-white" : "bg-black/50 text-white/80"}`}>
-                {faceDetected ? "✓ Yuz aniqlandi" : "Yuzingizni oval ichiga joylashtiring"}
-              </span>
-            </div>
+            {!cameraError && !cameraReady && (
+              <div className="absolute inset-0 flex flex-col items-center justify-center bg-gray-900 z-20">
+                <Loader2 className="h-8 w-8 animate-spin text-white mb-3" />
+                <p className="text-white/70 text-xs">Kamera ochilmoqda...</p>
+              </div>
+            )}
+
+            {cameraReady && (
+              <svg className="absolute inset-0 w-full h-full pointer-events-none z-10" viewBox="0 0 300 400" preserveAspectRatio="xMidYMid slice">
+                <defs>
+                  <mask id="ovalMask">
+                    <rect width="300" height="400" fill="white" />
+                    <ellipse cx="150" cy="175" rx="85" ry="115" fill="black" />
+                  </mask>
+                </defs>
+                <rect width="300" height="400" fill="rgba(0,0,0,0.5)" mask="url(#ovalMask)" />
+                <ellipse
+                  cx="150" cy="175" rx="85" ry="115"
+                  fill="none"
+                  strokeWidth="3"
+                  className={`transition-all duration-500 ${faceDetected ? "stroke-green-400" : "stroke-white/50"}`}
+                  strokeDasharray={faceDetected ? "0" : "12 6"}
+                />
+                {faceDetected && (
+                  <>
+                    <ellipse cx="150" cy="175" rx="85" ry="115" fill="none" strokeWidth="6" className="stroke-green-400/30" />
+                    <ellipse cx="150" cy="175" rx="90" ry="120" fill="none" strokeWidth="2" className="stroke-green-400/20" />
+                  </>
+                )}
+              </svg>
+            )}
+
+            {cameraReady && (
+              <div className="absolute bottom-16 left-0 right-0 text-center pointer-events-none z-10">
+                <span className={`px-4 py-1.5 rounded-full text-xs font-medium ${faceDetected ? "bg-green-500/90 text-white" : "bg-black/50 text-white/80"}`}>
+                  {faceDetected ? "✓ Yuz aniqlandi" : "Yuzingizni oval ichiga joylashtiring"}
+                </span>
+              </div>
+            )}
 
             {step === "submitting" && (
-              <div className="absolute inset-0 bg-black/50 flex items-center justify-center z-10">
+              <div className="absolute inset-0 bg-black/50 flex items-center justify-center z-20">
                 <Loader2 className="h-10 w-10 animate-spin text-white" />
               </div>
             )}
@@ -449,7 +490,7 @@ export default function AttendanceCheckPage() {
               <div className={`px-3 py-1.5 rounded-full text-xs font-medium flex items-center gap-1.5 ${faceDetected ? "bg-green-500/90 text-white" : "bg-gray-800/70 text-gray-200"}`}
                 data-testid="badge-face-status">
                 <Camera className="h-3.5 w-3.5" />
-                {faceDetected ? `Yuz ✓ ${faceScore ? faceScore + "%" : ""}` : "Yuzni aniqlash..."}
+                {faceDetected ? `Yuz ✓ ${faceScore ? faceScore + "%" : ""}` : cameraReady ? "Yuzni aniqlash..." : "Kamera..."}
               </div>
               <div className={`px-3 py-1.5 rounded-full text-xs font-medium flex items-center gap-1.5 ${locationVerified ? "bg-green-500/90 text-white" : locationError ? "bg-red-500/90 text-white" : locationLoading ? "bg-yellow-500/90 text-white" : "bg-gray-800/70 text-gray-200"}`}
                 data-testid="badge-location-status">

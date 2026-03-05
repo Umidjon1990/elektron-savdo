@@ -17,7 +17,9 @@ async function ensureFaceModels() {
   const faceapi = await import("face-api.js");
   const MODEL_URL = "/models";
   await Promise.all([
+    faceapi.nets.ssdMobilenetv1.loadFromUri(MODEL_URL),
     faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL),
+    faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL),
     faceapi.nets.faceLandmark68TinyNet.loadFromUri(MODEL_URL),
     faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL),
   ]);
@@ -461,18 +463,26 @@ export default function EmployeesPage() {
       await ensureFaceModels();
       const faceapi = await import("face-api.js");
       const img = await faceapi.fetchImage(dataUrl);
-      const detection = await faceapi
-        .detectSingleFace(img, new faceapi.TinyFaceDetectorOptions())
-        .withFaceLandmarks(true)
+
+      let detection = await faceapi
+        .detectSingleFace(img, new faceapi.SsdMobilenetv1Options({ minConfidence: 0.3 }))
+        .withFaceLandmarks()
         .withFaceDescriptor();
+
+      if (!detection) {
+        detection = await faceapi
+          .detectSingleFace(img, new faceapi.TinyFaceDetectorOptions({ inputSize: 416, scoreThreshold: 0.3 }))
+          .withFaceLandmarks(true)
+          .withFaceDescriptor();
+      }
 
       if (detection) {
         setFormFaceDescriptor(Array.from(detection.descriptor));
-        setFaceStatus("✅ Yuz aniqlandi va saqlandi");
+        setFaceStatus(`✅ Yuz aniqlandi (${Math.round(detection.detection.score * 100)}%) va saqlandi`);
         stopCamera();
         setCapturingFace(false);
       } else {
-        setFaceStatus("❌ Yuz topilmadi, qayta urinib ko'ring");
+        setFaceStatus("❌ Yuz topilmadi. Yuzingizni to'g'ri tutib, yaxshi yoritilgan joyda qayta urinib ko'ring");
       }
     } catch {
       setFaceStatus("⚠️ Face model yuklanmadi, rasm saqlandi");

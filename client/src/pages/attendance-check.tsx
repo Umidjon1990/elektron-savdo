@@ -30,7 +30,9 @@ async function loadFaceApi() {
   const faceapi = await import("face-api.js");
   const MODEL_URL = "/models";
   await Promise.all([
+    faceapi.nets.ssdMobilenetv1.loadFromUri(MODEL_URL),
     faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL),
+    faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL),
     faceapi.nets.faceLandmark68TinyNet.loadFromUri(MODEL_URL),
     faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL),
   ]);
@@ -103,17 +105,24 @@ export default function AttendanceCheckPage() {
     }
   };
 
+  const bestDescriptorRef = useRef<{ descriptor: number[]; score: number } | null>(null);
+  const detectionCountRef = useRef(0);
+  const noFaceCountRef = useRef(0);
+
   const startCamera = async () => {
     try {
       await loadFaceApi();
       const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: "user", width: { ideal: 480 }, height: { ideal: 640 } },
+        video: { facingMode: "user", width: { ideal: 1280 }, height: { ideal: 720 } },
       });
       streamRef.current = stream;
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
         await videoRef.current.play();
       }
+      bestDescriptorRef.current = null;
+      detectionCountRef.current = 0;
+      noFaceCountRef.current = 0;
       startFaceDetection();
     } catch (err: any) {
       setErrorMsg("Kameraga ruxsat berilmadi. Iltimos, kamera ruxsatini yoqing.");
@@ -129,20 +138,41 @@ export default function AttendanceCheckPage() {
       detecting = true;
       try {
         const faceapi = await import("face-api.js");
-        const detection = await faceapi
-          .detectSingleFace(videoRef.current!, new faceapi.TinyFaceDetectorOptions({ inputSize: 320, scoreThreshold: 0.5 }))
-          .withFaceLandmarks(true)
+
+        let detection = await faceapi
+          .detectSingleFace(videoRef.current!, new faceapi.SsdMobilenetv1Options({ minConfidence: 0.3 }))
+          .withFaceLandmarks()
           .withFaceDescriptor();
 
+        if (!detection) {
+          detection = await faceapi
+            .detectSingleFace(videoRef.current!, new faceapi.TinyFaceDetectorOptions({ inputSize: 416, scoreThreshold: 0.3 }))
+            .withFaceLandmarks(true)
+            .withFaceDescriptor();
+        }
+
         if (detection) {
+          noFaceCountRef.current = 0;
+          detectionCountRef.current++;
           const desc = Array.from(detection.descriptor);
-          setLiveDescriptor(desc);
+          const score = detection.detection.score;
+
+          if (!bestDescriptorRef.current || score > bestDescriptorRef.current.score) {
+            bestDescriptorRef.current = { descriptor: desc, score };
+          }
+
+          setLiveDescriptor(bestDescriptorRef.current.descriptor);
           setFaceDetected(true);
-          setFaceScore(100);
+          setFaceScore(Math.round(score * 100));
+        } else {
+          noFaceCountRef.current++;
+          if (noFaceCountRef.current > 10) {
+            setFaceDetected(false);
+          }
         }
       } catch {}
       detecting = false;
-    }, 1500);
+    }, 500);
   };
 
   useEffect(() => {
@@ -374,7 +404,7 @@ export default function AttendanceCheckPage() {
         )}
 
         <Card className="overflow-hidden">
-          <div className="relative bg-black aspect-[3/4] flex items-center justify-center">
+          <div className={`relative bg-black aspect-[3/4] flex items-center justify-center transition-all duration-300 ${faceDetected ? "ring-4 ring-green-400 ring-inset" : "ring-4 ring-transparent"}`}>
             <video
               ref={videoRef}
               className="w-full h-full object-cover"

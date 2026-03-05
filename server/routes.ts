@@ -1361,8 +1361,8 @@ export async function registerRoutes(
           sum += (liveDescriptor[i] - storedDesc[i]) ** 2;
         }
         const distance = Math.sqrt(sum);
-        faceScore = Math.max(0, Math.min(100, Math.round((1 - distance / 1.0) * 100)));
-        faceVerified = faceScore >= 60;
+        faceScore = Math.max(0, Math.min(100, Math.round((1 - distance / 1.2) * 100)));
+        faceVerified = faceScore >= 50;
       }
 
       // Verify location using Haversine formula

@@ -294,29 +294,34 @@ export default function EmployeesPage() {
 
   const handleGetLocation = () => {
     if (!navigator.geolocation) {
-      return toast({ title: "Geolokatsiya qo'llab-quvvatlanmaydi", variant: "destructive" });
+      return toast({ title: "GPS qo'llab-quvvatlanmaydi. Qo'lda kiriting yoki Google Maps dan nusxalang.", variant: "destructive" });
     }
     setGettingLocation(true);
-    let resolved = false;
-    const onSuccess = (pos: GeolocationPosition) => {
-      if (resolved) return;
-      resolved = true;
-      setFormLocationLat(String(pos.coords.latitude));
-      setFormLocationLng(String(pos.coords.longitude));
-      setGettingLocation(false);
-      toast({ title: `Joylashuv aniqlandi: ${pos.coords.latitude.toFixed(6)}, ${pos.coords.longitude.toFixed(6)}` });
-    };
-    const onError = (err: GeolocationPositionError) => {
-      if (resolved) return;
-      resolved = true;
+    const timeoutId = setTimeout(() => {
       setGettingLocation(false);
       toast({ 
-        title: err.code === 1 ? "GPS ruxsati berilmadi" : "Joylashuvni aniqlashda xatolik", 
+        title: "GPS javob bermadi. Quyidagi usullardan foydalaning: 1) Google Maps dan lat/lng nusxalang, 2) Telegram dan joylashuv yuboring", 
         variant: "destructive" 
       });
-    };
-    navigator.geolocation.getCurrentPosition(onSuccess, onError, { enableHighAccuracy: false, timeout: 5000, maximumAge: 60000 });
-    navigator.geolocation.getCurrentPosition(onSuccess, () => {}, { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 });
+    }, 5000);
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        clearTimeout(timeoutId);
+        setFormLocationLat(String(pos.coords.latitude));
+        setFormLocationLng(String(pos.coords.longitude));
+        setGettingLocation(false);
+        toast({ title: `Joylashuv aniqlandi: ${pos.coords.latitude.toFixed(6)}, ${pos.coords.longitude.toFixed(6)}` });
+      },
+      () => {
+        clearTimeout(timeoutId);
+        setGettingLocation(false);
+        toast({ 
+          title: "GPS ishlamadi. Qo'lda kiriting: Google Maps da joyni bosib lat/lng ni nusxalang.", 
+          variant: "destructive" 
+        });
+      },
+      { enableHighAccuracy: false, timeout: 4000, maximumAge: 300000 }
+    );
   };
 
   const startCamera = async () => {
@@ -820,12 +825,18 @@ export default function EmployeesPage() {
                 {gettingLocation ? (
                   <><Loader2 className="h-4 w-4 mr-1 animate-spin" /> GPS aniqlanmoqda...</>
                 ) : (
-                  <><MapPin className="h-4 w-4 mr-1" /> 📍 Hozirgi joylashuvni aniqlash</>
+                  <><MapPin className="h-4 w-4 mr-1" /> Hozirgi joylashuvni aniqlash (GPS)</>
                 )}
               </Button>
+              <div className="bg-blue-50 border border-blue-200 rounded-md p-2 text-xs text-blue-700 space-y-1">
+                <p className="font-medium">GPS ishlamasa qo'lda kiriting:</p>
+                <p>1. <a href="https://www.google.com/maps" target="_blank" rel="noopener noreferrer" className="underline text-blue-600">Google Maps</a> ni oching</p>
+                <p>2. Do'kon joylashuvini bosing</p>
+                <p>3. Koordinatalarni (masalan: 41.2995, 69.2401) nusxalab yuqoridagi Latitude va Longitude maydonlariga yozing</p>
+              </div>
               {formLocationLat && formLocationLng && (
-                <p className="text-xs text-green-600 text-center">
-                  ✅ Joylashuv belgilangan: {parseFloat(formLocationLat).toFixed(6)}, {parseFloat(formLocationLng).toFixed(6)}
+                <p className="text-xs text-green-600 text-center font-medium">
+                  ✅ Joylashuv: {parseFloat(formLocationLat).toFixed(6)}, {parseFloat(formLocationLng).toFixed(6)}
                 </p>
               )}
             </div>

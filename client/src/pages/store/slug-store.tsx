@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Search, ShoppingCart, ArrowRight, Store, Truck, ShieldCheck, Phone, Play } from "lucide-react";
 import { VideoPopup } from "@/components/ui/video-popup";
-import { motion, AnimatePresence } from "framer-motion";
+import { AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
 
 interface TenantInfo {
@@ -232,29 +232,23 @@ export default function SlugStorePage() {
       </nav>
 
       <section className="relative overflow-hidden pt-12 pb-20 lg:pt-20 lg:pb-28">
-        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full h-full z-0 pointer-events-none">
-          <div className="absolute top-20 left-10 w-72 h-72 bg-purple-300 rounded-full mix-blend-multiply filter blur-3xl opacity-30 animate-blob" />
-          <div className="absolute top-20 right-10 w-72 h-72 bg-yellow-300 rounded-full mix-blend-multiply filter blur-3xl opacity-30 animate-blob animation-delay-2000" />
-        </div>
         <div className="container mx-auto px-4 relative z-10">
           <div className="text-center max-w-3xl mx-auto">
-            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }}>
-              <h1 className="text-4xl md:text-6xl font-extrabold tracking-tight text-slate-900 mb-6 leading-tight">
-                <span style={{ color: brandColor }}>{tenant.name}</span>ga <br /> xush kelibsiz!
-              </h1>
-              <p className="text-lg text-slate-600 mb-8 leading-relaxed">
-                Bizning do'konimizdan sifatli mahsulotlarni toping va onlayn buyurtma bering.
-              </p>
-              <Button
-                size="lg"
-                className="h-12 px-8 text-white rounded-full shadow-xl transition-transform hover:scale-105"
-                style={{ backgroundColor: brandColor }}
-                onClick={() => document.getElementById("catalog")?.scrollIntoView({ behavior: "smooth" })}
-                data-testid="button-start-shopping"
-              >
-                Xaridni boshlash <ArrowRight className="ml-2 h-4 w-4" />
-              </Button>
-            </motion.div>
+            <h1 className="text-4xl md:text-6xl font-extrabold tracking-tight text-slate-900 mb-6 leading-tight">
+              <span style={{ color: brandColor }}>{tenant.name}</span>ga <br /> xush kelibsiz!
+            </h1>
+            <p className="text-lg text-slate-600 mb-8 leading-relaxed">
+              Bizning do'konimizdan sifatli mahsulotlarni toping va onlayn buyurtma bering.
+            </p>
+            <Button
+              size="lg"
+              className="h-12 px-8 text-white rounded-full shadow-xl transition-transform hover:scale-105"
+              style={{ backgroundColor: brandColor }}
+              onClick={() => document.getElementById("catalog")?.scrollIntoView({ behavior: "smooth" })}
+              data-testid="button-start-shopping"
+            >
+              Xaridni boshlash <ArrowRight className="ml-2 h-4 w-4" />
+            </Button>
           </div>
         </div>
       </section>
@@ -346,12 +340,9 @@ export default function SlugStorePage() {
               </div>
               <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6">
                 {newProducts.map((product) => (
-                  <motion.div
+                  <div
                     key={`new-${product.id}`}
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.5 }}
-                    className="group rounded-2xl p-3 shadow-lg hover:shadow-xl transition-all flex flex-col relative overflow-hidden bg-gradient-to-br from-amber-50 via-white to-orange-50 border-2 border-amber-300 hover:shadow-amber-200 ring-1 ring-amber-200"
+                    className="group rounded-2xl p-3 shadow-lg hover:shadow-xl transition-shadow flex flex-col relative overflow-hidden bg-gradient-to-br from-amber-50 via-white to-orange-50 border-2 border-amber-300 ring-1 ring-amber-200"
                     data-testid={`card-new-product-${product.id}`}
                   >
                     <div className="absolute top-0 right-0 z-20">

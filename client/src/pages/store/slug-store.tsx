@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { useLocation, useParams } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
@@ -6,7 +6,6 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Search, ShoppingCart, ArrowRight, Store, Truck, ShieldCheck, Phone, Play } from "lucide-react";
 import { VideoPopup } from "@/components/ui/video-popup";
-import { AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
 
 interface TenantInfo {
@@ -55,13 +54,13 @@ function useStoreCart(slug: string) {
     localStorage.setItem(`cart_${slug}`, JSON.stringify(items));
   }, [items, slug]);
 
-  const addItem = (product: Product) => {
+  const addItem = useCallback((product: Product) => {
     setItems(prev => {
       const existing = prev.find(i => i.product.id === product.id);
       if (existing) return prev.map(i => i.product.id === product.id ? { ...i, quantity: i.quantity + 1 } : i);
       return [...prev, { product, quantity: 1 }];
     });
-  };
+  }, []);
 
   const itemCount = items.reduce((s, i) => s + i.quantity, 0);
   const total = items.reduce((s, i) => s + i.product.price * i.quantity, 0);
@@ -74,27 +73,20 @@ function FloatingCart({ slug, itemCount, total }: { slug: string; itemCount: num
   if (itemCount === 0) return null;
 
   return (
-    <AnimatePresence>
-      <motion.div
-        initial={{ y: 100, opacity: 0 }}
-        animate={{ y: 0, opacity: 1 }}
-        exit={{ y: 100, opacity: 0 }}
-        className="fixed bottom-4 left-4 right-4 z-50 md:left-auto md:right-8 md:w-96"
+    <div className="fixed bottom-4 left-4 right-4 z-50 md:left-auto md:right-8 md:w-96">
+      <Button
+        onClick={() => setLocation(`/store/${slug}/cart`)}
+        className="w-full h-auto min-h-14 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl shadow-2xl shadow-indigo-300 flex items-center justify-between px-4"
+        data-testid="button-floating-cart"
       >
-        <Button
-          onClick={() => setLocation(`/store/${slug}/cart`)}
-          className="w-full h-auto min-h-14 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl shadow-2xl shadow-indigo-300 flex items-center justify-between px-4"
-          data-testid="button-floating-cart"
-        >
-          <div className="flex items-center gap-2">
-            <ShoppingCart className="h-5 w-5" />
-            <span className="font-semibold">Savat</span>
-            <span className="bg-yellow-400 text-gray-900 text-xs font-bold px-2 py-0.5 rounded-full">{itemCount} dona</span>
-          </div>
-          <span className="text-base font-bold">{total.toLocaleString()} so'm</span>
-        </Button>
-      </motion.div>
-    </AnimatePresence>
+        <div className="flex items-center gap-2">
+          <ShoppingCart className="h-5 w-5" />
+          <span className="font-semibold">Savat</span>
+          <span className="bg-yellow-400 text-gray-900 text-xs font-bold px-2 py-0.5 rounded-full">{itemCount} dona</span>
+        </div>
+        <span className="text-base font-bold">{total.toLocaleString()} so'm</span>
+      </Button>
+    </div>
   );
 }
 
@@ -114,6 +106,7 @@ export default function SlugStorePage() {
       return res.json();
     },
     enabled: !!slug,
+    staleTime: 5 * 60 * 1000,
   });
 
   const { data: products = [], isLoading: productsLoading } = useQuery<Product[]>({
@@ -124,6 +117,7 @@ export default function SlugStorePage() {
       return res.json();
     },
     enabled: !!slug && !!tenant,
+    staleTime: 30000,
   });
 
   const { data: categories = [] } = useQuery<Category[]>({
@@ -150,6 +144,19 @@ export default function SlugStorePage() {
     }
   }, [categories, initialCategorySet]);
 
+  const filteredProducts = useMemo(() => products.filter(p =>
+    (activeCategory === "Barchasi" || p.category === activeCategory) &&
+    (p.name.toLowerCase().includes(searchQuery.toLowerCase()) || (p.author || "").toLowerCase().includes(searchQuery.toLowerCase()))
+  ), [products, activeCategory, searchQuery]);
+
+  const newProducts = useMemo(() => products.filter(p => p.isNew), [products]);
+
+  const sortedCategories = useMemo(() => [...categories].sort((a, b) => {
+    if (a.isPinned && !b.isPinned) return -1;
+    if (!a.isPinned && b.isPinned) return 1;
+    return (a.sortOrder || 0) - (b.sortOrder || 0);
+  }), [categories]);
+
   if (tenantLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-slate-50">
@@ -174,13 +181,6 @@ export default function SlugStorePage() {
   }
 
   const brandColor = tenant.brandColor || "#4f46e5";
-
-  const filteredProducts = products.filter(p =>
-    (activeCategory === "Barchasi" || p.category === activeCategory) &&
-    (p.name.toLowerCase().includes(searchQuery.toLowerCase()) || (p.author || "").toLowerCase().includes(searchQuery.toLowerCase()))
-  );
-
-  const newProducts = products.filter(p => p.isNew);
 
   return (
     <div className="min-h-screen bg-slate-50 font-sans">
@@ -303,11 +303,7 @@ export default function SlugStorePage() {
             >
               Barchasi
             </Button>
-            {[...categories].sort((a, b) => {
-              if (a.isPinned && !b.isPinned) return -1;
-              if (!a.isPinned && b.isPinned) return 1;
-              return (a.sortOrder || 0) - (b.sortOrder || 0);
-            }).map((cat) => (
+            {sortedCategories.map((cat) => (
               <Button
                 key={cat.id}
                 onClick={() => setActiveCategory(cat.name)}
@@ -333,7 +329,7 @@ export default function SlugStorePage() {
           {newProducts.length > 0 && activeCategory === "Barchasi" && !searchQuery && (
             <div className="mt-8 mb-6">
               <div className="flex items-center gap-3 mb-5">
-                <div className="bg-gradient-to-r from-amber-500 to-orange-500 text-white text-sm font-black px-4 py-1.5 rounded-full shadow-md shadow-amber-200/50 animate-pulse tracking-wider">
+                <div className="bg-gradient-to-r from-amber-500 to-orange-500 text-white text-sm font-black px-4 py-1.5 rounded-full shadow-md shadow-amber-200/50 tracking-wider">
                   YANGI
                 </div>
                 <div className="h-px flex-1 bg-gradient-to-r from-amber-300 to-transparent" />
@@ -346,15 +342,12 @@ export default function SlugStorePage() {
                     data-testid={`card-new-product-${product.id}`}
                   >
                     <div className="absolute top-0 right-0 z-20">
-                      <div className="bg-gradient-to-r from-amber-500 to-orange-500 text-white text-[10px] font-black px-4 py-1 rounded-bl-xl shadow-lg tracking-widest animate-pulse">
+                      <div className="bg-gradient-to-r from-amber-500 to-orange-500 text-white text-[10px] font-black px-4 py-1 rounded-bl-xl shadow-lg tracking-widest">
                         YANGI
                       </div>
                     </div>
-                    <div className="absolute -top-10 -left-10 w-24 h-24 bg-amber-400 opacity-10 rounded-full blur-2xl" />
-                    <div className="absolute -bottom-10 -right-10 w-24 h-24 bg-orange-400 opacity-10 rounded-full blur-2xl" />
                     <div className="relative aspect-[2/3] rounded-xl overflow-hidden mb-3 ring-2 ring-amber-200 ring-offset-2">
-                      <img src={product.image} alt={product.name} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" />
-                      <div className="absolute inset-0 bg-gradient-to-t from-amber-500/10 to-transparent pointer-events-none" />
+                      <img src={product.image} alt={product.name} className="w-full h-full object-cover" loading="lazy" />
                     </div>
                     <div className="flex-1 flex flex-col">
                       <div className="text-xs font-medium mb-1 text-amber-600">{product.category}</div>
@@ -374,7 +367,7 @@ export default function SlugStorePage() {
                         </Button>
                       </div>
                     </div>
-                  </motion.div>
+                  </div>
                 ))}
               </div>
             </div>
@@ -383,7 +376,7 @@ export default function SlugStorePage() {
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6 mt-8">
             {productsLoading ? (
               Array.from({ length: 8 }).map((_, i) => (
-                <div key={i} className="bg-white rounded-2xl p-3 shadow-sm border border-slate-100 animate-pulse">
+                <div key={i} className="bg-white rounded-2xl p-3 shadow-sm border border-slate-100">
                   <div className="aspect-[2/3] bg-slate-200 rounded-xl mb-3" />
                   <div className="h-3 bg-slate-200 rounded mb-2 w-1/3" />
                   <div className="h-4 bg-slate-200 rounded mb-1" />
@@ -400,41 +393,28 @@ export default function SlugStorePage() {
               </div>
             ) : (
               filteredProducts.map((product) => (
-                <motion.div
+                <div
                   key={product.id}
-                  initial={{ opacity: 0, scale: 0.95 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  transition={{ duration: 0.3 }}
                   className={cn(
-                    "group rounded-2xl p-3 shadow-sm hover:shadow-xl transition-all flex flex-col relative overflow-hidden",
+                    "group rounded-2xl p-3 shadow-sm hover:shadow-xl transition-shadow flex flex-col relative overflow-hidden",
                     product.isNew
-                      ? "bg-gradient-to-br from-amber-50 via-white to-emerald-50 border-2 border-amber-300 hover:shadow-amber-200 ring-1 ring-amber-200"
-                      : "bg-white border border-slate-100 hover:shadow-indigo-100"
+                      ? "bg-gradient-to-br from-amber-50 via-white to-emerald-50 border-2 border-amber-300 ring-1 ring-amber-200"
+                      : "bg-white border border-slate-100"
                   )}
                   data-testid={`card-product-${product.id}`}
                 >
                   {product.isNew && (
-                    <>
-                      <div className="absolute top-0 right-0 z-20">
-                        <div className="bg-gradient-to-r from-amber-500 to-orange-500 text-white text-[10px] font-black px-4 py-1 rounded-bl-xl shadow-lg tracking-widest animate-pulse">
-                          YANGI
-                        </div>
+                    <div className="absolute top-0 right-0 z-20">
+                      <div className="bg-gradient-to-r from-amber-500 to-orange-500 text-white text-[10px] font-black px-4 py-1 rounded-bl-xl shadow-lg tracking-widest">
+                        YANGI
                       </div>
-                      <div className="absolute -top-10 -left-10 w-24 h-24 bg-amber-400 opacity-10 rounded-full blur-2xl" />
-                      <div className="absolute -bottom-10 -right-10 w-24 h-24 bg-emerald-400 opacity-10 rounded-full blur-2xl" />
-                    </>
+                    </div>
                   )}
                   <div className={cn(
                     "relative aspect-[2/3] rounded-xl overflow-hidden mb-3",
                     product.isNew ? "ring-2 ring-amber-200 ring-offset-2" : "bg-slate-100"
                   )}>
-                    <img src={product.image} alt={product.name} className={cn(
-                      "w-full h-full object-cover transition-transform duration-500",
-                      product.isNew ? "group-hover:scale-110" : "group-hover:scale-105"
-                    )} />
-                    {product.isNew && (
-                      <div className="absolute inset-0 bg-gradient-to-t from-amber-500/10 to-transparent pointer-events-none" />
-                    )}
+                    <img src={product.image} alt={product.name} className="w-full h-full object-cover" loading="lazy" />
                     {product.stock < 5 && !product.isNew && (
                       <span className="absolute top-2 left-2 bg-red-500 text-white text-[10px] font-bold px-2 py-1 rounded-md">KAM QOLDI</span>
                     )}
@@ -456,7 +436,7 @@ export default function SlugStorePage() {
                       <Button
                         size="icon"
                         className={cn(
-                          "h-8 w-8 rounded-full text-white transition-all",
+                          "h-8 w-8 rounded-full text-white",
                           product.isNew ? "bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 shadow-md shadow-amber-200" : ""
                         )}
                         style={product.isNew ? {} : { backgroundColor: brandColor }}
@@ -481,7 +461,7 @@ export default function SlugStorePage() {
                       </div>
                     )}
                   </div>
-                </motion.div>
+                </div>
               ))
             )}
           </div>

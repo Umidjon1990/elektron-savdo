@@ -80,16 +80,18 @@ export function ProductProvider({ children }: { children: ReactNode }) {
       const rawProducts = await res.json();
       const products: Product[] = rawProducts.map((p: any) => ({ ...p, costPrice: p.costPrice ?? 0 }));
       
-      await db.products.clear();
-      await db.products.bulkPut(products);
       setCachedProducts(products);
+      
+      db.products.clear().then(() => db.products.bulkPut(products)).catch((e) => {
+        console.error("IndexedDB sync error:", e);
+      });
       
       return products;
     },
     enabled: !isOffline && cacheLoaded && !!token,
-    staleTime: 0,
-    refetchOnWindowFocus: true,
-    refetchOnMount: 'always',
+    staleTime: 30000,
+    refetchOnWindowFocus: false,
+    refetchOnMount: true,
     retry: 2,
   });
 

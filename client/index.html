@@ -26,17 +26,12 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
     <style>
-      html, body { height: auto !important; overflow: auto !important; min-height: 100vh; overscroll-behavior: none; -webkit-overflow-scrolling: touch; }
-      body { color: #1e293b; background-color: #f1f5f9; font-family: 'Inter', 'Segoe UI', Arial, sans-serif !important; -webkit-user-select: none; user-select: none; }
+      html, body { height: auto !important; overflow: auto !important; min-height: 100vh; -webkit-overflow-scrolling: touch; touch-action: pan-x pan-y; }
+      body { color: #1e293b; background-color: #f1f5f9; font-family: 'Inter', 'Segoe UI', Arial, sans-serif !important; }
       input, textarea, [contenteditable] { -webkit-user-select: text; user-select: text; }
       #root { min-height: 100vh; min-height: 100dvh; }
-      ::-webkit-scrollbar { width: 12px !important; height: 12px !important; }
-      ::-webkit-scrollbar-track { background: #cbd5e1 !important; }
-      ::-webkit-scrollbar-thumb { background: #64748b !important; border-radius: 6px !important; }
-      * { scrollbar-width: auto !important; scrollbar-color: #64748b #cbd5e1 !important; }
       @media (display-mode: standalone) {
-        html, body { height: 100vh !important; height: 100dvh !important; overflow: hidden !important; }
-        #root { height: 100vh; height: 100dvh; overflow: auto; overscroll-behavior: none; }
+        html { overscroll-behavior-y: contain; }
         body { padding-top: env(safe-area-inset-top); padding-bottom: env(safe-area-inset-bottom); }
       }
     </style>

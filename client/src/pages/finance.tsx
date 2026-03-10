@@ -82,7 +82,7 @@ export default function FinancePage() {
   const { token } = useAuth();
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  const { transactions: allTransactions, syncTransactions } = useTransactions();
+  const { transactions: allTransactions, syncTransactions, voidTransaction } = useTransactions();
   const [activeMenu, setActiveMenu] = useState<SubMenu>("kassa");
   const [period, setPeriod] = useState<"day" | "week" | "month">("month");
 
@@ -100,6 +100,8 @@ export default function FinancePage() {
   const [selectedDebt, setSelectedDebt] = useState<any>(null);
   const [payAmount, setPayAmount] = useState("");
   const [payNote, setPayNote] = useState("");
+  const [saleDetailTx, setSaleDetailTx] = useState<any>(null);
+  const [voidConfirmId, setVoidConfirmId] = useState<string | null>(null);
 
   const headers = { Authorization: `Bearer ${token}`, "Content-Type": "application/json" };
 
@@ -628,6 +630,29 @@ export default function FinancePage() {
                             <p className="text-[10px] text-gray-400 truncate">{item.note || item.counterparty || "-"}</p>
                           </div>
                           <div className="text-right shrink-0 flex items-center gap-2">
+                            {item.type === "savdo" && (
+                              <div className="flex items-center gap-1">
+                                <button
+                                  onClick={() => {
+                                    const tx = (allTransactions || []).find((t: any) => t.id === item.id);
+                                    if (tx) setSaleDetailTx(tx);
+                                  }}
+                                  className="p-1 rounded hover:bg-gray-200 text-gray-400 hover:text-blue-600"
+                                  title="Batafsil"
+                                  data-testid={`button-view-sale-${item.id}`}
+                                >
+                                  <FileText className="h-3.5 w-3.5" />
+                                </button>
+                                <button
+                                  onClick={() => setVoidConfirmId(item.id)}
+                                  className="p-1 rounded hover:bg-gray-200 text-gray-400 hover:text-red-600"
+                                  title="Bekor qilish"
+                                  data-testid={`button-void-sale-${item.id}`}
+                                >
+                                  <X className="h-3.5 w-3.5" />
+                                </button>
+                              </div>
+                            )}
                             {(item.type === "income" || item.type === "withdrawal") && (
                               <div className="flex items-center gap-1">
                                 <button
@@ -1364,6 +1389,117 @@ export default function FinancePage() {
           <DialogFooter>
             <Button variant="outline" onClick={() => setPayDialogOpen(false)}>Bekor</Button>
             <Button onClick={handleDebtPay} disabled={!payAmount || parseInt(payAmount) <= 0} data-testid="button-confirm-pay">To'lash</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!saleDetailTx} onOpenChange={(open) => { if (!open) setSaleDetailTx(null); }}>
+        <DialogContent className="sm:max-w-md max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <ShoppingCart className="h-4 w-4" />
+              Sotuv tafsilotlari
+            </DialogTitle>
+          </DialogHeader>
+          {saleDetailTx && (
+            <div className="space-y-3">
+              <div className="p-3 bg-gray-50 rounded-lg space-y-1">
+                <div className="flex justify-between text-sm">
+                  <span className="text-gray-500">Sana:</span>
+                  <span className="font-medium">{formatDateTime(saleDetailTx.date)}</span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-gray-500">To'lov usuli:</span>
+                  <span className="font-medium">{saleDetailTx.paymentMethod || "Naqd"}</span>
+                </div>
+                {saleDetailTx.customerName && (
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-500">Mijoz:</span>
+                    <span className="font-medium">{saleDetailTx.customerName}</span>
+                  </div>
+                )}
+                <div className="flex justify-between text-sm">
+                  <span className="text-gray-500">Jami:</span>
+                  <span className="font-bold text-green-600">{saleDetailTx.totalAmount.toLocaleString()} so'm</span>
+                </div>
+                {(saleDetailTx.totalProfit || 0) > 0 && (
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-500">Foyda:</span>
+                    <span className="font-medium text-blue-600">{(saleDetailTx.totalProfit || 0).toLocaleString()} so'm</span>
+                  </div>
+                )}
+              </div>
+
+              <div className="space-y-1">
+                <p className="text-xs font-semibold text-gray-500 uppercase">Tovarlar</p>
+                {(saleDetailTx.items || []).map((item: any, idx: number) => (
+                  <div key={idx} className="flex items-center justify-between p-2 rounded border bg-white">
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium truncate">{item.product?.name || "Noma'lum"}</p>
+                      <p className="text-[10px] text-gray-400">{(item.product?.price || item.price || 0).toLocaleString()} × {item.quantity}</p>
+                    </div>
+                    <p className="text-sm font-bold shrink-0">{((item.product?.price || item.price || 0) * item.quantity).toLocaleString()}</p>
+                  </div>
+                ))}
+              </div>
+
+              <div className="flex gap-2 pt-2">
+                <Button variant="outline" className="flex-1" onClick={() => setSaleDetailTx(null)}>Yopish</Button>
+                <Button
+                  variant="destructive"
+                  className="flex-1 gap-1"
+                  onClick={() => {
+                    setVoidConfirmId(saleDetailTx.id);
+                    setSaleDetailTx(null);
+                  }}
+                  data-testid="button-void-from-detail"
+                >
+                  <X className="h-3.5 w-3.5" /> Bekor qilish
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!voidConfirmId} onOpenChange={(open) => { if (!open) setVoidConfirmId(null); }}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-red-600">
+              <AlertTriangle className="h-5 w-5" />
+              Sotuvni bekor qilish
+            </DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-gray-600">
+            Bu sotuvni bekor qilsangiz, sotilgan tovarlar omborga qaytariladi va tranzaksiya "bekor qilingan" deb belgilanadi. Bu amalni ortga qaytarib bo'lmaydi.
+          </p>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => setVoidConfirmId(null)} data-testid="button-cancel-void">Yopish</Button>
+            <Button
+              variant="destructive"
+              onClick={async () => {
+                if (!voidConfirmId) return;
+                try {
+                  await voidTransaction(voidConfirmId);
+                  toast({
+                    title: "Sotuv bekor qilindi",
+                    description: "Tovarlar omborga qaytarildi",
+                    className: "bg-green-500 text-white border-none",
+                  });
+                  syncTransactions();
+                } catch (err: any) {
+                  toast({
+                    title: "Xato",
+                    description: err.message || "Bekor qilishda xatolik",
+                    variant: "destructive",
+                  });
+                }
+                setVoidConfirmId(null);
+              }}
+              data-testid="button-confirm-void"
+            >
+              Ha, bekor qilish
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

@@ -1386,6 +1386,19 @@ export async function registerRoutes(
       if (!faceVerified) note += "Yuz tasdiqlanmadi. ";
       if (!locationVerified) note += `Lokatsiya tashqarida (${locationDistance}m). `;
 
+      const accepted = faceVerified && locationVerified;
+
+      if (!accepted) {
+        return res.status(403).json({
+          accepted: false,
+          faceVerified,
+          locationVerified,
+          faceScore,
+          locationDistance,
+          message: `Tasdiqlash muvaffaqiyatsiz: ${note.trim()}`,
+        });
+      }
+
       const record = await storage.createAttendanceRecord({
         tenantId: staff.tenantId!,
         staffId: staff.id,
@@ -1403,10 +1416,8 @@ export async function registerRoutes(
 
       res.json({
         ...record,
-        accepted: faceVerified && locationVerified,
-        message: faceVerified && locationVerified
-          ? `${type === "check_in" ? "Kelish" : "Ketish"} muvaffaqiyatli qayd etildi!`
-          : `Tasdiqlash muvaffaqiyatsiz: ${note.trim()}`,
+        accepted: true,
+        message: `${type === "check_in" ? "Kelish" : "Ketish"} muvaffaqiyatli qayd etildi!`,
       });
     } catch (error) {
       res.status(500).json({ error: "Failed to record attendance" });
@@ -1946,11 +1957,11 @@ export async function registerRoutes(
       const allTransactions = await storage.getAllTransactions(req.tenantId!);
       const allExpenses = await storage.getExpenses(req.tenantId!, from, to);
 
-      const days: Record<string, { date: string; revenue: number; expenses: number; profit: number; payments: Record<string, number> }> = {};
+      const days: Record<string, { date: string; revenue: number; expenses: number; profit: number; totalProfit: number; payments: Record<string, number> }> = {};
       const current = new Date(from);
       while (current <= to) {
         const key = current.toISOString().split("T")[0];
-        days[key] = { date: key, revenue: 0, expenses: 0, profit: 0, payments: {} };
+        days[key] = { date: key, revenue: 0, expenses: 0, profit: 0, totalProfit: 0, payments: {} };
         current.setDate(current.getDate() + 1);
       }
 
@@ -1959,6 +1970,7 @@ export async function registerRoutes(
         const key = new Date(t.date).toISOString().split("T")[0];
         if (days[key]) {
           days[key].revenue += t.totalAmount;
+          days[key].totalProfit += t.totalProfit || 0;
           const method = t.paymentMethod || "Naqd";
           days[key].payments[method] = (days[key].payments[method] || 0) + t.totalAmount;
         }
@@ -1973,12 +1985,52 @@ export async function registerRoutes(
 
       const result = Object.values(days).map(d => ({
         ...d,
-        profit: d.revenue - d.expenses,
+        profit: d.totalProfit - d.expenses,
       }));
 
       res.json(result);
     } catch (error) {
       res.status(500).json({ error: "Failed to get daily breakdown" });
+    }
+  });
+
+  // Suppliers CRUD
+  app.get("/api/suppliers", authMiddleware, async (req: any, res) => {
+    try {
+      const list = await storage.getSuppliers(req.tenantId);
+      res.json(list);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch suppliers" });
+    }
+  });
+
+  app.post("/api/suppliers", authMiddleware, async (req: any, res) => {
+    try {
+      const supplier = await storage.createSupplier({ ...req.body, tenantId: req.tenantId });
+      res.json(supplier);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to create supplier" });
+    }
+  });
+
+  app.patch("/api/suppliers/:id", authMiddleware, async (req: any, res) => {
+    try {
+      const { name, phone, address, note, isActive } = req.body;
+      const updated = await storage.updateSupplier(req.params.id, { name, phone, address, note, isActive }, req.tenantId);
+      if (!updated) return res.status(404).json({ error: "Supplier not found" });
+      res.json(updated);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to update supplier" });
+    }
+  });
+
+  app.delete("/api/suppliers/:id", authMiddleware, async (req: any, res) => {
+    try {
+      const deleted = await storage.deleteSupplier(req.params.id, req.tenantId);
+      if (!deleted) return res.status(404).json({ error: "Supplier not found" });
+      res.json({ success: true });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to delete supplier" });
     }
   });
 

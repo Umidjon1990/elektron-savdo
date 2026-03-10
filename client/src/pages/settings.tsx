@@ -11,7 +11,8 @@ import { useSettings } from "@/lib/settings-context";
 import { useAuth } from "@/lib/auth-context";
 import { useUpload } from "@/hooks/use-upload";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Store, Bell, Printer, Database, Shield, Palette, Receipt, Link2, Copy, Check, ExternalLink, Bot, Send, CreditCard, Plus, Trash2, Edit2, X, Package, Users, Image as ImageIcon, Upload, Loader2, Eye } from "lucide-react";
+import { Store, Bell, Printer, Database, Shield, Palette, Receipt, Link2, Copy, Check, ExternalLink, Bot, Send, CreditCard, Plus, Trash2, Edit2, X, Package, Users, Image as ImageIcon, Upload, Loader2, Eye, QrCode, Download, Share2 } from "lucide-react";
+import { QRCodeCanvas } from "qrcode.react";
 
 interface PaymentMethod {
   id: string;
@@ -72,6 +73,7 @@ export default function SettingsPage() {
 
   const defaultFormVisibility: Record<string, boolean> = {
     costPrice: true,
+    price: true,
     barcodePrice: true,
     wholesalePrice: true,
     description: true,
@@ -85,6 +87,7 @@ export default function SettingsPage() {
 
   const FORM_VISIBILITY_OPTIONS = [
     { key: "costPrice", label: "Tan narxi (kelish narxi)" },
+    { key: "price", label: "Sotish narxi" },
     { key: "barcodePrice", label: "Barkod narxi" },
     { key: "wholesalePrice", label: "Ulgurchi narx" },
     { key: "description", label: "Izoh / Tavsif" },
@@ -264,7 +267,7 @@ export default function SettingsPage() {
           </div>
 
           <div className="space-y-6">
-            {tenant?.slug && (
+            {tenant?.slug && (<>
               <Card className="border-blue-200 bg-blue-50/50">
                 <CardHeader className="pb-3">
                   <CardTitle className="flex items-center gap-2 text-blue-800">
@@ -310,7 +313,72 @@ export default function SettingsPage() {
                   </div>
                 </CardContent>
               </Card>
-            )}
+
+              <Card className="border-purple-200 bg-purple-50/50">
+                <CardHeader className="pb-3">
+                  <CardTitle className="flex items-center gap-2 text-purple-800">
+                    <QrCode className="h-5 w-5" />
+                    Do'kon QR kodi
+                  </CardTitle>
+                  <CardDescription>QR kodni mijozlarga ulashing yoki chop eting</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="flex flex-col items-center gap-4">
+                    <div className="bg-white p-4 rounded-xl shadow-sm border" id="qr-code-container">
+                      <div className="text-center mb-3">
+                        <p className="text-lg font-bold text-gray-800">{tenant.name}</p>
+                        <p className="text-xs text-gray-500">{window.location.origin}/store/{tenant.slug}</p>
+                      </div>
+                      <QRCodeCanvas
+                        value={`${window.location.origin}/store/${tenant.slug}`}
+                        size={200}
+                        level="H"
+                        includeMargin={true}
+                        id="store-qr-code"
+                      />
+                    </div>
+                    <div className="flex gap-2 w-full">
+                      <Button
+                        variant="outline"
+                        className="flex-1 border-purple-300 hover:bg-purple-100"
+                        onClick={() => {
+                          const canvas = document.getElementById("store-qr-code") as HTMLCanvasElement;
+                          if (!canvas) return;
+                          const url = canvas.toDataURL("image/png");
+                          const a = document.createElement("a");
+                          a.download = `${tenant.slug}-qr-code.png`;
+                          a.href = url;
+                          a.click();
+                        }}
+                        data-testid="button-download-qr"
+                      >
+                        <Download className="h-4 w-4 mr-2" />
+                        Yuklab olish
+                      </Button>
+                      <Button
+                        variant="outline"
+                        className="flex-1 border-purple-300 hover:bg-purple-100"
+                        onClick={async () => {
+                          const storeUrl = `${window.location.origin}/store/${tenant.slug}`;
+                          if (navigator.share) {
+                            try {
+                              await navigator.share({ title: tenant.name, text: `${tenant.name} do'koniga xush kelibsiz!`, url: storeUrl });
+                            } catch {}
+                          } else {
+                            navigator.clipboard.writeText(storeUrl);
+                            toast({ title: "Link nusxalandi!" });
+                          }
+                        }}
+                        data-testid="button-share-qr"
+                      >
+                        <Share2 className="h-4 w-4 mr-2" />
+                        Ulashish
+                      </Button>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </>)}
 
             <Card className="border-green-200">
               <CardHeader>

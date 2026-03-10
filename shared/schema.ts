@@ -236,6 +236,17 @@ export const staffMembers = pgTable("staff_members", {
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
+export const suppliers = pgTable("suppliers", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  tenantId: varchar("tenant_id").references(() => tenants.id),
+  name: text("name").notNull(),
+  phone: text("phone").default(""),
+  address: text("address").default(""),
+  note: text("note").default(""),
+  isActive: boolean("is_active").notNull().default(true),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
 export const attendanceRecords = pgTable("attendance_records", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   tenantId: varchar("tenant_id").references(() => tenants.id),
@@ -331,6 +342,11 @@ export const insertAttendanceRecordSchema = createInsertSchema(attendanceRecords
   createdAt: true,
 });
 
+export const insertSupplierSchema = createInsertSchema(suppliers).omit({
+  id: true,
+  createdAt: true,
+});
+
 // Register schema for onboarding
 export const registerTenantSchema = z.object({
   storeName: z.string().min(2),
@@ -398,3 +414,6 @@ export type StaffMember = typeof staffMembers.$inferSelect;
 
 export type InsertAttendanceRecord = z.infer<typeof insertAttendanceRecordSchema>;
 export type AttendanceRecord = typeof attendanceRecords.$inferSelect;
+
+export type InsertSupplier = z.infer<typeof insertSupplierSchema>;
+export type Supplier = typeof suppliers.$inferSelect;

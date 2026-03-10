@@ -1,0 +1,195 @@
+Sen senior full-stack developer, software architect va product-minded expert vibe coder sifatida ishlaysan. Sen ushbu loyihaning original yaratuvchisisan va mavjud kod bazani chuqur tushunasan. Sening vazifang — loyihadagi kamchiliklar, xatolar va yetishmayotgan funksiyalarni professional darajada audit qilish, root cause topish, to‘g‘rilash va production-ready holatga keltirish.
+
+Asosiy qoidalar:
+- Avval mavjud kod bazani, database structure’ni, frontend/backend arxitekturasini va business logic oqimini to‘liq audit qil.
+- Har bir muammo bo‘yicha root cause top.
+- Faqat yuzaki patch qilma, tizimli va barqaror fix qil.
+- Mavjud ishlayotgan modullarni sindirib yuborma.
+- UI, backend, database, API, permissions, validation va state management bir-biriga mos ishlashini ta’minla.
+- Har bir fixdan keyin regression tekshiruv qil.
+- Kod clean, maintainable, scalable va production-ready bo‘lsin.
+- Har bir o‘zgarish real ishlaydigan bo‘lsin, fake fix yoki temporary hack qilinmasin.
+
+Bajariladigan ishlar:
+
+1) Moliya bo‘limida “Tushum” va “Foyda” bir xil summani ko‘rsatmoqda — bu xato
+Muammo:
+- Hozir moliya bo‘limida tushum va foyda bir xil summada chiqmoqda.
+- Bu noto‘g‘ri hisob-kitob.
+- Screenshot 1 dagi holatga ko‘ra foyda tushumdan tan narx va boshqa xarajatlar ayrilgandan keyin chiqishi kerak.
+
+Talab:
+- Revenue/tushum hisoblash logikasini audit qil.
+- Profit/foyda hisoblash logikasini audit qil.
+- Backend, query, aggregation, computed fields va frontend mapping qismlarini tekshir.
+- Qayerda bir xil formula yoki bir xil field ishlatilayotgan bo‘lsa top va tuzat.
+- To‘g‘ri formula joriy qil:
+  foyda = tushum - tan narx - boshqa xarajatlar
+- Agar tizimda cost of goods sold, expense, delivery cost, operating cost, xizmat xarajati yoki boshqa cost turlari bo‘lsa, ularni ham to‘g‘ri qo‘sh.
+- Finance dashboard, summary cards, reports va API response’larida to‘g‘ri qiymatlar chiqsin.
+- Screenshot 1 dagi muammoga mos, to‘liq fix qil.
+
+2) Kassa harakatlarida o‘chirish va tahrirlash yo‘q — bu qo‘shilishi kerak
+Muammo:
+- Kassa harakatlari bo‘limida edit va delete funksiyasi yo‘q.
+- Screenshot 2 dagi UX talabiga mos emas.
+
+Talab:
+- Kassa harakatlari moduli, UI, API va backend permission/business logic qismini audit qil.
+- Nega edit/delete yo‘qligini aniqlagin:
+  - UI tugma yo‘qmi
+  - permission yo‘qmi
+  - endpoint yo‘qmi
+  - backend support yo‘qmi
+  - audit yoki soft delete arxitekturasi yo‘qmi
+- Quyidagilarni qo‘sh:
+  - Kassa harakatini tahrirlash
+  - Kassa harakatini o‘chirish
+- O‘chirish xavfsiz bo‘lsin:
+  - confirmation modal bo‘lsin
+  - kerak bo‘lsa soft delete ishlatilsin
+  - audit log yozilsin
+- Tahrirlash yoki o‘chirishdan keyin:
+  - kassa balansi
+  - summary
+  - hisobotlar
+  - tegishli finance data
+  qayta hisoblanishi kerak
+- Tegishli rollarga permission berilsin.
+- UI aniq, tushunarli va barqaror ishlasin.
+
+3) Xodim kelish-ketishini audit qil
+Muammo:
+- Xodim tizimga kirishda muvaffaqiyatsiz urinish qilsa ham tizim uni “ishga keldi” deb belgilab qo‘ymoqda.
+- Bu attendance/check-in business logic xato ishlayotganini ko‘rsatadi.
+
+Talab:
+- Attendance, check-in/check-out, auth/login va session flow’ni audit qil.
+- “Ishga keldi” statusi qaysi trigger asosida yozilayotganini top:
+  - login attempt
+  - successful login
+  - token issuance
+  - session creation
+  - frontend optimistic update
+  - alohida attendance event
+- Muvaffaqiyatsiz login hech qachon attendance yozmasligi kerak.
+- Attendance faqat haqiqiy muvaffaqiyatli check-in yoki tasdiqlangan autentifikatsiya eventidan keyin yozilsin.
+- Auth guard, middleware, hooks, listeners, API response va frontend holatini tekshir.
+- Noto‘g‘ri attendance recordlar yuzaga kelayotgan bo‘lsa, ularni aniqlashga yordam beradigan audit log qo‘sh.
+- Edge case’larni tekshir:
+  - login xato
+  - backend error
+  - internet uzilishi
+  - duplicate request
+  - refresh/retry
+  - token fail
+- Yakunda check-in/check-out logikasi ishonchli bo‘lsin.
+
+4) Kelgan tovarni rasmiylashtirishda narx maydonlarini yoqib/o‘chirish sozlamasi ishlashi kerak
+Muammo:
+- Omborga tovar qo‘shishda yoki kelgan tovarni rasmiylashtirishda tan narxi, kelish narxi, sotish narxi va boshqa narx maydonlarini settings orqali yoqib/o‘chirish kerak.
+- Hozir ayrim narxlarni, ayniqsa sotish narxini o‘chirib bo‘lmayapti.
+- Screenshot 3 da shu muammo ko‘rsatilgan.
+
+Talab:
+- Settings bo‘limidagi dynamic field visibility/configuration logikasini audit qil.
+- Quyidagi narx maydonlari settings orqali boshqariladigan bo‘lsin:
+  - tan narxi
+  - kelish narxi
+  - sotish narxi
+  - ulgurji narx
+  - mavjud bo‘lsa boshqa price fieldlar
+- Setting o‘zgarsa:
+  - form UI darhol moslashsin
+  - validation ham mos ravishda o‘zgarsin
+  - backend required field qoidalari ham moslashsin
+- Hidden field frontendda ko‘rinmasin.
+- Hidden field backend tomonidan majburiy talab qilinmasin.
+- Hozir o‘chmayotgan price field bug’ini root cause bilan top va tuzat.
+- Dynamic form architecture izchil ishlasin.
+
+5) Omborga tovar qo‘shishda tovar beruvchi tanlash va kategoriya yaratish bo‘lishi kerak
+Muammo:
+- Omborga tovar qo‘shishda tovar beruvchini tanlash imkoni bo‘lishi kerak.
+- Kategoriya tanlash va yangi kategoriya yaratish ham bo‘lishi kerak.
+- Tovar beruvchini boshqarish xodimlar bo‘limida bo‘lishi kerak va u inventory bilan integratsiyalashgan bo‘lishi kerak.
+
+Talab:
+- Inventory / warehouse / product create flow’ni audit qil.
+- Product yoki stock entry form’da quyidagilar bo‘lsin:
+  - tovar beruvchi tanlash
+  - kategoriya tanlash
+  - yangi kategoriya yaratish
+- Tovar beruvchi uchun data model to‘g‘ri qurilsin:
+  - employee va supplier tushunchalari aralashib ketmasin
+  - kerak bo‘lsa alohida supplier/vendor entity yarat
+  - lekin UI navigation talabga ko‘ra xodimlar bo‘limi ichida joylashishi mumkin
+- Supplier yaratish, tahrirlash, aktiv/noaktiv qilish imkoniyati bo‘lsin.
+- Product qo‘shishda supplier dropdown real data bilan ishlasin.
+- Kategoriya CRUD yoki kamida create/select ishlasin.
+- Supplier va category product/inventory bilan to‘g‘ri bog‘lansin.
+- Foreign key, relation, search va filtering to‘g‘ri ishlasin.
+- Product detail, stock entry va history’da supplier ko‘rinsin.
+
+6) Tenant do‘kon yaratilganda sub URL bilan birga QR kod ham generatsiya qilinsin
+Muammo:
+- Har bir tenant/do‘kon yaratilganda alohida sub URL hosil bo‘ladi.
+- Shu URL bilan birga avtomatik QR kod ham yaratilishi kerak.
+- QR kod va do‘kon URL chiroyli ko‘rinishda ko‘rsatilishi, yuklab olish va ulashish imkoni bo‘lishi kerak.
+
+Talab:
+- Tenant creation flow’ni audit qil.
+- Har bir yangi do‘kon uchun hosil bo‘ladigan sub URL’ni aniqlab, shu URL asosida QR code generatsiya qil.
+- QR kod store detail sahifasida yoki yaratilgandan keyingi success ekranida chiroyli ko‘rinishda chiqsin.
+- UI ichida quyidagilar bo‘lsin:
+  - do‘kon nomi
+  - sub URL
+  - QR kod preview
+  - QR kodni yuklab olish
+  - URL’ni nusxalash
+  - QR yoki havolani ulashish
+- Share va download funksiyasi real ishlasin.
+- QR kod sifatli bo‘lsin, print/share uchun yaroqli bo‘lsin.
+- QR kod sub URL o‘zgarsa qayta generatsiya bo‘ladigan arxitekturaga ega bo‘lsin.
+- Agar tenant update qilinsa va URL o‘zgarsa, eski QR kod muammosini oldini ol.
+- Kerak bo‘lsa QR image storage yoki on-the-fly generation arxitekturasini eng to‘g‘ri variant bilan tanla.
+- UX chiroyli, zamonaviy va amaliy bo‘lsin.
+- QR card yoki share card ko‘rinishi professional bo‘lsin.
+- Foydalanuvchi uni saytdan bevosita yuklab ola olsin va boshqalar bilan ulasha olsin.
+
+Umumiy texnik talablar:
+- Tegishli frontend componentlar, backend route/controller/service, database model va validation qismlarini tekshir.
+- Schema noto‘g‘ri bo‘lsa migration yoz.
+- CRUD va business logic izchil bo‘lsin.
+- Error handling foydalanuvchiga tushunarli bo‘lsin.
+- Toast, alert, modal va form validation aniq ishlasin.
+- Loading, empty state, error state to‘g‘ri boshqarilsin.
+- Permission tizimi bo‘lsa rollar bo‘yicha tekshir.
+- Audit log kerak bo‘lsa qo‘sh.
+- Kodni refactor qilish kerak bo‘lsa qil, lekin keraksiz murakkablashtirma.
+- Har bir modul boshqa modullar bilan mos ishlasin.
+
+Ishlash tartibi:
+1. Avval kod bazani va arxitekturani to‘liq tahlil qil.
+2. Har bir yuqoridagi muammo bo‘yicha root cause summary yoz.
+3. So‘ng fixlarni implement qil.
+4. Har bir fixdan keyin nimalar o‘zgarganini qisqacha yoz.
+5. Yakunda test checklist ber.
+6. Agar biror joyda dizayn qarori kerak bo‘lsa, eng xavfsiz, scalable va maintainable variantni tanla.
+
+Deliverables:
+- Tuzatilgan kod
+- Root cause summary
+- O‘zgargan fayllar ro‘yxati
+- Test checklist
+- O‘zgargan business logic bo‘yicha qisqa izoh
+- Agar migration bo‘lsa, migration summary
+- Agar yangi component yoki endpoint qo‘shilgan bo‘lsa, ularning ro‘yxati
+
+Muhim:
+- Fake fix qilma.
+- Temporary hack qilma.
+- Muammoni to‘liq hal qil.
+- Frontend va backend orasidagi nomutanosibliklarni ham tuzat.
+- Database, API va UI bir-biriga mos bo‘lsin.
+- Har bir modul production-ready holatga keltirilsin.

@@ -63,6 +63,16 @@ export default function Inventory() {
     },
   });
 
+  const { data: suppliersList = [] } = useQuery<any[]>({
+    queryKey: ["suppliers"],
+    queryFn: async () => {
+      const res = await fetch("/api/suppliers", { headers: { Authorization: `Bearer ${token}` } });
+      if (!res.ok) return [];
+      return res.json();
+    },
+    enabled: !!token,
+  });
+
   const { data: tenantSettings } = useQuery<any>({
     queryKey: ["tenant-settings"],
     queryFn: async () => {
@@ -82,7 +92,7 @@ export default function Inventory() {
   ];
 
   const formVisibility: Record<string, boolean> = {
-    costPrice: true, barcodePrice: true, wholesalePrice: true,
+    costPrice: true, price: true, barcodePrice: true, wholesalePrice: true,
     description: true, videoUrl: true, isNew: true, category: true, author: true, supplier: true,
     ...(tenantSettings?.productFormVisibility || {}),
   };
@@ -120,6 +130,8 @@ export default function Inventory() {
     isNew: false
   });
   const [newCategoryName, setNewCategoryName] = useState("");
+  const [newSupplierName, setNewSupplierName] = useState("");
+  const [newSupplierPhone, setNewSupplierPhone] = useState("");
   const [customFieldValues, setCustomFieldValues] = useState<Record<string, string>>({});
   
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -690,13 +702,65 @@ export default function Inventory() {
                               <Truck className="h-3.5 w-3.5 text-muted-foreground" />
                               Yetkazib beruvchi
                             </Label>
-                            <Input
-                              id="supplier"
-                              placeholder="Kim dan kelgan?"
-                              value={newProduct.supplier}
-                              onChange={(e) => setNewProduct({...newProduct, supplier: e.target.value})}
-                              data-testid="input-supplier"
-                            />
+                            <div className="flex gap-2">
+                              <Select value={newProduct.supplier || "none"} onValueChange={(val) => setNewProduct({...newProduct, supplier: val === "none" ? "" : val})}>
+                                <SelectTrigger className="flex-1 bg-white" data-testid="select-supplier">
+                                  <SelectValue placeholder="Tanlang" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="none">Tanlanmagan</SelectItem>
+                                  {(suppliersList || []).filter((s: any) => s.isActive).map((s: any) => (
+                                    <SelectItem key={s.id} value={s.name}>{s.name}</SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                              <Dialog>
+                                <DialogTrigger asChild>
+                                  <Button type="button" variant="outline" size="icon" className="shrink-0" data-testid="button-add-supplier">
+                                    <Plus className="h-4 w-4" />
+                                  </Button>
+                                </DialogTrigger>
+                                <DialogContent className="max-w-sm">
+                                  <DialogHeader><DialogTitle>Yangi yetkazib beruvchi</DialogTitle></DialogHeader>
+                                  <div className="space-y-3">
+                                    <Input
+                                      placeholder="Nomi"
+                                      value={newSupplierName}
+                                      onChange={(e) => setNewSupplierName(e.target.value)}
+                                      data-testid="input-new-supplier-name"
+                                    />
+                                    <Input
+                                      placeholder="Telefon (ixtiyoriy)"
+                                      value={newSupplierPhone}
+                                      onChange={(e) => setNewSupplierPhone(e.target.value)}
+                                      data-testid="input-new-supplier-phone"
+                                    />
+                                  </div>
+                                  <DialogFooter>
+                                    <Button
+                                      onClick={async () => {
+                                        if (!newSupplierName.trim()) return;
+                                        try {
+                                          await fetch("/api/suppliers", {
+                                            method: "POST",
+                                            headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+                                            body: JSON.stringify({ name: newSupplierName.trim(), phone: newSupplierPhone.trim() }),
+                                          });
+                                          queryClient.invalidateQueries({ queryKey: ["suppliers"] });
+                                          setNewProduct(prev => ({ ...prev, supplier: newSupplierName.trim() }));
+                                          setNewSupplierName("");
+                                          setNewSupplierPhone("");
+                                        } catch {}
+                                      }}
+                                      disabled={!newSupplierName.trim()}
+                                      data-testid="button-save-supplier"
+                                    >
+                                      Qo'shish
+                                    </Button>
+                                  </DialogFooter>
+                                </DialogContent>
+                              </Dialog>
+                            </div>
                           </div>}
                         </div>
 
@@ -717,6 +781,7 @@ export default function Inventory() {
                               />
                             </div>
                             )}
+                            {isFieldVisible("price") && (
                             <div className="space-y-1">
                               <Label htmlFor="price" className="text-xs text-muted-foreground">Sotish narxi (so'm)</Label>
                               <Input 
@@ -728,6 +793,7 @@ export default function Inventory() {
                                 className="bg-white h-9"
                               />
                             </div>
+                            )}
                             {isFieldVisible("barcodePrice") && (
                             <div className="space-y-1">
                               <Label htmlFor="barcodePrice" className="text-xs text-muted-foreground">Barkod narxi (so'm)</Label>

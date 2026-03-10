@@ -1,6 +1,6 @@
 import { db } from "@db";
-import { users, products, orders, categories, transactions, tenants, expenses, expenseCategories, incomeCategories, debtPayments, cashRegisterEntries, customers, deliveries, auditLogs, shiftHandovers, staffMembers, attendanceRecords } from "@shared/schema";
-import type { User, InsertUser, Product, InsertProduct, Order, InsertOrder, Category, InsertCategory, Transaction, InsertTransaction, Tenant, InsertTenant, Expense, InsertExpense, ExpenseCategory, InsertExpenseCategory, IncomeCategory, InsertIncomeCategory, DebtPayment, InsertDebtPayment, CashRegisterEntry, InsertCashRegisterEntry, Customer, InsertCustomer, Delivery, InsertDelivery, AuditLog, InsertAuditLog, ShiftHandover, InsertShiftHandover, StaffMember, InsertStaffMember, AttendanceRecord, InsertAttendanceRecord } from "@shared/schema";
+import { users, products, orders, categories, transactions, tenants, expenses, expenseCategories, incomeCategories, debtPayments, cashRegisterEntries, customers, deliveries, auditLogs, shiftHandovers, staffMembers, attendanceRecords, suppliers } from "@shared/schema";
+import type { User, InsertUser, Product, InsertProduct, Order, InsertOrder, Category, InsertCategory, Transaction, InsertTransaction, Tenant, InsertTenant, Expense, InsertExpense, ExpenseCategory, InsertExpenseCategory, IncomeCategory, InsertIncomeCategory, DebtPayment, InsertDebtPayment, CashRegisterEntry, InsertCashRegisterEntry, Customer, InsertCustomer, Delivery, InsertDelivery, AuditLog, InsertAuditLog, ShiftHandover, InsertShiftHandover, StaffMember, InsertStaffMember, AttendanceRecord, InsertAttendanceRecord, Supplier, InsertSupplier } from "@shared/schema";
 import { eq, desc, sql, and, inArray, gte, lte, or, ilike } from "drizzle-orm";
 
 export interface IStorage {
@@ -120,6 +120,12 @@ export interface IStorage {
   createStaffMember(data: InsertStaffMember): Promise<StaffMember>;
   updateStaffMember(id: string, data: Partial<InsertStaffMember>, tenantId?: string): Promise<StaffMember | undefined>;
   deleteStaffMember(id: string, tenantId?: string): Promise<boolean>;
+
+  // Suppliers
+  getSuppliers(tenantId: string): Promise<Supplier[]>;
+  createSupplier(data: InsertSupplier): Promise<Supplier>;
+  updateSupplier(id: string, data: Partial<InsertSupplier>, tenantId?: string): Promise<Supplier | undefined>;
+  deleteSupplier(id: string, tenantId?: string): Promise<boolean>;
 
   // Attendance
   getAttendanceRecords(tenantId: string, staffId?: string, dateFrom?: Date, dateTo?: Date): Promise<AttendanceRecord[]>;
@@ -689,7 +695,7 @@ export class DatabaseStorage implements IStorage {
     );
 
     const expensesTotal = expResult?.total || 0;
-    return { revenue, expensesTotal, profit: revenue - expensesTotal, totalProfit, paymentBreakdown, transactionCount: txns.length };
+    return { revenue, expensesTotal, profit: totalProfit - expensesTotal, totalProfit, paymentBreakdown, transactionCount: txns.length };
   }
 
   // Customers
@@ -869,6 +875,30 @@ export class DatabaseStorage implements IStorage {
       ? and(eq(staffMembers.id, id), eq(staffMembers.tenantId, tenantId))
       : eq(staffMembers.id, id);
     const result = await db.delete(staffMembers).where(condition);
+    return (result.rowCount ?? 0) > 0;
+  }
+
+  // Suppliers
+  async getSuppliers(tenantId: string): Promise<Supplier[]> {
+    return db.select().from(suppliers).where(eq(suppliers.tenantId, tenantId)).orderBy(desc(suppliers.createdAt));
+  }
+
+  async createSupplier(data: InsertSupplier): Promise<Supplier> {
+    const [created] = await db.insert(suppliers).values(data).returning();
+    return created;
+  }
+
+  async updateSupplier(id: string, data: Partial<InsertSupplier>, tenantId?: string): Promise<Supplier | undefined> {
+    const conditions: any[] = [eq(suppliers.id, id)];
+    if (tenantId) conditions.push(eq(suppliers.tenantId, tenantId));
+    const [updated] = await db.update(suppliers).set(data).where(and(...conditions)).returning();
+    return updated;
+  }
+
+  async deleteSupplier(id: string, tenantId?: string): Promise<boolean> {
+    const conditions: any[] = [eq(suppliers.id, id)];
+    if (tenantId) conditions.push(eq(suppliers.tenantId, tenantId));
+    const result = await db.delete(suppliers).where(and(...conditions));
     return (result.rowCount ?? 0) > 0;
   }
 

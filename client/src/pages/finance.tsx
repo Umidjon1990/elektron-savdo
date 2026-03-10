@@ -185,7 +185,7 @@ export default function FinancePage() {
     }
     const transactionCount = Math.max(currentTxns.length, serverSummary?.transactionCount || 0);
 
-    return { revenue, expensesTotal, profit: revenue - expensesTotal, totalProfit, paymentBreakdown, transactionCount, prevRevenue: serverSummary?.prevRevenue || 0, prevExpenses: serverSummary?.prevExpenses || 0 };
+    return { revenue, expensesTotal, profit: totalProfit - expensesTotal, totalProfit, paymentBreakdown, transactionCount, prevRevenue: serverSummary?.prevRevenue || 0, prevExpenses: serverSummary?.prevExpenses || 0 };
   }, [allTransactions, serverSummary, period]);
 
   const { data: serverDailyData = [] } = useQuery<any[]>({
@@ -218,12 +218,13 @@ export default function FinancePage() {
     const allDates = new Set([...Object.keys(dayMap), ...Object.keys(srvMap)]);
     return Array.from(allDates).sort().map(date => {
       const client = dayMap[date] || { revenue: 0, profit: 0 };
-      const srv = srvMap[date] || { revenue: 0, expenses: 0, profit: 0 };
+      const srv = srvMap[date] || { revenue: 0, expenses: 0, profit: 0, totalProfit: 0 };
+      const grossProfit = Math.max(client.profit, srv.totalProfit || 0);
       return {
         date,
         revenue: Math.max(client.revenue, srv.revenue || 0),
         expenses: srv.expenses || 0,
-        profit: Math.max(client.revenue, srv.revenue || 0) - (srv.expenses || 0),
+        profit: grossProfit - (srv.expenses || 0),
         payments: srv.payments || {},
       };
     });
@@ -615,17 +616,40 @@ export default function FinancePage() {
                             <p className="text-sm font-medium capitalize">{item.type === "savdo" ? "Sotuv" : item.type === "income" ? "Kirim" : item.type === "withdrawal" ? "Chiqarilgan" : "Chiqim"}</p>
                             <p className="text-[10px] text-gray-400 truncate">{item.note || item.counterparty || "-"}</p>
                           </div>
-                          <div className="text-right shrink-0">
-                            <p className={`text-sm font-bold ${item.type === "savdo" || item.type === "income" ? "text-green-600" : "text-red-600"}`}>
-                              {item.type === "savdo" || item.type === "income" ? "+" : "-"}{item.amount.toLocaleString()}
-                            </p>
-                            <div className="flex items-center gap-1 justify-end">
-                              <span className={`text-[9px] px-1.5 py-0.5 rounded font-medium ${
-                                (item.paymentMethod || "").toLowerCase().includes("karta") || (item.paymentMethod || "").toLowerCase().includes("card") ? "bg-blue-50 text-blue-600" :
-                                (item.paymentMethod || "").toLowerCase().includes("nasiya") ? "bg-amber-50 text-amber-600" :
-                                "bg-green-50 text-green-600"
-                              }`}>{item.paymentMethod}</span>
-                              <span className="text-[10px] text-gray-400">{formatDateTime(item.date)}</span>
+                          <div className="text-right shrink-0 flex items-center gap-2">
+                            {(item.type === "income" || item.type === "withdrawal") && (
+                              <div className="flex items-center gap-1">
+                                <button
+                                  onClick={() => {
+                                    const entry = (cashEntries || []).find((e: any) => e.id === item.id);
+                                    if (entry) { setEditingIncome(entry); setIncomeDialogOpen(true); }
+                                  }}
+                                  className="p-1 rounded hover:bg-gray-200 text-gray-400 hover:text-blue-600"
+                                  data-testid={`button-edit-journal-${item.id}`}
+                                >
+                                  <Pencil className="h-3.5 w-3.5" />
+                                </button>
+                                <button
+                                  onClick={() => { if (confirm("Ushbu yozuvni o'chirishni tasdiqlaysizmi?")) deleteEntry.mutate(item.id); }}
+                                  className="p-1 rounded hover:bg-gray-200 text-gray-400 hover:text-red-600"
+                                  data-testid={`button-delete-journal-${item.id}`}
+                                >
+                                  <Trash2 className="h-3.5 w-3.5" />
+                                </button>
+                              </div>
+                            )}
+                            <div>
+                              <p className={`text-sm font-bold ${item.type === "savdo" || item.type === "income" ? "text-green-600" : "text-red-600"}`}>
+                                {item.type === "savdo" || item.type === "income" ? "+" : "-"}{item.amount.toLocaleString()}
+                              </p>
+                              <div className="flex items-center gap-1 justify-end">
+                                <span className={`text-[9px] px-1.5 py-0.5 rounded font-medium ${
+                                  (item.paymentMethod || "").toLowerCase().includes("karta") || (item.paymentMethod || "").toLowerCase().includes("card") ? "bg-blue-50 text-blue-600" :
+                                  (item.paymentMethod || "").toLowerCase().includes("nasiya") ? "bg-amber-50 text-amber-600" :
+                                  "bg-green-50 text-green-600"
+                                }`}>{item.paymentMethod}</span>
+                                <span className="text-[10px] text-gray-400">{formatDateTime(item.date)}</span>
+                              </div>
                             </div>
                           </div>
                         </div>

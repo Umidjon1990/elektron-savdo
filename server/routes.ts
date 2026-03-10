@@ -218,6 +218,8 @@ export async function registerRoutes(
         name: tenant.name,
         logo: tenant.logo,
         brandColor: tenant.brandColor,
+        orderFormFields: tenant.orderFormFields,
+        paymentMethods: tenant.paymentMethods,
       });
     } catch (error) {
       res.status(500).json({ error: "Server xatoligi" });
@@ -246,7 +248,7 @@ export async function registerRoutes(
       if (req.user!.role !== "owner") {
         return res.status(403).json({ error: "Faqat do'kon egasi uchun" });
       }
-      const allowedFields = ["name", "brandColor", "logo", "telegramBotToken", "telegramChatId", "paymentMethods", "productFields", "customerFields", "receiptLogo", "productFormVisibility", "deliveryEnabled"];
+      const allowedFields = ["name", "brandColor", "logo", "telegramBotToken", "telegramChatId", "paymentMethods", "productFields", "customerFields", "receiptLogo", "productFormVisibility", "orderFormFields", "deliveryEnabled"];
       const data: Record<string, any> = {};
       for (const key of allowedFields) {
         if (req.body[key] !== undefined) data[key] = req.body[key];

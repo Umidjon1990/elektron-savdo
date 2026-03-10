@@ -11,7 +11,7 @@ import { useSettings } from "@/lib/settings-context";
 import { useAuth } from "@/lib/auth-context";
 import { useUpload } from "@/hooks/use-upload";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Store, Bell, Printer, Database, Shield, Palette, Receipt, Link2, Copy, Check, ExternalLink, Bot, Send, CreditCard, Plus, Trash2, Edit2, X, Package, Users, Image as ImageIcon, Upload, Loader2, Eye, QrCode, Download, Share2 } from "lucide-react";
+import { Store, Bell, Printer, Database, Shield, Palette, Receipt, Link2, Copy, Check, ExternalLink, Bot, Send, CreditCard, Plus, Trash2, Edit2, X, Package, Users, Image as ImageIcon, Upload, Loader2, Eye, QrCode, Download, Share2, ShoppingCart, ToggleLeft } from "lucide-react";
 import { QRCodeCanvas } from "qrcode.react";
 
 interface PaymentMethod {
@@ -48,6 +48,24 @@ const DEFAULT_CUSTOMER_FIELDS: CustomerField[] = [
   { key: "note", label: "Izoh" },
 ];
 
+interface OrderFormField {
+  key: string;
+  label: string;
+  enabled: boolean;
+  required: boolean;
+}
+
+const DEFAULT_ORDER_FORM_FIELDS: OrderFormField[] = [
+  { key: "name", label: "Ism Familiya", enabled: true, required: true },
+  { key: "phone", label: "Aloqa uchun telefon", enabled: true, required: true },
+  { key: "telegramPhone", label: "Telegram telefon", enabled: true, required: true },
+  { key: "deliveryType", label: "Yetkazib berish turi", enabled: true, required: false },
+  { key: "address", label: "Manzil", enabled: true, required: false },
+  { key: "shippingType", label: "Pochta turi (BTS/Starex)", enabled: true, required: false },
+  { key: "postalAddress", label: "Pochta manzili", enabled: true, required: false },
+  { key: "paymentMethod", label: "To'lov turi", enabled: true, required: false },
+];
+
 export default function SettingsPage() {
   const { toast } = useToast();
   const { settings, updateSettings } = useSettings();
@@ -70,6 +88,10 @@ export default function SettingsPage() {
 
   const [customerFields, setCustomerFields] = useState<CustomerField[]>(DEFAULT_CUSTOMER_FIELDS);
   const [newCustomerFieldLabel, setNewCustomerFieldLabel] = useState("");
+  const [orderFormFields, setOrderFormFields] = useState<OrderFormField[]>(DEFAULT_ORDER_FORM_FIELDS);
+  const [newOrderFieldLabel, setNewOrderFieldLabel] = useState("");
+  const [editingOrderFieldKey, setEditingOrderFieldKey] = useState<string | null>(null);
+  const [editingOrderFieldLabel, setEditingOrderFieldLabel] = useState("");
 
   const defaultFormVisibility: Record<string, boolean> = {
     costPrice: true,
@@ -127,6 +149,7 @@ export default function SettingsPage() {
       if (data.customerFields) setCustomerFields(data.customerFields);
       if (data.receiptLogo) setReceiptLogo(data.receiptLogo);
       if (data.productFormVisibility) setProductFormVisibility({ ...defaultFormVisibility, ...data.productFormVisibility });
+      if (data.orderFormFields) setOrderFormFields(data.orderFormFields);
       if (data.deliveryEnabled !== undefined) setDeliveryEnabled(data.deliveryEnabled);
       return data;
     },
@@ -231,6 +254,43 @@ export default function SettingsPage() {
     const updated = customerFields.filter(f => f.key !== key);
     setCustomerFields(updated);
     saveConfigMutation.mutate({ customerFields: updated });
+  };
+
+  const toggleOrderField = (key: string) => {
+    const updated = orderFormFields.map(f => f.key === key ? { ...f, enabled: !f.enabled } : f);
+    setOrderFormFields(updated);
+    saveConfigMutation.mutate({ orderFormFields: updated });
+  };
+
+  const toggleOrderFieldRequired = (key: string) => {
+    const updated = orderFormFields.map(f => f.key === key ? { ...f, required: !f.required } : f);
+    setOrderFormFields(updated);
+    saveConfigMutation.mutate({ orderFormFields: updated });
+  };
+
+  const addOrderField = () => {
+    if (!newOrderFieldLabel.trim()) return;
+    const key = "custom_" + Date.now();
+    const updated = [...orderFormFields, { key, label: newOrderFieldLabel.trim(), enabled: true, required: false }];
+    setOrderFormFields(updated);
+    setNewOrderFieldLabel("");
+    saveConfigMutation.mutate({ orderFormFields: updated });
+  };
+
+  const removeOrderField = (key: string) => {
+    const builtIn = ["name", "phone", "telegramPhone", "deliveryType", "address", "shippingType", "postalAddress", "paymentMethod"];
+    if (builtIn.includes(key)) return;
+    const updated = orderFormFields.filter(f => f.key !== key);
+    setOrderFormFields(updated);
+    saveConfigMutation.mutate({ orderFormFields: updated });
+  };
+
+  const saveEditingOrderField = () => {
+    if (!editingOrderFieldKey || !editingOrderFieldLabel.trim()) return;
+    const updated = orderFormFields.map(f => f.key === editingOrderFieldKey ? { ...f, label: editingOrderFieldLabel.trim() } : f);
+    setOrderFormFields(updated);
+    setEditingOrderFieldKey(null);
+    saveConfigMutation.mutate({ orderFormFields: updated });
   };
 
   const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -607,6 +667,97 @@ export default function SettingsPage() {
                     data-testid="input-new-customer-field"
                   />
                   <Button size="sm" className="h-9 gap-1" onClick={addCustomerField} disabled={!newCustomerFieldLabel.trim()}>
+                    <Plus className="h-4 w-4" />
+                    Qo'shish
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="border-teal-200">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-teal-800">
+                  <ShoppingCart className="h-5 w-5" />
+                  Onlayn buyurtma formasi
+                </CardTitle>
+                <CardDescription>Onlayn do'kon buyurtma formasida qaysi maydonlar ko'rinishini sozlang</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <div className="space-y-2">
+                  {orderFormFields.map(field => {
+                    const builtIn = ["name", "phone", "telegramPhone", "deliveryType", "address", "shippingType", "postalAddress", "paymentMethod"];
+                    const isBuiltIn = builtIn.includes(field.key);
+                    return (
+                      <div key={field.key} className="flex items-center gap-2 p-2 bg-gray-50 rounded-lg" data-testid={`order-field-${field.key}`}>
+                        <Switch
+                          checked={field.enabled}
+                          onCheckedChange={() => toggleOrderField(field.key)}
+                          data-testid={`switch-order-field-${field.key}`}
+                        />
+                        {editingOrderFieldKey === field.key ? (
+                          <div className="flex-1 flex gap-2">
+                            <Input
+                              value={editingOrderFieldLabel}
+                              onChange={(e) => setEditingOrderFieldLabel(e.target.value)}
+                              className="h-8 text-sm"
+                              onKeyDown={(e) => e.key === "Enter" && saveEditingOrderField()}
+                              autoFocus
+                            />
+                            <Button size="icon" variant="ghost" className="h-8 w-8" onClick={saveEditingOrderField}>
+                              <Check className="h-3.5 w-3.5" />
+                            </Button>
+                            <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => setEditingOrderFieldKey(null)}>
+                              <X className="h-3.5 w-3.5" />
+                            </Button>
+                          </div>
+                        ) : (
+                          <>
+                            <span className={`flex-1 font-medium text-sm ${!field.enabled ? "text-muted-foreground line-through" : ""}`}>{field.label}</span>
+                            <label className="flex items-center gap-1 text-xs text-muted-foreground cursor-pointer">
+                              <input
+                                type="checkbox"
+                                checked={field.required}
+                                onChange={() => toggleOrderFieldRequired(field.key)}
+                                disabled={!field.enabled}
+                                className="rounded"
+                                data-testid={`checkbox-required-${field.key}`}
+                              />
+                              Majburiy
+                            </label>
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              className="h-8 w-8 text-muted-foreground"
+                              onClick={() => { setEditingOrderFieldKey(field.key); setEditingOrderFieldLabel(field.label); }}
+                            >
+                              <Edit2 className="h-3.5 w-3.5" />
+                            </Button>
+                            {!isBuiltIn && (
+                              <Button
+                                size="icon"
+                                variant="ghost"
+                                className="h-8 w-8 text-muted-foreground hover:text-red-600"
+                                onClick={() => removeOrderField(field.key)}
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </Button>
+                            )}
+                          </>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+                <div className="flex gap-2">
+                  <Input
+                    placeholder="Yangi maydon nomi..."
+                    value={newOrderFieldLabel}
+                    onChange={(e) => setNewOrderFieldLabel(e.target.value)}
+                    className="h-9"
+                    onKeyDown={(e) => e.key === "Enter" && addOrderField()}
+                    data-testid="input-new-order-field"
+                  />
+                  <Button size="sm" className="h-9 gap-1" onClick={addOrderField} disabled={!newOrderFieldLabel.trim()}>
                     <Plus className="h-4 w-4" />
                     Qo'shish
                   </Button>

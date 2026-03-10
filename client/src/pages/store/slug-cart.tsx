@@ -26,12 +26,21 @@ interface CartItem {
   quantity: number;
 }
 
+interface OrderFormField {
+  key: string;
+  label: string;
+  enabled: boolean;
+  required: boolean;
+}
+
 interface TenantInfo {
   id: string;
   slug: string;
   name: string;
   logo: string | null;
   brandColor: string;
+  orderFormFields?: OrderFormField[];
+  paymentMethods?: Array<{id: string, name: string}>;
 }
 
 export default function SlugCartPage() {
@@ -89,14 +98,34 @@ export default function SlugCartPage() {
   const total = items.reduce((s, i) => s + i.product.price * i.quantity, 0);
   const brandColor = tenant?.brandColor || "#4f46e5";
 
+  const defaultOrderFields: OrderFormField[] = [
+    { key: "name", label: "Ism Familiya", enabled: true, required: true },
+    { key: "phone", label: "Aloqa uchun telefon", enabled: true, required: true },
+    { key: "telegramPhone", label: "Telegram telefon", enabled: true, required: true },
+    { key: "deliveryType", label: "Yetkazib berish turi", enabled: true, required: false },
+    { key: "address", label: "Manzil", enabled: true, required: false },
+    { key: "shippingType", label: "Pochta turi (BTS/Starex)", enabled: true, required: false },
+    { key: "postalAddress", label: "Pochta manzili", enabled: true, required: false },
+    { key: "paymentMethod", label: "To'lov turi", enabled: true, required: false },
+  ];
+  const fields = tenant?.orderFormFields || defaultOrderFields;
+  const isFieldEnabled = (key: string) => fields.find(f => f.key === key)?.enabled ?? true;
+  const isFieldRequired = (key: string) => fields.find(f => f.key === key)?.required ?? false;
+  const getFieldLabel = (key: string, fallback: string) => fields.find(f => f.key === key)?.label || fallback;
+  const customFields = fields.filter(f => f.key.startsWith("custom_") && f.enabled);
+
   const handleCheckout = async () => {
-    if (!formData.name || !formData.phone || !formData.telegramPhone) {
-      toast({ title: "Ma'lumotlar to'liq emas", description: "Iltimos, ism va telefon raqamlarini kiriting", variant: "destructive" });
-      return;
-    }
-    if (formData.deliveryType === "delivery" && !formData.address) {
-      toast({ title: "Manzil kiritilmagan", description: "Iltimos, yetkazib berish manzilingizni kiriting", variant: "destructive" });
-      return;
+    const deliveryDependentKeys = ["address", "shippingType", "postalAddress"];
+    const skipDeliveryFields = !isFieldEnabled("deliveryType") || formData.deliveryType !== "delivery";
+
+    for (const field of fields) {
+      if (!field.enabled || !field.required) continue;
+      if (skipDeliveryFields && deliveryDependentKeys.includes(field.key)) continue;
+      const val = (formData as any)[field.key];
+      if (!val || (typeof val === "string" && !val.trim())) {
+        toast({ title: "Ma'lumotlar to'liq emas", description: `"${field.label}" maydonini to'ldiring`, variant: "destructive" });
+        return;
+      }
     }
 
     try {
@@ -106,7 +135,16 @@ export default function SlugCartPage() {
         if (formData.postalAddress) telegramInfo += ` | Pochta manzili: ${formData.postalAddress}`;
       }
 
-      const orderData = {
+      const customData: Record<string, string> = {};
+      for (const cf of customFields) {
+        const val = (formData as any)[cf.key];
+        if (val) {
+          customData[cf.label] = val;
+          telegramInfo += ` | ${cf.label}: ${val}`;
+        }
+      }
+
+      const orderData: Record<string, any> = {
         customerName: formData.name,
         customerPhone: formData.phone,
         customerTelegram: telegramInfo,
@@ -115,6 +153,8 @@ export default function SlugCartPage() {
         paymentMethod: formData.paymentMethod,
         deliveryType: formData.deliveryType,
       };
+      if (formData.address) orderData.address = formData.address;
+      if (Object.keys(customData).length > 0) orderData.customFields = customData;
 
       const headers: Record<string, string> = { "Content-Type": "application/json" };
 
@@ -226,75 +266,105 @@ export default function SlugCartPage() {
                       <DialogTitle>Buyurtmani tasdiqlash</DialogTitle>
                     </DialogHeader>
                     <div className="grid gap-6 py-4">
-                      <div className="space-y-2">
-                        <Label>Ism Familiya</Label>
-                        <Input placeholder="Azizbek T." value={formData.name} onChange={(e) => setFormData({ ...formData, name: e.target.value })} data-testid="input-checkout-name" />
-                      </div>
-                      <div className="space-y-2">
-                        <Label>Aloqa uchun telefon</Label>
-                        <Input placeholder="+998 90 123 45 67" value={formData.phone} onChange={(e) => setFormData({ ...formData, phone: e.target.value })} />
-                      </div>
-                      <div className="space-y-2">
-                        <Label>Telegram uchun telefon</Label>
-                        <Input placeholder="+998 90 123 45 67" value={formData.telegramPhone} onChange={(e) => setFormData({ ...formData, telegramPhone: e.target.value.replace(/@/g, "") })} />
-                      </div>
-                      <div className="space-y-2">
-                        <Label>Yetkazib berish turi</Label>
-                        <RadioGroup value={formData.deliveryType} onValueChange={(v: "delivery" | "pickup") => setFormData({ ...formData, deliveryType: v })} className="grid grid-cols-2 gap-4">
-                          <div>
-                            <RadioGroupItem value="delivery" id="s-delivery" className="peer sr-only" />
-                            <Label htmlFor="s-delivery" className="flex flex-col items-center justify-between rounded-md border-2 border-muted bg-popover p-4 hover:bg-accent peer-data-[state=checked]:border-primary [&:has([data-state=checked])]:border-primary">
-                              <span className="mb-2 block text-2xl">🚚</span>
-                              <span className="text-xs font-medium">Kuryer</span>
-                            </Label>
-                          </div>
-                          <div>
-                            <RadioGroupItem value="pickup" id="s-pickup" className="peer sr-only" />
-                            <Label htmlFor="s-pickup" className="flex flex-col items-center justify-between rounded-md border-2 border-muted bg-popover p-4 hover:bg-accent peer-data-[state=checked]:border-primary [&:has([data-state=checked])]:border-primary">
-                              <span className="mb-2 block text-2xl">🏢</span>
-                              <span className="text-xs font-medium">Olib ketish</span>
-                            </Label>
-                          </div>
-                        </RadioGroup>
-                      </div>
-                      {formData.deliveryType === "delivery" && (
+                      {isFieldEnabled("name") && (
+                        <div className="space-y-2">
+                          <Label>{getFieldLabel("name", "Ism Familiya")} {isFieldRequired("name") && <span className="text-red-500">*</span>}</Label>
+                          <Input placeholder="Azizbek T." value={formData.name} onChange={(e) => setFormData({ ...formData, name: e.target.value })} data-testid="input-checkout-name" />
+                        </div>
+                      )}
+                      {isFieldEnabled("phone") && (
+                        <div className="space-y-2">
+                          <Label>{getFieldLabel("phone", "Aloqa uchun telefon")} {isFieldRequired("phone") && <span className="text-red-500">*</span>}</Label>
+                          <Input placeholder="+998 90 123 45 67" value={formData.phone} onChange={(e) => setFormData({ ...formData, phone: e.target.value })} data-testid="input-checkout-phone" />
+                        </div>
+                      )}
+                      {isFieldEnabled("telegramPhone") && (
+                        <div className="space-y-2">
+                          <Label>{getFieldLabel("telegramPhone", "Telegram telefon")} {isFieldRequired("telegramPhone") && <span className="text-red-500">*</span>}</Label>
+                          <Input placeholder="+998 90 123 45 67" value={formData.telegramPhone} onChange={(e) => setFormData({ ...formData, telegramPhone: e.target.value.replace(/@/g, "") })} data-testid="input-checkout-telegram" />
+                        </div>
+                      )}
+                      {isFieldEnabled("deliveryType") && (
+                        <div className="space-y-2">
+                          <Label>{getFieldLabel("deliveryType", "Yetkazib berish turi")}</Label>
+                          <RadioGroup value={formData.deliveryType} onValueChange={(v: "delivery" | "pickup") => setFormData({ ...formData, deliveryType: v })} className="grid grid-cols-2 gap-4">
+                            <div>
+                              <RadioGroupItem value="delivery" id="s-delivery" className="peer sr-only" />
+                              <Label htmlFor="s-delivery" className="flex flex-col items-center justify-between rounded-md border-2 border-muted bg-popover p-4 hover:bg-accent peer-data-[state=checked]:border-primary [&:has([data-state=checked])]:border-primary">
+                                <span className="mb-2 block text-2xl">🚚</span>
+                                <span className="text-xs font-medium">Kuryer</span>
+                              </Label>
+                            </div>
+                            <div>
+                              <RadioGroupItem value="pickup" id="s-pickup" className="peer sr-only" />
+                              <Label htmlFor="s-pickup" className="flex flex-col items-center justify-between rounded-md border-2 border-muted bg-popover p-4 hover:bg-accent peer-data-[state=checked]:border-primary [&:has([data-state=checked])]:border-primary">
+                                <span className="mb-2 block text-2xl">🏢</span>
+                                <span className="text-xs font-medium">Olib ketish</span>
+                              </Label>
+                            </div>
+                          </RadioGroup>
+                        </div>
+                      )}
+                      {isFieldEnabled("deliveryType") && formData.deliveryType === "delivery" && (
                         <>
-                          <div className="space-y-2">
-                            <Label>Manzil</Label>
-                            <Input placeholder="Shahar, tuman, ko'cha" value={formData.address} onChange={(e) => setFormData({ ...formData, address: e.target.value })} />
-                          </div>
-                          <div className="space-y-2">
-                            <Label>Pochta turi</Label>
-                            <RadioGroup value={formData.shippingType} onValueChange={(v: "BTS" | "Starex") => setFormData({ ...formData, shippingType: v })} className="flex gap-4">
-                              <div className="flex items-center space-x-2">
-                                <RadioGroupItem value="BTS" id="s-bts" />
-                                <Label htmlFor="s-bts">BTS</Label>
-                              </div>
-                              <div className="flex items-center space-x-2">
-                                <RadioGroupItem value="Starex" id="s-starex" />
-                                <Label htmlFor="s-starex">Starex</Label>
-                              </div>
-                            </RadioGroup>
-                          </div>
-                          <div className="space-y-2">
-                            <Label>Pochta manzili <span className="text-slate-400 font-normal">(ixtiyoriy)</span></Label>
-                            <Input placeholder="Pochta filiali" value={formData.postalAddress} onChange={(e) => setFormData({ ...formData, postalAddress: e.target.value })} />
-                          </div>
+                          {isFieldEnabled("address") && (
+                            <div className="space-y-2">
+                              <Label>{getFieldLabel("address", "Manzil")} {isFieldRequired("address") && <span className="text-red-500">*</span>}</Label>
+                              <Input placeholder="Shahar, tuman, ko'cha" value={formData.address} onChange={(e) => setFormData({ ...formData, address: e.target.value })} data-testid="input-checkout-address" />
+                            </div>
+                          )}
+                          {isFieldEnabled("shippingType") && (
+                            <div className="space-y-2">
+                              <Label>{getFieldLabel("shippingType", "Pochta turi")}</Label>
+                              <RadioGroup value={formData.shippingType} onValueChange={(v: "BTS" | "Starex") => setFormData({ ...formData, shippingType: v })} className="flex gap-4">
+                                <div className="flex items-center space-x-2">
+                                  <RadioGroupItem value="BTS" id="s-bts" />
+                                  <Label htmlFor="s-bts">BTS</Label>
+                                </div>
+                                <div className="flex items-center space-x-2">
+                                  <RadioGroupItem value="Starex" id="s-starex" />
+                                  <Label htmlFor="s-starex">Starex</Label>
+                                </div>
+                              </RadioGroup>
+                            </div>
+                          )}
+                          {isFieldEnabled("postalAddress") && (
+                            <div className="space-y-2">
+                              <Label>{getFieldLabel("postalAddress", "Pochta manzili")} {!isFieldRequired("postalAddress") && <span className="text-slate-400 font-normal">(ixtiyoriy)</span>}</Label>
+                              <Input placeholder="Pochta filiali" value={formData.postalAddress} onChange={(e) => setFormData({ ...formData, postalAddress: e.target.value })} data-testid="input-checkout-postal" />
+                            </div>
+                          )}
                         </>
                       )}
-                      <div className="space-y-2">
-                        <Label>To'lov turi</Label>
-                        <RadioGroup value={formData.paymentMethod} onValueChange={(v: any) => setFormData({ ...formData, paymentMethod: v })} className="flex gap-4">
-                          <div className="flex items-center space-x-2">
-                            <RadioGroupItem value="click" id="s-click" />
-                            <Label htmlFor="s-click">Click / Payme</Label>
+                      {isFieldEnabled("paymentMethod") && (() => {
+                        const methods = tenant?.paymentMethods && tenant.paymentMethods.length > 0
+                          ? tenant.paymentMethods
+                          : [{ id: "click", name: "Click / Payme" }, { id: "cash", name: "Naqd" }];
+                        return (
+                          <div className="space-y-2">
+                            <Label>{getFieldLabel("paymentMethod", "To'lov turi")}</Label>
+                            <RadioGroup value={formData.paymentMethod} onValueChange={(v: any) => setFormData({ ...formData, paymentMethod: v })} className="flex gap-4 flex-wrap">
+                              {methods.map(m => (
+                                <div key={m.id} className="flex items-center space-x-2">
+                                  <RadioGroupItem value={m.id} id={`s-pm-${m.id}`} />
+                                  <Label htmlFor={`s-pm-${m.id}`}>{m.name}</Label>
+                                </div>
+                              ))}
+                            </RadioGroup>
                           </div>
-                          <div className="flex items-center space-x-2">
-                            <RadioGroupItem value="cash" id="s-cash" />
-                            <Label htmlFor="s-cash">Naqd</Label>
-                          </div>
-                        </RadioGroup>
-                      </div>
+                        );
+                      })()}
+                      {customFields.map(field => (
+                        <div key={field.key} className="space-y-2">
+                          <Label>{field.label} {field.required && <span className="text-red-500">*</span>}</Label>
+                          <Input
+                            placeholder={field.label}
+                            value={(formData as any)[field.key] || ""}
+                            onChange={(e) => setFormData({ ...formData, [field.key]: e.target.value })}
+                            data-testid={`input-checkout-${field.key}`}
+                          />
+                        </div>
+                      ))}
                     </div>
                     <Button onClick={handleCheckout} className="w-full h-12 text-white" style={{ backgroundColor: brandColor }} data-testid="button-submit-order">
                       <Send className="mr-2 h-4 w-4" /> Buyurtma berish

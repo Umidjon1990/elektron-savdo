@@ -1256,7 +1256,7 @@ export default function FinancePage() {
                     <p className="text-sm text-gray-500 text-center py-4">Tovar beruvchilar topilmadi</p>
                   ) : (
                     (supplierSummary?.suppliers || []).map((s: any, idx: number) => (
-                      <SupplierCard key={idx} supplier={s} />
+                      <SupplierCard key={idx} supplier={s} token={token} onUpdate={() => queryClient.invalidateQueries({ queryKey: ["supplier-summary"] })} />
                     ))
                   )}
                 </CardContent>
@@ -1583,71 +1583,238 @@ function CategoryDialog({ isOpen, onClose, category, onSave, isLoading }: any) {
   );
 }
 
-function SupplierCard({ supplier }: { supplier: any }) {
+function SupplierCard({ supplier, token, onUpdate }: { supplier: any; token: string | null; onUpdate: () => void }) {
   const [expanded, setExpanded] = useState(false);
+  const { toast } = useToast();
+  const [payDialogProduct, setPayDialogProduct] = useState<any>(null);
+  const [payAmount, setPayAmount] = useState("");
+  const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
+
+  const nasiyaProducts = (supplier.products || []).filter((p: any) => p.paymentMethod === "nasiya");
+  const nasiyaTotal = nasiyaProducts.reduce((s: number, p: any) => s + p.amount, 0);
+  const nasiyaPaid = nasiyaProducts.reduce((s: number, p: any) => s + (p.paidAmount || 0), 0);
+  const nasiyaRemaining = nasiyaTotal - nasiyaPaid;
+
+  const updateDebtStatus = async (productId: string, status: string, paidAmt?: number) => {
+    try {
+      await fetch(`/api/products/${productId}/supplier-debt`, {
+        method: "PATCH",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ status, paidAmount: paidAmt }),
+      });
+      toast({ title: "Yangilandi", className: "bg-green-500 text-white border-none" });
+      onUpdate();
+    } catch {
+      toast({ title: "Xato", variant: "destructive" });
+    }
+  };
+
   return (
-    <div className="border rounded-lg overflow-hidden" data-testid={`supplier-card-${supplier.name}`}>
-      <button
-        onClick={() => setExpanded(!expanded)}
-        className="w-full flex items-center justify-between p-3 hover:bg-gray-50 transition-colors text-left"
-      >
-        <div className="flex items-center gap-3 min-w-0">
-          <div className="w-9 h-9 rounded-full bg-blue-100 flex items-center justify-center shrink-0">
-            <Truck className="h-4 w-4 text-blue-600" />
-          </div>
-          <div className="min-w-0">
-            <p className="font-medium text-sm truncate">{supplier.name}</p>
-            {supplier.phone && <p className="text-xs text-gray-500">{supplier.phone}</p>}
-            <p className="text-xs text-gray-400">{supplier.totalProducts} tovar, {supplier.totalItems} dona</p>
-          </div>
-        </div>
-        <div className="flex items-center gap-3 shrink-0">
-          <div className="text-right">
-            <p className="font-bold text-sm">{supplier.totalAmount.toLocaleString()} so'm</p>
-            <div className="flex gap-2 text-[10px]">
-              {supplier.naqd > 0 && <span className="text-green-600">Naqd: {supplier.naqd.toLocaleString()}</span>}
-              {supplier.karta > 0 && <span className="text-blue-600">Karta: {supplier.karta.toLocaleString()}</span>}
-              {supplier.nasiya > 0 && <span className="text-amber-600">Nasiya: {supplier.nasiya.toLocaleString()}</span>}
+    <>
+      <div className="border rounded-lg overflow-hidden" data-testid={`supplier-card-${supplier.name}`}>
+        <button
+          onClick={() => setExpanded(!expanded)}
+          className="w-full flex items-center justify-between p-3 hover:bg-gray-50 transition-colors text-left"
+        >
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="w-9 h-9 rounded-full bg-blue-100 flex items-center justify-center shrink-0">
+              <Truck className="h-4 w-4 text-blue-600" />
+            </div>
+            <div className="min-w-0">
+              <p className="font-medium text-sm truncate">{supplier.name}</p>
+              {supplier.phone && <p className="text-xs text-gray-500">{supplier.phone}</p>}
+              <p className="text-xs text-gray-400">{supplier.totalProducts} tovar, {supplier.totalItems} dona</p>
             </div>
           </div>
-          <ChevronDown className={`h-4 w-4 text-gray-400 transition-transform ${expanded ? "rotate-180" : ""}`} />
-        </div>
-      </button>
-      {expanded && (
-        <div className="border-t bg-gray-50 p-3">
-          <table className="w-full text-xs">
-            <thead>
-              <tr className="text-gray-500">
-                <th className="text-left pb-1">Tovar</th>
-                <th className="text-right pb-1">Kelish narx</th>
-                <th className="text-right pb-1">Soni</th>
-                <th className="text-right pb-1">Jami</th>
-                <th className="text-right pb-1">To'lov</th>
-              </tr>
-            </thead>
-            <tbody>
-              {(supplier.products || []).map((p: any) => (
-                <tr key={p.id} className="border-t border-gray-200">
-                  <td className="py-1.5 pr-2 truncate max-w-[120px]">{p.name}</td>
-                  <td className="py-1.5 text-right">{p.costPrice.toLocaleString()}</td>
-                  <td className="py-1.5 text-right">{p.stock}</td>
-                  <td className="py-1.5 text-right font-medium">{p.amount.toLocaleString()}</td>
-                  <td className="py-1.5 text-right">
-                    <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${
-                      p.paymentMethod === "karta" ? "bg-blue-100 text-blue-700" :
-                      p.paymentMethod === "nasiya" ? "bg-amber-100 text-amber-700" :
-                      "bg-green-100 text-green-700"
-                    }`}>
-                      {p.paymentMethod === "karta" ? "Karta" : p.paymentMethod === "nasiya" ? "Nasiya" : "Naqd"}
-                    </span>
-                  </td>
+          <div className="flex items-center gap-3 shrink-0">
+            <div className="text-right">
+              <p className="font-bold text-sm">{supplier.totalAmount.toLocaleString()} so'm</p>
+              <div className="flex gap-2 text-[10px]">
+                {supplier.naqd > 0 && <span className="text-green-600">Naqd: {supplier.naqd.toLocaleString()}</span>}
+                {supplier.karta > 0 && <span className="text-blue-600">Karta: {supplier.karta.toLocaleString()}</span>}
+                {supplier.nasiya > 0 && <span className="text-amber-600">Nasiya: {supplier.nasiya.toLocaleString()}</span>}
+              </div>
+              {nasiyaRemaining > 0 && (
+                <p className="text-[10px] text-red-500 font-medium mt-0.5">Qarz: {nasiyaRemaining.toLocaleString()} so'm</p>
+              )}
+            </div>
+            <ChevronDown className={`h-4 w-4 text-gray-400 transition-transform ${expanded ? "rotate-180" : ""}`} />
+          </div>
+        </button>
+        {expanded && (
+          <div className="border-t bg-gray-50 p-3 space-y-3">
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="text-gray-500">
+                  <th className="text-left pb-1">Tovar</th>
+                  <th className="text-right pb-1">Jami</th>
+                  <th className="text-right pb-1">To'lov</th>
+                  <th className="text-right pb-1">Holat</th>
+                  <th className="text-right pb-1"></th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-    </div>
+              </thead>
+              <tbody>
+                {(supplier.products || []).map((p: any) => {
+                  const isNasiya = p.paymentMethod === "nasiya";
+                  const remaining = p.amount - (p.paidAmount || 0);
+                  const statusLabel = !isNasiya ? "" :
+                    p.debtStatus === "paid" ? "To'langan" :
+                    p.debtStatus === "partial" ? `Qisman (${(p.paidAmount || 0).toLocaleString()})` :
+                    "To'lanmagan";
+                  const statusColor = !isNasiya ? "" :
+                    p.debtStatus === "paid" ? "bg-green-100 text-green-700" :
+                    p.debtStatus === "partial" ? "bg-orange-100 text-orange-700" :
+                    "bg-red-100 text-red-700";
+
+                  return (
+                    <tr key={p.id} className="border-t border-gray-200">
+                      <td className="py-1.5 pr-2">
+                        <div className="truncate max-w-[100px]">{p.name}</div>
+                        <div className="text-[10px] text-gray-400">{p.costPrice.toLocaleString()} × {p.stock}</div>
+                      </td>
+                      <td className="py-1.5 text-right font-medium">{p.amount.toLocaleString()}</td>
+                      <td className="py-1.5 text-right">
+                        <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${
+                          p.paymentMethod === "karta" ? "bg-blue-100 text-blue-700" :
+                          p.paymentMethod === "nasiya" ? "bg-amber-100 text-amber-700" :
+                          "bg-green-100 text-green-700"
+                        }`}>
+                          {p.paymentMethod === "karta" ? "Karta" : p.paymentMethod === "nasiya" ? "Nasiya" : "Naqd"}
+                        </span>
+                      </td>
+                      <td className="py-1.5 text-right">
+                        {isNasiya && (
+                          <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${statusColor}`}>
+                            {statusLabel}
+                          </span>
+                        )}
+                      </td>
+                      <td className="py-1.5 text-right">
+                        {isNasiya && p.debtStatus !== "paid" && (
+                          <div className="flex items-center gap-1 justify-end">
+                            <button
+                              onClick={(e) => { e.stopPropagation(); updateDebtStatus(p.id, "paid", p.amount); }}
+                              className="p-1 hover:bg-green-100 rounded text-green-600" title="To'landi"
+                              data-testid={`btn-paid-${p.id}`}
+                            >
+                              <UserCheck className="h-3.5 w-3.5" />
+                            </button>
+                            <button
+                              onClick={(e) => { e.stopPropagation(); setPayDialogProduct(p); setPayAmount(""); }}
+                              className="p-1 hover:bg-orange-100 rounded text-orange-600" title="Qisman to'lov"
+                              data-testid={`btn-partial-${p.id}`}
+                            >
+                              <Pencil className="h-3.5 w-3.5" />
+                            </button>
+                            <button
+                              onClick={(e) => { e.stopPropagation(); setDeleteConfirm(p.id); }}
+                              className="p-1 hover:bg-red-100 rounded text-red-600" title="O'chirish"
+                              data-testid={`btn-delete-debt-${p.id}`}
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </button>
+                          </div>
+                        )}
+                        {isNasiya && p.debtStatus === "paid" && (
+                          <button
+                            onClick={(e) => { e.stopPropagation(); updateDebtStatus(p.id, "pending", 0); }}
+                            className="p-1 hover:bg-gray-200 rounded text-gray-500" title="Qaytarish"
+                            data-testid={`btn-unpaid-${p.id}`}
+                          >
+                            <X className="h-3.5 w-3.5" />
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+
+            {nasiyaProducts.length > 0 && (
+              <div className="flex items-center justify-between p-2 bg-amber-50 rounded-lg border border-amber-200">
+                <div className="text-xs">
+                  <span className="text-amber-700 font-medium">Nasiya jami: </span>
+                  <span className="font-bold text-amber-800">{nasiyaTotal.toLocaleString()} so'm</span>
+                </div>
+                <div className="text-xs">
+                  <span className="text-green-600">To'langan: {nasiyaPaid.toLocaleString()}</span>
+                  {nasiyaRemaining > 0 && <span className="text-red-600 ml-2">Qoldiq: {nasiyaRemaining.toLocaleString()}</span>}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
+      <Dialog open={!!payDialogProduct} onOpenChange={(open) => { if (!open) setPayDialogProduct(null); }}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader><DialogTitle>Qisman to'lov</DialogTitle></DialogHeader>
+          {payDialogProduct && (
+            <div className="space-y-3">
+              <p className="text-sm text-gray-600">{payDialogProduct.name}</p>
+              <p className="text-sm">Jami: <b>{payDialogProduct.amount.toLocaleString()}</b> so'm</p>
+              <p className="text-sm">Oldin to'langan: <b>{(payDialogProduct.paidAmount || 0).toLocaleString()}</b> so'm</p>
+              <p className="text-sm">Qoldiq: <b>{(payDialogProduct.amount - (payDialogProduct.paidAmount || 0)).toLocaleString()}</b> so'm</p>
+              <Input
+                type="number"
+                placeholder="To'lov miqdori (so'm)"
+                value={payAmount}
+                onChange={(e) => setPayAmount(e.target.value)}
+                data-testid="input-supplier-pay-amount"
+              />
+            </div>
+          )}
+          <DialogFooter>
+            <Button
+              onClick={() => {
+                if (!payDialogProduct || !payAmount) return;
+                const newPaid = (payDialogProduct.paidAmount || 0) + Number(payAmount);
+                const newStatus = newPaid >= payDialogProduct.amount ? "paid" : "partial";
+                updateDebtStatus(payDialogProduct.id, newStatus, Math.min(newPaid, payDialogProduct.amount));
+                setPayDialogProduct(null);
+              }}
+              disabled={!payAmount || Number(payAmount) <= 0}
+              data-testid="btn-confirm-partial-pay"
+            >
+              To'lash
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!deleteConfirm} onOpenChange={(open) => { if (!open) setDeleteConfirm(null); }}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader><DialogTitle>Nasiya yozuvini o'chirish</DialogTitle></DialogHeader>
+          <p className="text-sm text-gray-600">Bu tovarning nasiya ma'lumotini o'chirib, to'lov usulini naqd ga o'zgartirasizmi?</p>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => setDeleteConfirm(null)} data-testid="btn-cancel-delete-debt">Bekor qilish</Button>
+            <Button variant="destructive" onClick={async () => {
+              if (!deleteConfirm) return;
+              try {
+                await fetch(`/api/products/${deleteConfirm}/supplier-debt`, {
+                  method: "PATCH",
+                  headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+                  body: JSON.stringify({ status: "paid", paidAmount: 0 }),
+                });
+                await fetch(`/api/products/${deleteConfirm}`, {
+                  method: "PATCH",
+                  headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+                  body: JSON.stringify({ supplierPaymentMethod: "naqd" }),
+                });
+                toast({ title: "O'chirildi", className: "bg-green-500 text-white border-none" });
+                onUpdate();
+              } catch {
+                toast({ title: "Xato", variant: "destructive" });
+              }
+              setDeleteConfirm(null);
+            }} data-testid="btn-confirm-delete-debt">
+              O'chirish
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
 

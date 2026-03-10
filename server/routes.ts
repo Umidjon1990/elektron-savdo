@@ -2036,7 +2036,9 @@ export async function registerRoutes(
           costPrice: (p as any).costPrice || 0,
           stock: p.stock,
           amount,
-          paymentMethod: payMethod
+          paymentMethod: payMethod,
+          debtStatus: (p as any).supplierDebtStatus || "pending",
+          paidAmount: (p as any).supplierPaidAmount || 0
         });
       }
       
@@ -2081,6 +2083,27 @@ export async function registerRoutes(
       res.json(updated);
     } catch (error) {
       res.status(500).json({ error: "Failed to update supplier" });
+    }
+  });
+
+  app.patch("/api/products/:id/supplier-debt", authMiddleware, async (req: any, res) => {
+    try {
+      const { status, paidAmount } = req.body;
+      const validStatuses = ["pending", "partial", "paid"];
+      if (status && !validStatuses.includes(status)) {
+        return res.status(400).json({ error: "Invalid status" });
+      }
+      const product = await storage.getProduct(req.params.id);
+      if (!product || (product as any).tenantId !== req.tenantId) {
+        return res.status(404).json({ error: "Product not found" });
+      }
+      const updates: any = {};
+      if (status) updates.supplierDebtStatus = status;
+      if (paidAmount !== undefined) updates.supplierPaidAmount = Number(paidAmount);
+      const updated = await storage.updateProduct(req.params.id, updates);
+      res.json(updated);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to update supplier debt" });
     }
   });
 

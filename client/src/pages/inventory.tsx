@@ -127,6 +127,7 @@ export default function Inventory() {
     image: "",
     videoUrl: "",
     supplier: "",
+    supplierPaymentMethod: "naqd",
     isNew: false
   });
   const [newCategoryName, setNewCategoryName] = useState("");
@@ -160,7 +161,7 @@ export default function Inventory() {
     if (!isAddDialogOpen) {
       setStep(1);
       setEditingId(null);
-      setNewProduct({ name: "", author: "", price: "", costPrice: "", barcodePrice: "", wholesalePrice: "", stock: "", category: "", barcode: "", image: "", videoUrl: "", supplier: "", isNew: false });
+      setNewProduct({ name: "", author: "", price: "", costPrice: "", barcodePrice: "", wholesalePrice: "", stock: "", category: "", barcode: "", image: "", videoUrl: "", supplier: "", supplierPaymentMethod: "naqd", isNew: false });
       setCustomFieldValues({});
     }
   }, [isAddDialogOpen]);
@@ -180,6 +181,7 @@ export default function Inventory() {
       image: product.image,
       videoUrl: product.videoUrl || "",
       supplier: (product as any).supplier || "",
+      supplierPaymentMethod: (product as any).supplierPaymentMethod || "naqd",
       isNew: product.isNew || false
     });
     setCustomFieldValues({
@@ -328,6 +330,7 @@ export default function Inventory() {
           category: newProduct.category || categories[0]?.name || "Boshqa",
           barcode: newProduct.barcode.trim(),
           supplier: newProduct.supplier || "",
+          supplierPaymentMethod: newProduct.supplierPaymentMethod || "naqd",
           description: customFieldValues.description || "",
           image: newProduct.image,
           videoUrl: newProduct.videoUrl || undefined,
@@ -351,6 +354,7 @@ export default function Inventory() {
           category: newProduct.category || categories[0]?.name || "Boshqa",
           barcode: newProduct.barcode.trim(),
           supplier: newProduct.supplier || "",
+          supplierPaymentMethod: newProduct.supplierPaymentMethod || "naqd",
           description: customFieldValues.description || "",
           image: newProduct.image || "https://images.unsplash.com/photo-1543002588-bfa74002ed7e?auto=format&fit=crop&q=80&w=300&h=400",
           videoUrl: newProduct.videoUrl || undefined,
@@ -697,10 +701,10 @@ export default function Inventory() {
                               </Dialog>
                             </div>
                           </div>}
-                          {isFieldVisible("supplier") && <div className="space-y-2 col-span-2 sm:col-span-1">
+                          {isFieldVisible("supplier") && <div className="space-y-2 col-span-2">
                             <Label htmlFor="supplier" className="flex items-center gap-1.5">
                               <Truck className="h-3.5 w-3.5 text-muted-foreground" />
-                              Yetkazib beruvchi
+                              Tovar beruvchi
                             </Label>
                             <div className="flex gap-2">
                               <Select value={newProduct.supplier || "none"} onValueChange={(val) => setNewProduct({...newProduct, supplier: val === "none" ? "" : val})}>
@@ -714,6 +718,16 @@ export default function Inventory() {
                                   ))}
                                 </SelectContent>
                               </Select>
+                              <Select value={newProduct.supplierPaymentMethod} onValueChange={(val) => setNewProduct({...newProduct, supplierPaymentMethod: val})}>
+                                <SelectTrigger className="w-[120px] bg-white" data-testid="select-supplier-payment">
+                                  <SelectValue placeholder="To'lov" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="naqd">Naqd</SelectItem>
+                                  <SelectItem value="karta">Karta</SelectItem>
+                                  <SelectItem value="nasiya">Nasiya</SelectItem>
+                                </SelectContent>
+                              </Select>
                               <Dialog>
                                 <DialogTrigger asChild>
                                   <Button type="button" variant="outline" size="icon" className="shrink-0" data-testid="button-add-supplier">
@@ -721,7 +735,7 @@ export default function Inventory() {
                                   </Button>
                                 </DialogTrigger>
                                 <DialogContent className="max-w-sm">
-                                  <DialogHeader><DialogTitle>Yangi yetkazib beruvchi</DialogTitle></DialogHeader>
+                                  <DialogHeader><DialogTitle>Yangi tovar beruvchi</DialogTitle></DialogHeader>
                                   <div className="space-y-3">
                                     <Input
                                       placeholder="Nomi"

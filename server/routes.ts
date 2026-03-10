@@ -1995,6 +1995,66 @@ export async function registerRoutes(
   });
 
   // Suppliers CRUD
+  app.get("/api/supplier-summary", authMiddleware, async (req: any, res) => {
+    try {
+      const products = await storage.getAllProducts(req.tenantId);
+      const suppliers = await storage.getSuppliers(req.tenantId);
+      
+      const supplierMap: Record<string, { name: string; phone: string; totalAmount: number; totalProducts: number; totalItems: number; naqd: number; karta: number; nasiya: number; products: any[] }> = {};
+      
+      for (const s of suppliers) {
+        supplierMap[s.name] = {
+          name: s.name,
+          phone: s.phone || "",
+          totalAmount: 0,
+          totalProducts: 0,
+          totalItems: 0,
+          naqd: 0,
+          karta: 0,
+          nasiya: 0,
+          products: []
+        };
+      }
+      
+      for (const p of products) {
+        const sName = (p as any).supplier;
+        if (!sName) continue;
+        if (!supplierMap[sName]) {
+          supplierMap[sName] = { name: sName, phone: "", totalAmount: 0, totalProducts: 0, totalItems: 0, naqd: 0, karta: 0, nasiya: 0, products: [] };
+        }
+        const amount = ((p as any).costPrice || 0) * (p.stock || 0);
+        const payMethod = (p as any).supplierPaymentMethod || "naqd";
+        supplierMap[sName].totalAmount += amount;
+        supplierMap[sName].totalProducts += 1;
+        supplierMap[sName].totalItems += p.stock || 0;
+        if (payMethod === "karta") supplierMap[sName].karta += amount;
+        else if (payMethod === "nasiya") supplierMap[sName].nasiya += amount;
+        else supplierMap[sName].naqd += amount;
+        supplierMap[sName].products.push({
+          id: p.id,
+          name: p.name,
+          costPrice: (p as any).costPrice || 0,
+          stock: p.stock,
+          amount,
+          paymentMethod: payMethod
+        });
+      }
+      
+      const result = Object.values(supplierMap).filter(s => s.totalProducts > 0 || suppliers.some(sup => sup.name === s.name));
+      const totals = {
+        totalAmount: result.reduce((s, r) => s + r.totalAmount, 0),
+        totalNaqd: result.reduce((s, r) => s + r.naqd, 0),
+        totalKarta: result.reduce((s, r) => s + r.karta, 0),
+        totalNasiya: result.reduce((s, r) => s + r.nasiya, 0),
+        supplierCount: result.length,
+      };
+      
+      res.json({ suppliers: result.sort((a, b) => b.totalAmount - a.totalAmount), totals });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch supplier summary" });
+    }
+  });
+
   app.get("/api/suppliers", authMiddleware, async (req: any, res) => {
     try {
       const list = await storage.getSuppliers(req.tenantId);

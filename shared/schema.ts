@@ -52,6 +52,7 @@ export const products = pgTable("products", {
   category: text("category").notNull(),
   barcode: text("barcode").notNull(),
   supplier: text("supplier").default(""),
+  supplierPaymentMethod: text("supplier_payment_method").default("naqd"),
   description: text("description").default(""),
   image: text("image").notNull(),
   videoUrl: text("video_url"),

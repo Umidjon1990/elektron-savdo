@@ -55,7 +55,7 @@ const PAYMENT_COLORS: Record<string, string> = {
 
 const PIE_COLORS = ["#ef4444", "#f59e0b", "#3b82f6", "#8b5cf6", "#10b981", "#ec4899", "#6b7280", "#14b8a6", "#f97316", "#06b6d4"];
 
-type SubMenu = "kassa" | "kirim" | "chiqim" | "nasiya" | "hisobot" | "topshirish";
+type SubMenu = "kassa" | "kirim" | "chiqim" | "nasiya" | "hisobot" | "topshirish" | "tovarberuvchi";
 
 function formatSum(val: number): string {
   if (val >= 1000000) return (val / 1000000).toFixed(1) + "M";
@@ -152,6 +152,16 @@ export default function FinancePage() {
       return res.json();
     },
     enabled: !!token,
+  });
+
+  const { data: supplierSummary } = useQuery<any>({
+    queryKey: ["supplier-summary"],
+    queryFn: async () => {
+      const res = await fetch("/api/supplier-summary", { headers });
+      if (!res.ok) throw new Error("Failed");
+      return res.json();
+    },
+    enabled: !!token && (activeMenu === "tovarberuvchi" || activeMenu === "hisobot"),
   });
 
   const summary = useMemo(() => {
@@ -512,6 +522,7 @@ export default function FinancePage() {
     { key: "nasiya", label: "Nasiya", icon: HandCoins },
     { key: "hisobot", label: "Hisobot", icon: FileText },
     { key: "topshirish", label: "Topshirish", icon: UserCheck },
+    { key: "tovarberuvchi", label: "Tovar beruvchi", icon: Truck },
   ];
 
   return (
@@ -1049,16 +1060,16 @@ export default function FinancePage() {
                     <p className="text-lg font-bold">{expTotal.toLocaleString()}</p>
                   </CardContent>
                 </Card>
+                <Card className="border-0 shadow-sm bg-gradient-to-br from-orange-500 to-amber-600 text-white">
+                  <CardContent className="p-3">
+                    <p className="text-[10px] opacity-80 font-medium">Tovar xarid</p>
+                    <p className="text-lg font-bold">{(supplierSummary?.totals?.totalAmount || 0).toLocaleString()}</p>
+                  </CardContent>
+                </Card>
                 <Card className={`border-0 shadow-sm text-white ${profit >= 0 ? "bg-gradient-to-br from-blue-500 to-indigo-600" : "bg-gradient-to-br from-orange-500 to-red-600"}`}>
                   <CardContent className="p-3">
                     <p className="text-[10px] opacity-80 font-medium">Sof foyda</p>
                     <p className="text-lg font-bold">{profit.toLocaleString()}</p>
-                  </CardContent>
-                </Card>
-                <Card className="border-0 shadow-sm bg-gradient-to-br from-violet-500 to-purple-600 text-white">
-                  <CardContent className="p-3">
-                    <p className="text-[10px] opacity-80 font-medium">O'rtacha chek</p>
-                    <p className="text-lg font-bold">{(summary?.transactionCount || 0) > 0 ? Math.round(revenue / (summary?.transactionCount || 1)).toLocaleString() : "0"}</p>
                   </CardContent>
                 </Card>
               </div>
@@ -1191,6 +1202,102 @@ export default function FinancePage() {
           )}
 
           {activeMenu === "topshirish" && <ShiftHandoverTab token={token} period={period} balance={balance} headers={headers} />}
+
+          {activeMenu === "tovarberuvchi" && (
+            <>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                <Card className="bg-gradient-to-br from-blue-50 to-blue-100 border-blue-200">
+                  <CardContent className="p-4">
+                    <div className="flex items-center gap-2 mb-1">
+                      <Truck className="h-4 w-4 text-blue-600" />
+                      <span className="text-xs text-blue-700 font-medium">Jami xarid</span>
+                    </div>
+                    <p className="text-xl font-bold text-blue-800" data-testid="text-supplier-total">{(supplierSummary?.totals?.totalAmount || 0).toLocaleString()} so'm</p>
+                  </CardContent>
+                </Card>
+                <Card className="bg-gradient-to-br from-green-50 to-green-100 border-green-200">
+                  <CardContent className="p-4">
+                    <div className="flex items-center gap-2 mb-1">
+                      <Banknote className="h-4 w-4 text-green-600" />
+                      <span className="text-xs text-green-700 font-medium">Naqd</span>
+                    </div>
+                    <p className="text-xl font-bold text-green-800" data-testid="text-supplier-naqd">{(supplierSummary?.totals?.totalNaqd || 0).toLocaleString()} so'm</p>
+                  </CardContent>
+                </Card>
+                <Card className="bg-gradient-to-br from-indigo-50 to-indigo-100 border-indigo-200">
+                  <CardContent className="p-4">
+                    <div className="flex items-center gap-2 mb-1">
+                      <CreditCard className="h-4 w-4 text-indigo-600" />
+                      <span className="text-xs text-indigo-700 font-medium">Karta</span>
+                    </div>
+                    <p className="text-xl font-bold text-indigo-800" data-testid="text-supplier-karta">{(supplierSummary?.totals?.totalKarta || 0).toLocaleString()} so'm</p>
+                  </CardContent>
+                </Card>
+                <Card className="bg-gradient-to-br from-amber-50 to-amber-100 border-amber-200">
+                  <CardContent className="p-4">
+                    <div className="flex items-center gap-2 mb-1">
+                      <HandCoins className="h-4 w-4 text-amber-600" />
+                      <span className="text-xs text-amber-700 font-medium">Nasiya</span>
+                    </div>
+                    <p className="text-xl font-bold text-amber-800" data-testid="text-supplier-nasiya">{(supplierSummary?.totals?.totalNasiya || 0).toLocaleString()} so'm</p>
+                  </CardContent>
+                </Card>
+              </div>
+
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-base flex items-center gap-2">
+                    <Users className="h-4 w-4" />
+                    Tovar beruvchilar ro'yxati ({supplierSummary?.suppliers?.length || 0})
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-2">
+                  {(supplierSummary?.suppliers || []).length === 0 ? (
+                    <p className="text-sm text-gray-500 text-center py-4">Tovar beruvchilar topilmadi</p>
+                  ) : (
+                    (supplierSummary?.suppliers || []).map((s: any, idx: number) => (
+                      <SupplierCard key={idx} supplier={s} />
+                    ))
+                  )}
+                </CardContent>
+              </Card>
+
+              {(supplierSummary?.totals?.totalAmount || 0) > 0 && (
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-base">To'lov usullari bo'yicha</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="h-64">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <PieChart>
+                          <Pie
+                            data={[
+                              { name: "Naqd", value: supplierSummary?.totals?.totalNaqd || 0 },
+                              { name: "Karta", value: supplierSummary?.totals?.totalKarta || 0 },
+                              { name: "Nasiya", value: supplierSummary?.totals?.totalNasiya || 0 },
+                            ].filter(d => d.value > 0)}
+                            cx="50%" cy="50%" outerRadius={80} dataKey="value"
+                            label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+                          >
+                            {[
+                              { name: "Naqd", value: supplierSummary?.totals?.totalNaqd || 0, color: "#22c55e" },
+                              { name: "Karta", value: supplierSummary?.totals?.totalKarta || 0, color: "#3b82f6" },
+                              { name: "Nasiya", value: supplierSummary?.totals?.totalNasiya || 0, color: "#f59e0b" },
+                            ].filter(d => d.value > 0).map((entry, i) => (
+                              <Cell key={i} fill={entry.color} />
+                            ))}
+                          </Pie>
+                          <Tooltip formatter={(v: any) => `${Number(v).toLocaleString()} so'm`} />
+                          <Legend />
+                        </PieChart>
+                      </ResponsiveContainer>
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+            </>
+          )}
         </div>
       </div>
 
@@ -1473,6 +1580,74 @@ function CategoryDialog({ isOpen, onClose, category, onSave, isLoading }: any) {
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  );
+}
+
+function SupplierCard({ supplier }: { supplier: any }) {
+  const [expanded, setExpanded] = useState(false);
+  return (
+    <div className="border rounded-lg overflow-hidden" data-testid={`supplier-card-${supplier.name}`}>
+      <button
+        onClick={() => setExpanded(!expanded)}
+        className="w-full flex items-center justify-between p-3 hover:bg-gray-50 transition-colors text-left"
+      >
+        <div className="flex items-center gap-3 min-w-0">
+          <div className="w-9 h-9 rounded-full bg-blue-100 flex items-center justify-center shrink-0">
+            <Truck className="h-4 w-4 text-blue-600" />
+          </div>
+          <div className="min-w-0">
+            <p className="font-medium text-sm truncate">{supplier.name}</p>
+            {supplier.phone && <p className="text-xs text-gray-500">{supplier.phone}</p>}
+            <p className="text-xs text-gray-400">{supplier.totalProducts} tovar, {supplier.totalItems} dona</p>
+          </div>
+        </div>
+        <div className="flex items-center gap-3 shrink-0">
+          <div className="text-right">
+            <p className="font-bold text-sm">{supplier.totalAmount.toLocaleString()} so'm</p>
+            <div className="flex gap-2 text-[10px]">
+              {supplier.naqd > 0 && <span className="text-green-600">Naqd: {supplier.naqd.toLocaleString()}</span>}
+              {supplier.karta > 0 && <span className="text-blue-600">Karta: {supplier.karta.toLocaleString()}</span>}
+              {supplier.nasiya > 0 && <span className="text-amber-600">Nasiya: {supplier.nasiya.toLocaleString()}</span>}
+            </div>
+          </div>
+          <ChevronDown className={`h-4 w-4 text-gray-400 transition-transform ${expanded ? "rotate-180" : ""}`} />
+        </div>
+      </button>
+      {expanded && (
+        <div className="border-t bg-gray-50 p-3">
+          <table className="w-full text-xs">
+            <thead>
+              <tr className="text-gray-500">
+                <th className="text-left pb-1">Tovar</th>
+                <th className="text-right pb-1">Kelish narx</th>
+                <th className="text-right pb-1">Soni</th>
+                <th className="text-right pb-1">Jami</th>
+                <th className="text-right pb-1">To'lov</th>
+              </tr>
+            </thead>
+            <tbody>
+              {(supplier.products || []).map((p: any) => (
+                <tr key={p.id} className="border-t border-gray-200">
+                  <td className="py-1.5 pr-2 truncate max-w-[120px]">{p.name}</td>
+                  <td className="py-1.5 text-right">{p.costPrice.toLocaleString()}</td>
+                  <td className="py-1.5 text-right">{p.stock}</td>
+                  <td className="py-1.5 text-right font-medium">{p.amount.toLocaleString()}</td>
+                  <td className="py-1.5 text-right">
+                    <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${
+                      p.paymentMethod === "karta" ? "bg-blue-100 text-blue-700" :
+                      p.paymentMethod === "nasiya" ? "bg-amber-100 text-amber-700" :
+                      "bg-green-100 text-green-700"
+                    }`}>
+                      {p.paymentMethod === "karta" ? "Karta" : p.paymentMethod === "nasiya" ? "Nasiya" : "Naqd"}
+                    </span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
   );
 }
 

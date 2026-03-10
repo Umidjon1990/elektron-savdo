@@ -11,7 +11,7 @@ import { useSettings } from "@/lib/settings-context";
 import { useAuth } from "@/lib/auth-context";
 import { useUpload } from "@/hooks/use-upload";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Store, Bell, Printer, Database, Shield, Palette, Receipt, Link2, Copy, Check, ExternalLink, Bot, Send, CreditCard, Plus, Trash2, Edit2, X, Package, Users, Image as ImageIcon, Upload, Loader2, Eye, QrCode, Download, Share2, ShoppingCart, ToggleLeft } from "lucide-react";
+import { Store, Bell, Printer, Database, Shield, Palette, Receipt, Link2, Copy, Check, ExternalLink, Bot, Send, CreditCard, Plus, Trash2, Edit2, X, Package, Users, Image as ImageIcon, Upload, Loader2, Eye, QrCode, Download, Share2, ShoppingCart, ToggleLeft, ChevronDown, ChevronRight } from "lucide-react";
 import { QRCodeCanvas } from "qrcode.react";
 
 interface PaymentMethod {
@@ -48,20 +48,34 @@ const DEFAULT_CUSTOMER_FIELDS: CustomerField[] = [
   { key: "note", label: "Izoh" },
 ];
 
+interface FieldOption {
+  id: string;
+  label: string;
+  type?: "delivery" | "pickup";
+}
+
 interface OrderFormField {
   key: string;
   label: string;
   enabled: boolean;
   required: boolean;
+  options?: FieldOption[];
 }
 
 const DEFAULT_ORDER_FORM_FIELDS: OrderFormField[] = [
   { key: "name", label: "Ism Familiya", enabled: true, required: true },
   { key: "phone", label: "Aloqa uchun telefon", enabled: true, required: true },
   { key: "telegramPhone", label: "Telegram telefon", enabled: true, required: true },
-  { key: "deliveryType", label: "Yetkazib berish turi", enabled: true, required: false },
+  { key: "deliveryType", label: "Yetkazib berish turi", enabled: true, required: false, options: [
+    { id: "delivery_free", label: "Kuryer (bepul)", type: "delivery" },
+    { id: "delivery_paid", label: "Kuryer (pullik)", type: "delivery" },
+    { id: "pickup", label: "Olib ketish", type: "pickup" },
+  ]},
   { key: "address", label: "Manzil", enabled: true, required: false },
-  { key: "shippingType", label: "Pochta turi (BTS/Starex)", enabled: true, required: false },
+  { key: "shippingType", label: "Pochta turi", enabled: true, required: false, options: [
+    { id: "BTS", label: "BTS" },
+    { id: "Starex", label: "Starex" },
+  ]},
   { key: "postalAddress", label: "Pochta manzili", enabled: true, required: false },
   { key: "paymentMethod", label: "To'lov turi", enabled: true, required: false },
 ];
@@ -92,6 +106,10 @@ export default function SettingsPage() {
   const [newOrderFieldLabel, setNewOrderFieldLabel] = useState("");
   const [editingOrderFieldKey, setEditingOrderFieldKey] = useState<string | null>(null);
   const [editingOrderFieldLabel, setEditingOrderFieldLabel] = useState("");
+  const [expandedOrderField, setExpandedOrderField] = useState<string | null>(null);
+  const [newOptionLabel, setNewOptionLabel] = useState("");
+  const [editingOptionId, setEditingOptionId] = useState<string | null>(null);
+  const [editingOptionLabel, setEditingOptionLabel] = useState("");
 
   const defaultFormVisibility: Record<string, boolean> = {
     costPrice: true,
@@ -290,6 +308,50 @@ export default function SettingsPage() {
     const updated = orderFormFields.map(f => f.key === editingOrderFieldKey ? { ...f, label: editingOrderFieldLabel.trim() } : f);
     setOrderFormFields(updated);
     setEditingOrderFieldKey(null);
+    saveConfigMutation.mutate({ orderFormFields: updated });
+  };
+
+  const addFieldOption = (fieldKey: string, optionType?: "delivery" | "pickup") => {
+    if (!newOptionLabel.trim()) return;
+    const optId = newOptionLabel.trim().toLowerCase().replace(/\s+/g, "_") + "_" + Date.now();
+    const newOpt: FieldOption = { id: optId, label: newOptionLabel.trim() };
+    if (fieldKey === "deliveryType") newOpt.type = optionType || "delivery";
+    const updated = orderFormFields.map(f => {
+      if (f.key !== fieldKey) return f;
+      const opts = f.options ? [...f.options, newOpt] : [newOpt];
+      return { ...f, options: opts };
+    });
+    setOrderFormFields(updated);
+    setNewOptionLabel("");
+    saveConfigMutation.mutate({ orderFormFields: updated });
+  };
+
+  const removeFieldOption = (fieldKey: string, optionId: string) => {
+    const updated = orderFormFields.map(f => {
+      if (f.key !== fieldKey || !f.options) return f;
+      return { ...f, options: f.options.filter(o => o.id !== optionId) };
+    });
+    setOrderFormFields(updated);
+    saveConfigMutation.mutate({ orderFormFields: updated });
+  };
+
+  const saveEditingOption = (fieldKey: string) => {
+    if (!editingOptionId || !editingOptionLabel.trim()) return;
+    const updated = orderFormFields.map(f => {
+      if (f.key !== fieldKey || !f.options) return f;
+      return { ...f, options: f.options.map(o => o.id === editingOptionId ? { ...o, label: editingOptionLabel.trim() } : o) };
+    });
+    setOrderFormFields(updated);
+    setEditingOptionId(null);
+    saveConfigMutation.mutate({ orderFormFields: updated });
+  };
+
+  const toggleOptionType = (fieldKey: string, optionId: string) => {
+    const updated = orderFormFields.map(f => {
+      if (f.key !== fieldKey || !f.options) return f;
+      return { ...f, options: f.options.map(o => o.id === optionId ? { ...o, type: o.type === "pickup" ? "delivery" : "pickup" } : o) };
+    });
+    setOrderFormFields(updated);
     saveConfigMutation.mutate({ orderFormFields: updated });
   };
 
@@ -687,62 +749,147 @@ export default function SettingsPage() {
                   {orderFormFields.map(field => {
                     const builtIn = ["name", "phone", "telegramPhone", "deliveryType", "address", "shippingType", "postalAddress", "paymentMethod"];
                     const isBuiltIn = builtIn.includes(field.key);
+                    const hasOptions = field.options && field.options.length > 0;
+                    const isExpanded = expandedOrderField === field.key;
                     return (
-                      <div key={field.key} className="flex items-center gap-2 p-2 bg-gray-50 rounded-lg" data-testid={`order-field-${field.key}`}>
-                        <Switch
-                          checked={field.enabled}
-                          onCheckedChange={() => toggleOrderField(field.key)}
-                          data-testid={`switch-order-field-${field.key}`}
-                        />
-                        {editingOrderFieldKey === field.key ? (
-                          <div className="flex-1 flex gap-2">
-                            <Input
-                              value={editingOrderFieldLabel}
-                              onChange={(e) => setEditingOrderFieldLabel(e.target.value)}
-                              className="h-8 text-sm"
-                              onKeyDown={(e) => e.key === "Enter" && saveEditingOrderField()}
-                              autoFocus
-                            />
-                            <Button size="icon" variant="ghost" className="h-8 w-8" onClick={saveEditingOrderField}>
-                              <Check className="h-3.5 w-3.5" />
-                            </Button>
-                            <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => setEditingOrderFieldKey(null)}>
-                              <X className="h-3.5 w-3.5" />
-                            </Button>
-                          </div>
-                        ) : (
-                          <>
-                            <span className={`flex-1 font-medium text-sm ${!field.enabled ? "text-muted-foreground line-through" : ""}`}>{field.label}</span>
-                            <label className="flex items-center gap-1 text-xs text-muted-foreground cursor-pointer">
-                              <input
-                                type="checkbox"
-                                checked={field.required}
-                                onChange={() => toggleOrderFieldRequired(field.key)}
-                                disabled={!field.enabled}
-                                className="rounded"
-                                data-testid={`checkbox-required-${field.key}`}
+                      <div key={field.key} className="space-y-1" data-testid={`order-field-${field.key}`}>
+                        <div className="flex items-center gap-2 p-2 bg-gray-50 rounded-lg">
+                          <Switch
+                            checked={field.enabled}
+                            onCheckedChange={() => toggleOrderField(field.key)}
+                            data-testid={`switch-order-field-${field.key}`}
+                          />
+                          {editingOrderFieldKey === field.key ? (
+                            <div className="flex-1 flex gap-2">
+                              <Input
+                                value={editingOrderFieldLabel}
+                                onChange={(e) => setEditingOrderFieldLabel(e.target.value)}
+                                className="h-8 text-sm"
+                                onKeyDown={(e) => e.key === "Enter" && saveEditingOrderField()}
+                                autoFocus
                               />
-                              Majburiy
-                            </label>
-                            <Button
-                              size="icon"
-                              variant="ghost"
-                              className="h-8 w-8 text-muted-foreground"
-                              onClick={() => { setEditingOrderFieldKey(field.key); setEditingOrderFieldLabel(field.label); }}
-                            >
-                              <Edit2 className="h-3.5 w-3.5" />
-                            </Button>
-                            {!isBuiltIn && (
+                              <Button size="icon" variant="ghost" className="h-8 w-8" onClick={saveEditingOrderField}>
+                                <Check className="h-3.5 w-3.5" />
+                              </Button>
+                              <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => setEditingOrderFieldKey(null)}>
+                                <X className="h-3.5 w-3.5" />
+                              </Button>
+                            </div>
+                          ) : (
+                            <>
+                              {(hasOptions || ["deliveryType", "shippingType"].includes(field.key)) && (
+                                <Button
+                                  size="icon"
+                                  variant="ghost"
+                                  className="h-6 w-6 text-muted-foreground"
+                                  onClick={() => setExpandedOrderField(isExpanded ? null : field.key)}
+                                >
+                                  {isExpanded ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
+                                </Button>
+                              )}
+                              <span className={`flex-1 font-medium text-sm ${!field.enabled ? "text-muted-foreground line-through" : ""}`}>
+                                {field.label}
+                                {hasOptions && <span className="text-xs text-muted-foreground ml-1">({field.options!.length} variant)</span>}
+                              </span>
+                              <label className="flex items-center gap-1 text-xs text-muted-foreground cursor-pointer">
+                                <input
+                                  type="checkbox"
+                                  checked={field.required}
+                                  onChange={() => toggleOrderFieldRequired(field.key)}
+                                  disabled={!field.enabled}
+                                  className="rounded"
+                                  data-testid={`checkbox-required-${field.key}`}
+                                />
+                                Majburiy
+                              </label>
                               <Button
                                 size="icon"
                                 variant="ghost"
-                                className="h-8 w-8 text-muted-foreground hover:text-red-600"
-                                onClick={() => removeOrderField(field.key)}
+                                className="h-8 w-8 text-muted-foreground"
+                                onClick={() => { setEditingOrderFieldKey(field.key); setEditingOrderFieldLabel(field.label); }}
                               >
-                                <Trash2 className="h-3.5 w-3.5" />
+                                <Edit2 className="h-3.5 w-3.5" />
                               </Button>
-                            )}
-                          </>
+                              {!isBuiltIn && (
+                                <Button
+                                  size="icon"
+                                  variant="ghost"
+                                  className="h-8 w-8 text-muted-foreground hover:text-red-600"
+                                  onClick={() => removeOrderField(field.key)}
+                                >
+                                  <Trash2 className="h-3.5 w-3.5" />
+                                </Button>
+                              )}
+                            </>
+                          )}
+                        </div>
+                        {isExpanded && (
+                          <div className="ml-10 p-3 bg-white border border-gray-200 rounded-lg space-y-2">
+                            <p className="text-xs text-muted-foreground font-medium">Variantlar:</p>
+                            {(field.options || []).map(opt => (
+                              <div key={opt.id} className="flex items-center gap-2 p-1.5 bg-gray-50 rounded" data-testid={`option-${field.key}-${opt.id}`}>
+                                {editingOptionId === opt.id ? (
+                                  <div className="flex-1 flex gap-2">
+                                    <Input
+                                      value={editingOptionLabel}
+                                      onChange={(e) => setEditingOptionLabel(e.target.value)}
+                                      className="h-7 text-xs"
+                                      onKeyDown={(e) => e.key === "Enter" && saveEditingOption(field.key)}
+                                      autoFocus
+                                    />
+                                    <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => saveEditingOption(field.key)}>
+                                      <Check className="h-3 w-3" />
+                                    </Button>
+                                    <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => setEditingOptionId(null)}>
+                                      <X className="h-3 w-3" />
+                                    </Button>
+                                  </div>
+                                ) : (
+                                  <>
+                                    {field.key === "deliveryType" && (
+                                      <button
+                                        className={`text-xs px-1.5 py-0.5 rounded ${opt.type === "pickup" ? "bg-orange-100 text-orange-700" : "bg-blue-100 text-blue-700"}`}
+                                        onClick={() => toggleOptionType(field.key, opt.id)}
+                                        title="Turini o'zgartirish"
+                                      >
+                                        {opt.type === "pickup" ? "🏢" : "🚚"}
+                                      </button>
+                                    )}
+                                    <span className="flex-1 text-sm">{opt.label}</span>
+                                    <Button
+                                      size="icon"
+                                      variant="ghost"
+                                      className="h-7 w-7 text-muted-foreground"
+                                      onClick={() => { setEditingOptionId(opt.id); setEditingOptionLabel(opt.label); }}
+                                    >
+                                      <Edit2 className="h-3 w-3" />
+                                    </Button>
+                                    <Button
+                                      size="icon"
+                                      variant="ghost"
+                                      className="h-7 w-7 text-muted-foreground hover:text-red-600"
+                                      onClick={() => removeFieldOption(field.key, opt.id)}
+                                    >
+                                      <Trash2 className="h-3 w-3" />
+                                    </Button>
+                                  </>
+                                )}
+                              </div>
+                            ))}
+                            <div className="flex gap-2">
+                              <Input
+                                placeholder="Yangi variant..."
+                                value={newOptionLabel}
+                                onChange={(e) => setNewOptionLabel(e.target.value)}
+                                className="h-8 text-xs"
+                                onKeyDown={(e) => e.key === "Enter" && addFieldOption(field.key)}
+                                data-testid={`input-new-option-${field.key}`}
+                              />
+                              <Button size="sm" className="h-8 text-xs gap-1" onClick={() => addFieldOption(field.key)} disabled={!newOptionLabel.trim()}>
+                                <Plus className="h-3 w-3" />
+                              </Button>
+                            </div>
+                          </div>
                         )}
                       </div>
                     );

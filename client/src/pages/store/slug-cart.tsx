@@ -31,6 +31,7 @@ interface OrderFormField {
   label: string;
   enabled: boolean;
   required: boolean;
+  options?: Array<{id: string, label: string, type?: string}>;
 }
 
 interface TenantInfo {
@@ -49,14 +50,14 @@ export default function SlugCartPage() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<Record<string, string>>({
     name: "",
     phone: "",
     telegramPhone: "",
-    deliveryType: "delivery" as "delivery" | "pickup",
-    paymentMethod: "click" as "cash" | "card" | "online" | "click",
+    deliveryType: "delivery_free",
+    paymentMethod: "click",
     address: "",
-    shippingType: "BTS" as "BTS" | "Starex",
+    shippingType: "BTS",
     postalAddress: "",
   });
 
@@ -81,6 +82,17 @@ export default function SlugCartPage() {
     localStorage.setItem(`cart_${slug}`, JSON.stringify(items));
   }, [items, slug]);
 
+  useEffect(() => {
+    if (tenant?.orderFormFields) {
+      const dtField = tenant.orderFormFields.find(f => f.key === "deliveryType");
+      const stField = tenant.orderFormFields.find(f => f.key === "shippingType");
+      const updates: Record<string, string> = {};
+      if (dtField?.options?.length) updates.deliveryType = dtField.options[0].id;
+      if (stField?.options?.length) updates.shippingType = stField.options[0].id;
+      if (Object.keys(updates).length > 0) setFormData(prev => ({ ...prev, ...updates }));
+    }
+  }, [tenant]);
+
   const removeItem = (productId: string) => {
     setItems(prev => prev.filter(i => i.product.id !== productId));
   };
@@ -102,9 +114,16 @@ export default function SlugCartPage() {
     { key: "name", label: "Ism Familiya", enabled: true, required: true },
     { key: "phone", label: "Aloqa uchun telefon", enabled: true, required: true },
     { key: "telegramPhone", label: "Telegram telefon", enabled: true, required: true },
-    { key: "deliveryType", label: "Yetkazib berish turi", enabled: true, required: false },
+    { key: "deliveryType", label: "Yetkazib berish turi", enabled: true, required: false, options: [
+      { id: "delivery_free", label: "Kuryer (bepul)", type: "delivery" },
+      { id: "delivery_paid", label: "Kuryer (pullik)", type: "delivery" },
+      { id: "pickup", label: "Olib ketish", type: "pickup" },
+    ]},
     { key: "address", label: "Manzil", enabled: true, required: false },
-    { key: "shippingType", label: "Pochta turi (BTS/Starex)", enabled: true, required: false },
+    { key: "shippingType", label: "Pochta turi", enabled: true, required: false, options: [
+      { id: "BTS", label: "BTS" },
+      { id: "Starex", label: "Starex" },
+    ]},
     { key: "postalAddress", label: "Pochta manzili", enabled: true, required: false },
     { key: "paymentMethod", label: "To'lov turi", enabled: true, required: false },
   ];
@@ -112,11 +131,18 @@ export default function SlugCartPage() {
   const isFieldEnabled = (key: string) => fields.find(f => f.key === key)?.enabled ?? true;
   const isFieldRequired = (key: string) => fields.find(f => f.key === key)?.required ?? false;
   const getFieldLabel = (key: string, fallback: string) => fields.find(f => f.key === key)?.label || fallback;
+  const getFieldOptions = (key: string) => fields.find(f => f.key === key)?.options || [];
   const customFields = fields.filter(f => f.key.startsWith("custom_") && f.enabled);
+  const deliveryOptions = getFieldOptions("deliveryType");
+  const shippingOptions = getFieldOptions("shippingType");
+  const selectedDeliveryOption = deliveryOptions.find(o => o.id === formData.deliveryType);
+  const isDeliverySelected = deliveryOptions.length > 0
+    ? (selectedDeliveryOption?.type || "delivery") !== "pickup"
+    : formData.deliveryType !== "pickup";
 
   const handleCheckout = async () => {
     const deliveryDependentKeys = ["address", "shippingType", "postalAddress"];
-    const skipDeliveryFields = !isFieldEnabled("deliveryType") || formData.deliveryType !== "delivery";
+    const skipDeliveryFields = !isFieldEnabled("deliveryType") || !isDeliverySelected;
 
     for (const field of fields) {
       if (!field.enabled || !field.required) continue;
@@ -130,8 +156,12 @@ export default function SlugCartPage() {
 
     try {
       let telegramInfo = formData.telegramPhone;
-      if (formData.deliveryType === "delivery") {
-        telegramInfo += ` | Manzil: ${formData.address} | Pochta: ${formData.shippingType}`;
+      const deliveryLabel = deliveryOptions.find(o => o.id === formData.deliveryType)?.label || formData.deliveryType;
+      if (isFieldEnabled("deliveryType")) telegramInfo += ` | Yetkazish: ${deliveryLabel}`;
+      if (isDeliverySelected) {
+        if (formData.address) telegramInfo += ` | Manzil: ${formData.address}`;
+        const shippingLabel = shippingOptions.find(o => o.id === formData.shippingType)?.label || formData.shippingType;
+        if (isFieldEnabled("shippingType")) telegramInfo += ` | Pochta: ${shippingLabel}`;
         if (formData.postalAddress) telegramInfo += ` | Pochta manzili: ${formData.postalAddress}`;
       }
 
@@ -287,25 +317,39 @@ export default function SlugCartPage() {
                       {isFieldEnabled("deliveryType") && (
                         <div className="space-y-2">
                           <Label>{getFieldLabel("deliveryType", "Yetkazib berish turi")}</Label>
-                          <RadioGroup value={formData.deliveryType} onValueChange={(v: "delivery" | "pickup") => setFormData({ ...formData, deliveryType: v })} className="grid grid-cols-2 gap-4">
-                            <div>
-                              <RadioGroupItem value="delivery" id="s-delivery" className="peer sr-only" />
-                              <Label htmlFor="s-delivery" className="flex flex-col items-center justify-between rounded-md border-2 border-muted bg-popover p-4 hover:bg-accent peer-data-[state=checked]:border-primary [&:has([data-state=checked])]:border-primary">
-                                <span className="mb-2 block text-2xl">🚚</span>
-                                <span className="text-xs font-medium">Kuryer</span>
-                              </Label>
-                            </div>
-                            <div>
-                              <RadioGroupItem value="pickup" id="s-pickup" className="peer sr-only" />
-                              <Label htmlFor="s-pickup" className="flex flex-col items-center justify-between rounded-md border-2 border-muted bg-popover p-4 hover:bg-accent peer-data-[state=checked]:border-primary [&:has([data-state=checked])]:border-primary">
-                                <span className="mb-2 block text-2xl">🏢</span>
-                                <span className="text-xs font-medium">Olib ketish</span>
-                              </Label>
-                            </div>
-                          </RadioGroup>
+                          {deliveryOptions.length > 0 ? (
+                            <RadioGroup value={formData.deliveryType} onValueChange={(v: any) => setFormData({ ...formData, deliveryType: v })} className="grid gap-3" style={{ gridTemplateColumns: `repeat(${Math.min(deliveryOptions.length, 3)}, 1fr)` }}>
+                              {deliveryOptions.map(opt => (
+                                <div key={opt.id}>
+                                  <RadioGroupItem value={opt.id} id={`s-dt-${opt.id}`} className="peer sr-only" />
+                                  <Label htmlFor={`s-dt-${opt.id}`} className="flex flex-col items-center justify-between rounded-md border-2 border-muted bg-popover p-3 hover:bg-accent peer-data-[state=checked]:border-primary [&:has([data-state=checked])]:border-primary cursor-pointer">
+                                    <span className="mb-1 block text-xl">{opt.type === "pickup" ? "🏢" : "🚚"}</span>
+                                    <span className="text-xs font-medium text-center">{opt.label}</span>
+                                  </Label>
+                                </div>
+                              ))}
+                            </RadioGroup>
+                          ) : (
+                            <RadioGroup value={formData.deliveryType} onValueChange={(v: any) => setFormData({ ...formData, deliveryType: v })} className="grid grid-cols-2 gap-4">
+                              <div>
+                                <RadioGroupItem value="delivery" id="s-delivery" className="peer sr-only" />
+                                <Label htmlFor="s-delivery" className="flex flex-col items-center justify-between rounded-md border-2 border-muted bg-popover p-4 hover:bg-accent peer-data-[state=checked]:border-primary [&:has([data-state=checked])]:border-primary">
+                                  <span className="mb-2 block text-2xl">🚚</span>
+                                  <span className="text-xs font-medium">Kuryer</span>
+                                </Label>
+                              </div>
+                              <div>
+                                <RadioGroupItem value="pickup" id="s-pickup" className="peer sr-only" />
+                                <Label htmlFor="s-pickup" className="flex flex-col items-center justify-between rounded-md border-2 border-muted bg-popover p-4 hover:bg-accent peer-data-[state=checked]:border-primary [&:has([data-state=checked])]:border-primary">
+                                  <span className="mb-2 block text-2xl">🏢</span>
+                                  <span className="text-xs font-medium">Olib ketish</span>
+                                </Label>
+                              </div>
+                            </RadioGroup>
+                          )}
                         </div>
                       )}
-                      {isFieldEnabled("deliveryType") && formData.deliveryType === "delivery" && (
+                      {isFieldEnabled("deliveryType") && isDeliverySelected && (
                         <>
                           {isFieldEnabled("address") && (
                             <div className="space-y-2">
@@ -313,18 +357,16 @@ export default function SlugCartPage() {
                               <Input placeholder="Shahar, tuman, ko'cha" value={formData.address} onChange={(e) => setFormData({ ...formData, address: e.target.value })} data-testid="input-checkout-address" />
                             </div>
                           )}
-                          {isFieldEnabled("shippingType") && (
+                          {isFieldEnabled("shippingType") && shippingOptions.length > 0 && (
                             <div className="space-y-2">
                               <Label>{getFieldLabel("shippingType", "Pochta turi")}</Label>
-                              <RadioGroup value={formData.shippingType} onValueChange={(v: "BTS" | "Starex") => setFormData({ ...formData, shippingType: v })} className="flex gap-4">
-                                <div className="flex items-center space-x-2">
-                                  <RadioGroupItem value="BTS" id="s-bts" />
-                                  <Label htmlFor="s-bts">BTS</Label>
-                                </div>
-                                <div className="flex items-center space-x-2">
-                                  <RadioGroupItem value="Starex" id="s-starex" />
-                                  <Label htmlFor="s-starex">Starex</Label>
-                                </div>
+                              <RadioGroup value={formData.shippingType} onValueChange={(v: any) => setFormData({ ...formData, shippingType: v })} className="flex gap-4 flex-wrap">
+                                {shippingOptions.map(opt => (
+                                  <div key={opt.id} className="flex items-center space-x-2">
+                                    <RadioGroupItem value={opt.id} id={`s-ship-${opt.id}`} />
+                                    <Label htmlFor={`s-ship-${opt.id}`}>{opt.label}</Label>
+                                  </div>
+                                ))}
                               </RadioGroup>
                             </div>
                           )}

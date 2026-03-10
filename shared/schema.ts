@@ -24,7 +24,7 @@ export const tenants = pgTable("tenants", {
   customerFields: json("customer_fields").$type<Array<{key: string, label: string}>>(),
   receiptLogo: text("receipt_logo"),
   productFormVisibility: json("product_form_visibility").$type<Record<string, boolean>>(),
-  orderFormFields: json("order_form_fields").$type<Array<{key: string, label: string, enabled: boolean, required: boolean}>>(),
+  orderFormFields: json("order_form_fields").$type<Array<{key: string, label: string, enabled: boolean, required: boolean, options?: Array<{id: string, label: string, type?: string}>}>>(),
   deliveryEnabled: boolean("delivery_enabled").notNull().default(false),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });

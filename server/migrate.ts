@@ -83,6 +83,14 @@ export async function runMigrations() {
           ALTER TABLE products ADD COLUMN video_url TEXT;
         END IF;
       END $$;
+
+      -- Add order_form_fields column to tenants if it doesn't exist
+      DO $$ 
+      BEGIN 
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='tenants' AND column_name='order_form_fields') THEN
+          ALTER TABLE tenants ADD COLUMN order_form_fields JSON;
+        END IF;
+      END $$;
     `);
     
     console.log("Database migrations completed successfully!");

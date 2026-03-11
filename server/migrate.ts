@@ -91,6 +91,28 @@ export async function runMigrations() {
           ALTER TABLE tenants ADD COLUMN order_form_fields JSON;
         END IF;
       END $$;
+
+      -- Add currency columns to products
+      DO $$ 
+      BEGIN 
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='products' AND column_name='supplier_currency') THEN
+          ALTER TABLE products ADD COLUMN supplier_currency TEXT DEFAULT 'uzs';
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='products' AND column_name='supplier_currency_rate') THEN
+          ALTER TABLE products ADD COLUMN supplier_currency_rate INTEGER NOT NULL DEFAULT 0;
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='products' AND column_name='supplier_original_price') THEN
+          ALTER TABLE products ADD COLUMN supplier_original_price INTEGER NOT NULL DEFAULT 0;
+        END IF;
+      END $$;
+
+      -- Add default_dollar_rate to tenants
+      DO $$ 
+      BEGIN 
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='tenants' AND column_name='default_dollar_rate') THEN
+          ALTER TABLE tenants ADD COLUMN default_dollar_rate INTEGER NOT NULL DEFAULT 0;
+        END IF;
+      END $$;
     `);
     
     console.log("Database migrations completed successfully!");

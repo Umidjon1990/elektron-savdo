@@ -128,6 +128,9 @@ export default function Inventory() {
     videoUrl: "",
     supplier: "",
     supplierPaymentMethod: "naqd",
+    supplierCurrency: "uzs",
+    supplierCurrencyRate: "",
+    supplierOriginalPrice: "",
     isNew: false
   });
   const [newCategoryName, setNewCategoryName] = useState("");
@@ -161,7 +164,7 @@ export default function Inventory() {
     if (!isAddDialogOpen) {
       setStep(1);
       setEditingId(null);
-      setNewProduct({ name: "", author: "", price: "", costPrice: "", barcodePrice: "", wholesalePrice: "", stock: "", category: "", barcode: "", image: "", videoUrl: "", supplier: "", supplierPaymentMethod: "naqd", isNew: false });
+      setNewProduct({ name: "", author: "", price: "", costPrice: "", barcodePrice: "", wholesalePrice: "", stock: "", category: "", barcode: "", image: "", videoUrl: "", supplier: "", supplierPaymentMethod: "naqd", supplierCurrency: "uzs", supplierCurrencyRate: "", supplierOriginalPrice: "", isNew: false });
       setCustomFieldValues({});
     }
   }, [isAddDialogOpen]);
@@ -182,6 +185,9 @@ export default function Inventory() {
       videoUrl: product.videoUrl || "",
       supplier: (product as any).supplier || "",
       supplierPaymentMethod: (product as any).supplierPaymentMethod || "naqd",
+      supplierCurrency: (product as any).supplierCurrency || "uzs",
+      supplierCurrencyRate: ((product as any).supplierCurrencyRate || "").toString(),
+      supplierOriginalPrice: ((product as any).supplierOriginalPrice || "").toString(),
       isNew: product.isNew || false
     });
     setCustomFieldValues({
@@ -318,6 +324,18 @@ export default function Inventory() {
         }
       }
 
+      const isUsd = newProduct.supplierCurrency === "usd";
+      const supplierOriginalPrice = isUsd ? Number(newProduct.supplierOriginalPrice) || 0 : 0;
+      const supplierCurrencyRate = isUsd ? Number(newProduct.supplierCurrencyRate) || 0 : 0;
+      const currencyFields = {
+        supplierCurrency: newProduct.supplierCurrency || "uzs",
+        supplierCurrencyRate,
+        supplierOriginalPrice,
+      };
+      if (isUsd && supplierOriginalPrice > 0 && supplierCurrencyRate > 0) {
+        newProduct.costPrice = (supplierOriginalPrice * supplierCurrencyRate).toString();
+      }
+
       if (editingId) {
         await updateProduct(editingId, {
           name: newProduct.name,
@@ -331,6 +349,7 @@ export default function Inventory() {
           barcode: newProduct.barcode.trim(),
           supplier: newProduct.supplier || "",
           supplierPaymentMethod: newProduct.supplierPaymentMethod || "naqd",
+          ...currencyFields,
           description: customFieldValues.description || "",
           image: newProduct.image,
           videoUrl: newProduct.videoUrl || undefined,
@@ -355,6 +374,7 @@ export default function Inventory() {
           barcode: newProduct.barcode.trim(),
           supplier: newProduct.supplier || "",
           supplierPaymentMethod: newProduct.supplierPaymentMethod || "naqd",
+          ...currencyFields,
           description: customFieldValues.description || "",
           image: newProduct.image || "https://images.unsplash.com/photo-1543002588-bfa74002ed7e?auto=format&fit=crop&q=80&w=300&h=400",
           videoUrl: newProduct.videoUrl || undefined,
@@ -719,13 +739,41 @@ export default function Inventory() {
                                 </SelectContent>
                               </Select>
                               <Select value={newProduct.supplierPaymentMethod} onValueChange={(val) => setNewProduct({...newProduct, supplierPaymentMethod: val})}>
-                                <SelectTrigger className="w-[120px] bg-white" data-testid="select-supplier-payment">
+                                <SelectTrigger className="w-[100px] bg-white" data-testid="select-supplier-payment">
                                   <SelectValue placeholder="To'lov" />
                                 </SelectTrigger>
                                 <SelectContent>
                                   <SelectItem value="naqd">Naqd</SelectItem>
                                   <SelectItem value="karta">Karta</SelectItem>
                                   <SelectItem value="nasiya">Nasiya</SelectItem>
+                                </SelectContent>
+                              </Select>
+                              <Select value={newProduct.supplierCurrency} onValueChange={(val) => {
+                                const updates: any = { supplierCurrency: val };
+                                if (val === "usd") {
+                                  const defaultRate = tenantSettings?.defaultDollarRate || 0;
+                                  if (!newProduct.supplierCurrencyRate && defaultRate > 0) {
+                                    updates.supplierCurrencyRate = defaultRate.toString();
+                                  }
+                                  updates.supplierOriginalPrice = updates.supplierOriginalPrice || "";
+                                  const rate = Number(updates.supplierCurrencyRate || newProduct.supplierCurrencyRate) || 0;
+                                  const origPrice = Number(updates.supplierOriginalPrice || newProduct.supplierOriginalPrice) || 0;
+                                  if (rate > 0 && origPrice > 0) {
+                                    updates.costPrice = (origPrice * rate).toString();
+                                  }
+                                }
+                                if (val === "uzs") {
+                                  updates.supplierCurrencyRate = "";
+                                  updates.supplierOriginalPrice = "";
+                                }
+                                setNewProduct(prev => ({...prev, ...updates}));
+                              }}>
+                                <SelectTrigger className="w-[90px] bg-white" data-testid="select-supplier-currency">
+                                  <SelectValue placeholder="Valyuta" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="uzs">So'm</SelectItem>
+                                  <SelectItem value="usd">Dollar</SelectItem>
                                 </SelectContent>
                               </Select>
                               <Dialog>
@@ -781,7 +829,55 @@ export default function Inventory() {
                         <div className="bg-gray-50 p-4 rounded-lg space-y-3">
                           <Label className="text-sm font-semibold text-gray-700">Narxlar</Label>
                           <div className="grid grid-cols-2 gap-3">
-                            {isFieldVisible("costPrice") && (
+                            {isFieldVisible("costPrice") && newProduct.supplierCurrency === "usd" ? (
+                            <div className="space-y-1 col-span-2">
+                              <Label className="text-xs text-muted-foreground">Tan narxi (dollar)</Label>
+                              <div className="grid grid-cols-3 gap-2">
+                                <div className="space-y-1">
+                                  <span className="text-[10px] text-muted-foreground">Narx ($)</span>
+                                  <Input
+                                    type="number"
+                                    placeholder="100"
+                                    value={newProduct.supplierOriginalPrice}
+                                    onChange={(e) => {
+                                      const origPrice = e.target.value;
+                                      const rate = Number(newProduct.supplierCurrencyRate) || 0;
+                                      const costPrice = rate > 0 ? (Number(origPrice) * rate).toString() : "";
+                                      setNewProduct(prev => ({...prev, supplierOriginalPrice: origPrice, costPrice}));
+                                    }}
+                                    className="bg-white h-9"
+                                    data-testid="input-original-price"
+                                  />
+                                </div>
+                                <div className="space-y-1">
+                                  <span className="text-[10px] text-muted-foreground">Kurs (1$=?so'm)</span>
+                                  <Input
+                                    type="number"
+                                    placeholder="12200"
+                                    value={newProduct.supplierCurrencyRate}
+                                    onChange={(e) => {
+                                      const rate = e.target.value;
+                                      const origPrice = Number(newProduct.supplierOriginalPrice) || 0;
+                                      const costPrice = origPrice > 0 ? (origPrice * Number(rate)).toString() : "";
+                                      setNewProduct(prev => ({...prev, supplierCurrencyRate: rate, costPrice}));
+                                    }}
+                                    className="bg-white h-9"
+                                    data-testid="input-currency-rate"
+                                  />
+                                </div>
+                                <div className="space-y-1">
+                                  <span className="text-[10px] text-muted-foreground">Jami (so'm)</span>
+                                  <Input
+                                    type="number"
+                                    value={newProduct.costPrice}
+                                    readOnly
+                                    className="bg-gray-100 h-9 font-semibold"
+                                    data-testid="input-cost-price-calculated"
+                                  />
+                                </div>
+                              </div>
+                            </div>
+                            ) : isFieldVisible("costPrice") ? (
                             <div className="space-y-1">
                               <Label htmlFor="costPrice" className="text-xs text-muted-foreground">Tan narxi (so'm)</Label>
                               <Input 
@@ -794,7 +890,7 @@ export default function Inventory() {
                                 className="bg-white h-9"
                               />
                             </div>
-                            )}
+                            ) : null}
                             {isFieldVisible("price") && (
                             <div className="space-y-1">
                               <Label htmlFor="price" className="text-xs text-muted-foreground">Sotish narxi (so'm)</Label>

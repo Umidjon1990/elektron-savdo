@@ -11,7 +11,7 @@ import { useSettings } from "@/lib/settings-context";
 import { useAuth } from "@/lib/auth-context";
 import { useUpload } from "@/hooks/use-upload";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Store, Bell, Printer, Database, Shield, Palette, Receipt, Link2, Copy, Check, ExternalLink, Bot, Send, CreditCard, Plus, Trash2, Edit2, X, Package, Users, Image as ImageIcon, Upload, Loader2, Eye, QrCode, Download, Share2, ShoppingCart, ToggleLeft, ChevronDown, ChevronRight } from "lucide-react";
+import { Store, Bell, Printer, Database, Shield, Palette, Receipt, Link2, Copy, Check, ExternalLink, Bot, Send, CreditCard, Plus, Trash2, Edit2, X, Package, Users, Image as ImageIcon, Upload, Loader2, Eye, QrCode, Download, Share2, ShoppingCart, ToggleLeft, ChevronDown, ChevronRight, DollarSign } from "lucide-react";
 import { QRCodeCanvas } from "qrcode.react";
 
 interface PaymentMethod {
@@ -102,6 +102,7 @@ export default function SettingsPage() {
 
   const [customerFields, setCustomerFields] = useState<CustomerField[]>(DEFAULT_CUSTOMER_FIELDS);
   const [newCustomerFieldLabel, setNewCustomerFieldLabel] = useState("");
+  const [defaultDollarRate, setDefaultDollarRate] = useState("");
   const [orderFormFields, setOrderFormFields] = useState<OrderFormField[]>(DEFAULT_ORDER_FORM_FIELDS);
   const [newOrderFieldLabel, setNewOrderFieldLabel] = useState("");
   const [editingOrderFieldKey, setEditingOrderFieldKey] = useState<string | null>(null);
@@ -168,6 +169,7 @@ export default function SettingsPage() {
       if (data.receiptLogo) setReceiptLogo(data.receiptLogo);
       if (data.productFormVisibility) setProductFormVisibility({ ...defaultFormVisibility, ...data.productFormVisibility });
       if (data.orderFormFields) setOrderFormFields(data.orderFormFields);
+      if (data.defaultDollarRate !== undefined && data.defaultDollarRate !== null) setDefaultDollarRate(data.defaultDollarRate.toString());
       if (data.deliveryEnabled !== undefined) setDeliveryEnabled(data.deliveryEnabled);
       return data;
     },
@@ -568,6 +570,46 @@ export default function SettingsPage() {
                     Qo'shish
                   </Button>
                 </div>
+              </CardContent>
+            </Card>
+
+            <Card className="border-yellow-200">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-yellow-800">
+                  <DollarSign className="h-5 w-5" />
+                  Dollar kursi
+                </CardTitle>
+                <CardDescription>Tovar beruvchidan dollar bilan olinganda ishlatiladigan standart kurs</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="flex gap-3 items-end">
+                  <div className="flex-1 space-y-1">
+                    <Label className="text-xs text-muted-foreground">1 dollar = ? so'm</Label>
+                    <Input
+                      type="number"
+                      placeholder="12200"
+                      value={defaultDollarRate}
+                      onChange={(e) => setDefaultDollarRate(e.target.value)}
+                      className="h-10"
+                      data-testid="input-default-dollar-rate"
+                    />
+                  </div>
+                  <Button
+                    className="h-10"
+                    onClick={() => {
+                      saveConfigMutation.mutate({ defaultDollarRate: Number(defaultDollarRate) || 0 });
+                    }}
+                    disabled={saveConfigMutation.isPending}
+                    data-testid="button-save-dollar-rate"
+                  >
+                    Saqlash
+                  </Button>
+                </div>
+                {Number(defaultDollarRate) > 0 && (
+                  <p className="text-xs text-muted-foreground mt-2">
+                    Misol: $100 tovar = {(100 * Number(defaultDollarRate)).toLocaleString()} so'm
+                  </p>
+                )}
               </CardContent>
             </Card>
 

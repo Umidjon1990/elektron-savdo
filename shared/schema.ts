@@ -25,6 +25,7 @@ export const tenants = pgTable("tenants", {
   receiptLogo: text("receipt_logo"),
   productFormVisibility: json("product_form_visibility").$type<Record<string, boolean>>(),
   orderFormFields: json("order_form_fields").$type<Array<{key: string, label: string, enabled: boolean, required: boolean, options?: Array<{id: string, label: string, type?: string}>}>>(),
+  defaultDollarRate: integer("default_dollar_rate").notNull().default(0),
   deliveryEnabled: boolean("delivery_enabled").notNull().default(false),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
@@ -54,6 +55,9 @@ export const products = pgTable("products", {
   barcode: text("barcode").notNull(),
   supplier: text("supplier").default(""),
   supplierPaymentMethod: text("supplier_payment_method").default("naqd"),
+  supplierCurrency: text("supplier_currency").default("uzs"),
+  supplierCurrencyRate: integer("supplier_currency_rate").notNull().default(0),
+  supplierOriginalPrice: integer("supplier_original_price").notNull().default(0),
   supplierDebtStatus: text("supplier_debt_status").default("pending"),
   supplierPaidAmount: integer("supplier_paid_amount").notNull().default(0),
   description: text("description").default(""),

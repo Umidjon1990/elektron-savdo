@@ -29,7 +29,7 @@ PostgreSQL serves as the primary database, with Drizzle ORM managing schema and 
 - **Image Storage**: Utilizes Cloudflare R2 for image storage with presigned URL uploads.
 - **Financial Management**: Includes profit tracking, configurable payment methods, expense and income management with categories, and a professional finance module featuring cash register balance, debt overview, and detailed reports.
 - **Customer & Sales Management**: Nasiya (credit/debt) system with detailed debt tracking and partial payments, enhanced customer pages with debt management, and configurable online order forms.
-- **Inventory & Product Customization**: Configurable product fields, multiple price types (regular, barcode, wholesale), supplier tracking, and inline category creation.
+- **Inventory & Product Customization**: Configurable product fields, multiple price types (regular, barcode, wholesale), supplier tracking, inline category creation, and supplier currency support (UZS/USD with auto-calculated cost price from exchange rate).
 - **Staff Management**: Comprehensive staff attendance system with Face ID verification, GPS geofencing, and salary calculation based on attendance.
 - **Delivery Management**: Courier assignment, delivery tracking, and public courier delivery pages.
 - **Supplier Management**: CRUD for suppliers, supplier payment methods, and debt tracking.

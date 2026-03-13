@@ -288,7 +288,8 @@ export default function Dashboard() {
 
   const handleCheckout = async (method: string = "cash", customerData?: { customerName?: string; customerPhone?: string; customerInfo?: Record<string, string> }, nasiyaData?: { dueDate: string }, deliveryData?: { courierId: string; courierName: string; address: string; customerName: string; customerPhone: string }) => {
     const total = cart.reduce((acc, item) => {
-      const itemTotal = item.product.price * item.quantity;
+      const effectivePrice = item.product.price > 0 ? item.product.price : ((item.product as any).barcodePrice || (item.product as any).wholesalePrice || 0);
+      const itemTotal = effectivePrice * item.quantity;
       const discount = item.discount || 0;
       return acc + (itemTotal - discount);
     }, 0);
@@ -305,7 +306,7 @@ export default function Dashboard() {
               customerName: deliveryData.customerName,
               customerPhone: deliveryData.customerPhone,
               address: deliveryData.address,
-              items: cart.map(item => ({ productId: item.product.id, name: item.product.name, price: item.product.price, quantity: item.quantity })),
+              items: cart.map(item => ({ productId: item.product.id, name: item.product.name, price: item.product.price > 0 ? item.product.price : ((item.product as any).barcodePrice || (item.product as any).wholesalePrice || 0), quantity: item.quantity })),
               totalAmount: total,
               status: "confirmed",
               paymentMethod: method,

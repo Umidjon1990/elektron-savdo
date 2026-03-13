@@ -18,6 +18,7 @@ export function ProductCard({ product, onClick, size = "default" }: ProductCardP
   const isLarge = size === "large";
 
   const outOfStock = product.stock <= 0;
+  const displayPrice = product.price > 0 ? product.price : ((product as any).barcodePrice || (product as any).wholesalePrice || 0);
 
   return (
     <Card 
@@ -103,7 +104,7 @@ export function ProductCard({ product, onClick, size = "default" }: ProductCardP
             "text-blue-600 font-bold font-mono",
             isLarge ? "text-lg" : "text-base"
           )}>
-            {product.price.toLocaleString()} <span className="text-slate-400 font-normal text-xs">so'm</span>
+            {displayPrice.toLocaleString()} <span className="text-slate-400 font-normal text-xs">so'm</span>
           </span>
           <div className={cn(
             "rounded-full bg-blue-500 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all transform scale-75 group-hover:scale-100",

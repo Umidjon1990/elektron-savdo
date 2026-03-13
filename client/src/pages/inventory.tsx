@@ -336,11 +336,14 @@ export default function Inventory() {
         newProduct.costPrice = (supplierOriginalPrice * supplierCurrencyRate).toString();
       }
 
+      const finalPrice = Number(newProduct.price) || 0;
+      const fallbackPrice = finalPrice > 0 ? finalPrice : (Number(newProduct.barcodePrice) || Number(newProduct.wholesalePrice) || 0);
+
       if (editingId) {
         await updateProduct(editingId, {
           name: newProduct.name,
           author: newProduct.author,
-          price: Number(newProduct.price),
+          price: fallbackPrice,
           costPrice: Number(newProduct.costPrice) || 0,
           barcodePrice: newProduct.barcodePrice ? Number(newProduct.barcodePrice) : undefined,
           wholesalePrice: newProduct.wholesalePrice ? Number(newProduct.wholesalePrice) : undefined,
@@ -365,7 +368,7 @@ export default function Inventory() {
         await addProduct({
           name: newProduct.name,
           author: newProduct.author,
-          price: Number(newProduct.price),
+          price: fallbackPrice,
           costPrice: Number(newProduct.costPrice) || 0,
           barcodePrice: newProduct.barcodePrice ? Number(newProduct.barcodePrice) : undefined,
           wholesalePrice: newProduct.wholesalePrice ? Number(newProduct.wholesalePrice) : undefined,
@@ -1067,7 +1070,7 @@ export default function Inventory() {
                         {product.barcode}
                       </TableCell>
                       <TableCell className="text-right font-medium">
-                        {product.price.toLocaleString()}
+                        {(product.price > 0 ? product.price : ((product as any).barcodePrice || (product as any).wholesalePrice || 0)).toLocaleString()}
                       </TableCell>
                       <TableCell className="text-right">
                         <span className={`font-medium ${product.stock < 10 ? 'text-red-500' : 'text-green-600'}`}>
@@ -1181,7 +1184,7 @@ export default function Inventory() {
                       
                       <div className="mt-3 flex items-center justify-between">
                         <span className="font-bold text-primary">
-                          {product.price.toLocaleString()} so'm
+                          {(product.price > 0 ? product.price : ((product as any).barcodePrice || (product as any).wholesalePrice || 0)).toLocaleString()} so'm
                         </span>
                         <div className="flex items-center gap-2 text-xs">
                           <span className="text-muted-foreground">Qoldiq:</span>

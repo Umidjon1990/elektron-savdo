@@ -108,7 +108,8 @@ export function TransactionProvider({ children }: { children: ReactNode }) {
     const profit = items.reduce((acc, item) => {
       const costPrice = item.product.costPrice || 0;
       const discount = item.discount || 0;
-      const itemProfit = ((item.product.price * item.quantity) - discount) - (costPrice * item.quantity);
+      const effectivePrice = item.product.price > 0 ? item.product.price : ((item.product as any).barcodePrice || (item.product as any).wholesalePrice || 0);
+      const itemProfit = ((effectivePrice * item.quantity) - discount) - (costPrice * item.quantity);
       return acc + itemProfit;
     }, 0);
     

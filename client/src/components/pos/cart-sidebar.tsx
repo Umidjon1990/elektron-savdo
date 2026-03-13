@@ -72,7 +72,8 @@ const FIELD_ICONS: Record<string, React.ReactNode> = {
 };
 
 export function CartSidebar({ items, onUpdateQuantity, onUpdateDiscount, onRemove, onClear, onCheckout, paymentMethods, customerFields, deliveryEnabled, couriers }: CartSidebarProps) {
-  const subtotal = items.reduce((acc, item) => acc + (item.product.price * item.quantity), 0);
+  const getEffectivePrice = (product: any) => product.price > 0 ? product.price : (product.barcodePrice || product.wholesalePrice || 0);
+  const subtotal = items.reduce((acc, item) => acc + (getEffectivePrice(item.product) * item.quantity), 0);
   const totalDiscount = items.reduce((acc, item) => acc + (item.discount || 0), 0);
   const total = subtotal - totalDiscount;
   const itemCount = items.reduce((acc, item) => acc + item.quantity, 0);

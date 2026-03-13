@@ -114,9 +114,14 @@ export default function Dashboard() {
       });
 
       if (product) {
+        if (product.stock <= 0) {
+          if (beepSound) { beepSound.currentTime = 0; beepSound.play().catch(() => {}); }
+          return;
+        }
         setCart(prev => {
           const existing = prev.find(item => item.product.id === product.id);
           if (existing) {
+            if (existing.quantity >= product.stock) return prev;
             return prev.map(item =>
               item.product.id === product.id
                 ? { ...item, quantity: item.quantity + 1 }
@@ -197,9 +202,27 @@ export default function Dashboard() {
   }, []);
 
   const addToCart = (product: Product) => {
+    if (product.stock <= 0) {
+      toast({
+        title: "Tovar tugagan",
+        description: `${product.name} omborda qolmagan`,
+        variant: "destructive",
+        duration: 2000,
+      });
+      return;
+    }
     setCart(prev => {
       const existing = prev.find(item => item.product.id === product.id);
       if (existing) {
+        if (existing.quantity >= product.stock) {
+          toast({
+            title: "Omborda yetarli emas",
+            description: `${product.name} — faqat ${product.stock} ta mavjud`,
+            variant: "destructive",
+            duration: 2000,
+          });
+          return prev;
+        }
         return prev.map(item => 
           item.product.id === product.id 
             ? { ...item, quantity: item.quantity + 1 }
@@ -217,6 +240,16 @@ export default function Dashboard() {
   };
 
   const handleScannedProductAdd = (product: Product) => {
+    if (product.stock <= 0) {
+      toast({
+        title: "Tovar tugagan",
+        description: `${product.name} omborda qolmagan`,
+        variant: "destructive",
+        duration: 2000,
+      });
+      setScannedProduct(null);
+      return;
+    }
     addToCart(product);
     setScannedProduct(null);
     setIsMobileCartOpen(true);
@@ -230,7 +263,9 @@ export default function Dashboard() {
   const updateQuantity = (id: string, delta: number) => {
     setCart(prev => prev.map(item => {
       if (item.product.id === id) {
-        return { ...item, quantity: Math.max(1, item.quantity + delta) };
+        const newQty = item.quantity + delta;
+        if (delta > 0 && newQty > item.product.stock) return item;
+        return { ...item, quantity: Math.max(1, newQty) };
       }
       return item;
     }));

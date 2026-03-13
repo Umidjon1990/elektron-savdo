@@ -17,13 +17,18 @@ export function ProductCard({ product, onClick, size = "default" }: ProductCardP
 
   const isLarge = size === "large";
 
+  const outOfStock = product.stock <= 0;
+
   return (
     <Card 
       className={cn(
-        "cursor-pointer transition-all hover:shadow-xl active:scale-[0.98] border-0 group overflow-hidden relative",
-        "bg-white rounded-xl shadow-sm hover:shadow-lg"
+        "transition-all border-0 group overflow-hidden relative",
+        "bg-white rounded-xl shadow-sm",
+        outOfStock 
+          ? "opacity-50 cursor-not-allowed" 
+          : "cursor-pointer hover:shadow-xl active:scale-[0.98] hover:shadow-lg"
       )}
-      onClick={() => onClick(product)}
+      onClick={() => { if (!outOfStock) onClick(product); }}
       data-testid={`product-card-${product.id}`}
     >
       <div 
@@ -52,11 +57,15 @@ export function ProductCard({ product, onClick, size = "default" }: ProductCardP
           </div>
         )}
         
-        {product.stock <= 5 && (
+        {outOfStock ? (
+          <div className="absolute top-2 left-2 bg-gray-700 text-white text-[10px] font-bold px-2 py-1 rounded-full uppercase tracking-wide shadow-lg">
+            Tugadi
+          </div>
+        ) : product.stock <= 5 ? (
           <div className="absolute top-2 left-2 bg-red-500 text-white text-[10px] font-bold px-2 py-1 rounded-full uppercase tracking-wide shadow-lg">
             Kam qoldi
           </div>
-        )}
+        ) : null}
 
         <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/60 to-transparent p-3 pt-8 opacity-0 group-hover:opacity-100 transition-opacity">
           <div className="flex items-center justify-center">

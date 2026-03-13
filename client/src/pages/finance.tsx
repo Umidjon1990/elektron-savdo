@@ -1238,6 +1238,9 @@ export default function FinancePage() {
                       <span className="text-xs text-blue-700 font-medium">Jami xarid</span>
                     </div>
                     <p className="text-xl font-bold text-blue-800" data-testid="text-supplier-total">{(supplierSummary?.totals?.totalAmount || 0).toLocaleString()} so'm</p>
+                    {(supplierSummary?.totals?.totalAmountUsd || 0) > 0 && (
+                      <p className="text-sm font-semibold text-blue-600">${(supplierSummary?.totals?.totalAmountUsd || 0).toLocaleString()}</p>
+                    )}
                   </CardContent>
                 </Card>
                 <Card className="bg-gradient-to-br from-green-50 to-green-100 border-green-200">
@@ -1247,6 +1250,9 @@ export default function FinancePage() {
                       <span className="text-xs text-green-700 font-medium">Naqd</span>
                     </div>
                     <p className="text-xl font-bold text-green-800" data-testid="text-supplier-naqd">{(supplierSummary?.totals?.totalNaqd || 0).toLocaleString()} so'm</p>
+                    {(supplierSummary?.totals?.totalNaqdUsd || 0) > 0 && (
+                      <p className="text-sm font-semibold text-green-600">${(supplierSummary?.totals?.totalNaqdUsd || 0).toLocaleString()}</p>
+                    )}
                   </CardContent>
                 </Card>
                 <Card className="bg-gradient-to-br from-indigo-50 to-indigo-100 border-indigo-200">
@@ -1256,6 +1262,9 @@ export default function FinancePage() {
                       <span className="text-xs text-indigo-700 font-medium">Karta</span>
                     </div>
                     <p className="text-xl font-bold text-indigo-800" data-testid="text-supplier-karta">{(supplierSummary?.totals?.totalKarta || 0).toLocaleString()} so'm</p>
+                    {(supplierSummary?.totals?.totalKartaUsd || 0) > 0 && (
+                      <p className="text-sm font-semibold text-indigo-600">${(supplierSummary?.totals?.totalKartaUsd || 0).toLocaleString()}</p>
+                    )}
                   </CardContent>
                 </Card>
                 <Card className="bg-gradient-to-br from-amber-50 to-amber-100 border-amber-200">
@@ -1265,6 +1274,9 @@ export default function FinancePage() {
                       <span className="text-xs text-amber-700 font-medium">Nasiya</span>
                     </div>
                     <p className="text-xl font-bold text-amber-800" data-testid="text-supplier-nasiya">{(supplierSummary?.totals?.totalNasiya || 0).toLocaleString()} so'm</p>
+                    {(supplierSummary?.totals?.totalNasiyaUsd || 0) > 0 && (
+                      <p className="text-sm font-semibold text-amber-600">${(supplierSummary?.totals?.totalNasiyaUsd || 0).toLocaleString()}</p>
+                    )}
                   </CardContent>
                 </Card>
               </div>
@@ -1765,6 +1777,9 @@ function SupplierCard({ supplier, token, onUpdate }: { supplier: any; token: str
           <div className="flex items-center gap-3 shrink-0">
             <div className="text-right">
               <p className="font-bold text-sm">{supplier.totalAmount.toLocaleString()} so'm</p>
+              {supplier.totalAmountUsd > 0 && (
+                <p className="font-semibold text-xs text-blue-600">${supplier.totalAmountUsd.toLocaleString()}</p>
+              )}
               <div className="flex gap-2 text-[10px]">
                 {supplier.naqd > 0 && <span className="text-green-600">Naqd: {supplier.naqd.toLocaleString()}</span>}
                 {supplier.karta > 0 && <span className="text-blue-600">Karta: {supplier.karta.toLocaleString()}</span>}
@@ -1806,9 +1821,18 @@ function SupplierCard({ supplier, token, onUpdate }: { supplier: any; token: str
                     <tr key={p.id} className="border-t border-gray-200">
                       <td className="py-1.5 pr-2">
                         <div className="truncate max-w-[100px]">{p.name}</div>
-                        <div className="text-[10px] text-gray-400">{p.costPrice.toLocaleString()} × {p.stock}</div>
+                        <div className="text-[10px] text-gray-400">
+                          {p.supplierCurrency === "usd" 
+                            ? `$${p.supplierOriginalPrice.toLocaleString()} × ${p.stock}` 
+                            : `${p.costPrice.toLocaleString()} × ${p.stock}`}
+                        </div>
                       </td>
-                      <td className="py-1.5 text-right font-medium">{p.amount.toLocaleString()}</td>
+                      <td className="py-1.5 text-right font-medium">
+                        {p.amount.toLocaleString()}
+                        {p.supplierCurrency === "usd" && p.amountUsd > 0 && (
+                          <div className="text-[10px] text-blue-600">${p.amountUsd.toLocaleString()}</div>
+                        )}
+                      </td>
                       <td className="py-1.5 text-right">
                         <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${
                           p.paymentMethod === "karta" ? "bg-blue-100 text-blue-700" :

@@ -477,6 +477,9 @@ export async function registerRoutes(
         stock: Number(req.body.stock) || 0,
         barcodePrice: req.body.barcodePrice ? Number(req.body.barcodePrice) : null,
         wholesalePrice: req.body.wholesalePrice ? Number(req.body.wholesalePrice) : null,
+        supplierCurrency: req.body.supplierCurrency || "uzs",
+        supplierCurrencyRate: Math.round(Number(req.body.supplierCurrencyRate) || 0),
+        supplierOriginalPrice: Number(req.body.supplierOriginalPrice) || 0,
       };
       const validatedData = insertProductSchema.parse(body);
       const product = await storage.createProduct(validatedData);
@@ -487,7 +490,9 @@ export async function registerRoutes(
         return res.status(400).json({ error: "Bu shtrix kod allaqachon mavjud" });
       }
       if (error?.name === 'ZodError') {
-        return res.status(400).json({ error: "Ma'lumotlar to'liq emas", details: error.errors });
+        const fieldErrors = error.errors?.map((e: any) => `${e.path?.join('.')}: ${e.message}`).join(', ');
+        console.error("Zod validation errors:", fieldErrors);
+        return res.status(400).json({ error: `Ma'lumotlar to'liq emas: ${fieldErrors}`, details: error.errors });
       }
       res.status(500).json({ error: "Xatolik yuz berdi" });
     }
@@ -501,6 +506,9 @@ export async function registerRoutes(
       if (data.stock !== undefined) data.stock = Number(data.stock) || 0;
       if (data.barcodePrice !== undefined) data.barcodePrice = data.barcodePrice ? Number(data.barcodePrice) : null;
       if (data.wholesalePrice !== undefined) data.wholesalePrice = data.wholesalePrice ? Number(data.wholesalePrice) : null;
+      if (data.supplierCurrency !== undefined) data.supplierCurrency = data.supplierCurrency || "uzs";
+      if (data.supplierCurrencyRate !== undefined) data.supplierCurrencyRate = Math.round(Number(data.supplierCurrencyRate) || 0);
+      if (data.supplierOriginalPrice !== undefined) data.supplierOriginalPrice = Number(data.supplierOriginalPrice) || 0;
       const product = await storage.updateProduct(req.params.id, data, req.tenantId);
       if (!product) return res.status(404).json({ error: "Product not found" });
       res.json(product);

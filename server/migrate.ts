@@ -102,7 +102,9 @@ export async function runMigrations() {
           ALTER TABLE products ADD COLUMN supplier_currency_rate INTEGER NOT NULL DEFAULT 0;
         END IF;
         IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='products' AND column_name='supplier_original_price') THEN
-          ALTER TABLE products ADD COLUMN supplier_original_price INTEGER NOT NULL DEFAULT 0;
+          ALTER TABLE products ADD COLUMN supplier_original_price REAL NOT NULL DEFAULT 0;
+        ELSE
+          ALTER TABLE products ALTER COLUMN supplier_original_price TYPE REAL USING supplier_original_price::REAL;
         END IF;
       END $$;
 

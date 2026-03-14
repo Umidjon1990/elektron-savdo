@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, integer, timestamp, json, uniqueIndex, boolean } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, integer, timestamp, json, uniqueIndex, boolean, real } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -57,7 +57,7 @@ export const products = pgTable("products", {
   supplierPaymentMethod: text("supplier_payment_method").default("naqd"),
   supplierCurrency: text("supplier_currency").default("uzs"),
   supplierCurrencyRate: integer("supplier_currency_rate").notNull().default(0),
-  supplierOriginalPrice: integer("supplier_original_price").notNull().default(0),
+  supplierOriginalPrice: real("supplier_original_price").notNull().default(0),
   supplierDebtStatus: text("supplier_debt_status").default("pending"),
   supplierPaidAmount: integer("supplier_paid_amount").notNull().default(0),
   description: text("description").default(""),

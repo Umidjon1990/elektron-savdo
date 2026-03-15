@@ -665,7 +665,7 @@ export default function Inventory() {
                                 <SelectTrigger className="flex-1">
                                   <SelectValue placeholder="Tanlang" />
                                 </SelectTrigger>
-                                <SelectContent>
+                                <SelectContent className="max-h-60 overflow-y-auto">
                                   {categories.map(c => (
                                     <SelectItem key={c.id} value={c.name}>{c.name}</SelectItem>
                                   ))}

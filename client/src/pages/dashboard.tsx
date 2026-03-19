@@ -217,7 +217,7 @@ export default function Dashboard() {
         if (existing.quantity >= product.stock) {
           toast({
             title: "Omborda yetarli emas",
-            description: `${product.name} — faqat ${product.stock} ta mavjud`,
+            description: `${product.name} — faqat ${product.stock} ${(product as any).unit || "dona"} mavjud`,
             variant: "destructive",
             duration: 2000,
           });

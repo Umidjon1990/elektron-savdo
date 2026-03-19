@@ -32,6 +32,8 @@ PostgreSQL serves as the primary database, with Drizzle ORM managing schema and 
 - **Inventory & Product Customization**: Configurable product fields, multiple price types (regular, barcode, wholesale), supplier tracking, inline category creation, and supplier currency support (UZS/USD with auto-calculated cost price from exchange rate).
 - **Staff Management**: Comprehensive staff attendance system with Face ID verification, GPS geofencing, and salary calculation based on attendance.
 - **Delivery Management**: Courier assignment, delivery tracking, and public courier delivery pages.
+- **Product Units**: Support for multiple measurement units (dona, litr, kg, metr) with decimal stock quantities.
+- **Inventory Tabs**: Ombor page has filterable tabs — Barchasi, Mavjud (stock > 5), Kam qolgan (stock 1-5), Qolmagan (stock = 0).
 - **Supplier Management**: CRUD for suppliers, supplier payment methods, and debt tracking.
 - **CRM Hub**: A unified customer relationship management interface combining customers, orders, deliveries, and debtors with advanced filtering and workflow capabilities.
 - **Store QR Code**: On-the-fly QR code generation for store access.

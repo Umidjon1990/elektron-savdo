@@ -1771,7 +1771,7 @@ function SupplierCard({ supplier, token, onUpdate }: { supplier: any; token: str
             <div className="min-w-0">
               <p className="font-medium text-sm truncate">{supplier.name}</p>
               {supplier.phone && <p className="text-xs text-gray-500">{supplier.phone}</p>}
-              <p className="text-xs text-gray-400">{supplier.totalProducts} tovar, {supplier.totalItems} dona</p>
+              <p className="text-xs text-gray-400">{supplier.totalProducts} tovar, {supplier.totalItems} birlik</p>
             </div>
           </div>
           <div className="flex items-center gap-3 shrink-0">

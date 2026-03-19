@@ -475,6 +475,7 @@ export async function registerRoutes(
         costPrice: Number(req.body.costPrice) || 0,
         price: Number(req.body.price) || 0,
         stock: Number(req.body.stock) || 0,
+        unit: req.body.unit || "dona",
         barcodePrice: req.body.barcodePrice ? Number(req.body.barcodePrice) : null,
         wholesalePrice: req.body.wholesalePrice ? Number(req.body.wholesalePrice) : null,
         supplierCurrency: req.body.supplierCurrency || "uzs",

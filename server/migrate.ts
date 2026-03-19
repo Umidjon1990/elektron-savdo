@@ -108,6 +108,17 @@ export async function runMigrations() {
         END IF;
       END $$;
 
+      -- Add unit column to products
+      DO $$ 
+      BEGIN 
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='products' AND column_name='unit') THEN
+          ALTER TABLE products ADD COLUMN unit TEXT NOT NULL DEFAULT 'dona';
+        END IF;
+      END $$;
+
+      -- Change stock to REAL for decimal support (litr)
+      ALTER TABLE products ALTER COLUMN stock TYPE REAL USING stock::REAL;
+
       -- Add default_dollar_rate to tenants
       DO $$ 
       BEGIN 

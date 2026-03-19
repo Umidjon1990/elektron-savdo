@@ -82,7 +82,7 @@ export function ProductCard({ product, onClick, size = "default" }: ProductCardP
           isLarge ? "px-3 py-1.5 text-sm" : "px-2 py-1 text-xs",
           product.stock < 10 ? "text-red-600" : "text-emerald-600"
         )}>
-          {product.stock} ta
+          {product.stock} {(product as any).unit || "dona"}
         </div>
       </div>
       

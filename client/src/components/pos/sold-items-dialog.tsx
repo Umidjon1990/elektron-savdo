@@ -65,7 +65,7 @@ export function SoldItemsDialog({ isOpen, onClose }: SoldItemsDialogProps) {
           <div className="flex justify-between items-center">
             <div>
               <p className="text-sm opacity-80">Jami sotilgan</p>
-              <p className="text-2xl font-bold">{totalItems} ta</p>
+              <p className="text-2xl font-bold">{totalItems} birlik</p>
             </div>
             <div className="text-right">
               <p className="text-sm opacity-80">Jami tushum</p>
@@ -106,7 +106,7 @@ export function SoldItemsDialog({ isOpen, onClose }: SoldItemsDialogProps) {
                 </div>
                 
                 <div className="bg-purple-100 text-purple-700 px-3 py-1 rounded-full text-sm font-bold">
-                  {item.totalQuantity} ta
+                  {item.totalQuantity} birlik
                 </div>
               </div>
             ))

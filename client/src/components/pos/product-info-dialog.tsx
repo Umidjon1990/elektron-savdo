@@ -48,7 +48,7 @@ export function ProductInfoDialog({ product, isOpen, onClose, onAddToCart }: Pro
               <div className="bg-gray-50 p-3 rounded-lg border text-center">
                 <span className="text-xs text-muted-foreground uppercase tracking-wide">Omborda</span>
                 <div className={`font-bold text-lg ${product.stock < 10 ? 'text-red-500' : 'text-green-600'}`}>
-                  {product.stock} dona
+                  {product.stock} {(product as any).unit || "dona"}
                 </div>
               </div>
             </div>

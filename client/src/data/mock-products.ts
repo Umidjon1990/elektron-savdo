@@ -20,6 +20,7 @@ export interface Product {
   metadata?: Record<string, string>;
   sortOrder?: number;
   isNew?: boolean;
+  unit?: string;
 }
 
 export const MOCK_PRODUCTS: Product[] = [

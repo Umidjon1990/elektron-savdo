@@ -242,7 +242,7 @@ export function CartSidebar({ items, onUpdateQuantity, onUpdateDiscount, onRemov
         <div className="space-y-3">
           <div className="flex justify-between text-sm">
             <span className="text-muted-foreground">Jami mahsulot:</span>
-            <span className="font-semibold text-base">{itemCount} dona</span>
+            <span className="font-semibold text-base">{itemCount} dona/birlik</span>
           </div>
           {totalDiscount > 0 && (
             <div className="flex justify-between text-sm">
@@ -463,7 +463,7 @@ export function CartSidebar({ items, onUpdateQuantity, onUpdateDiscount, onRemov
               </div>
               <div className="flex justify-between items-center mt-1">
                 <span className="text-xs text-purple-600">Tovarlar:</span>
-                <span className="text-xs text-purple-600">{itemCount} dona</span>
+                <span className="text-xs text-purple-600">{itemCount} birlik</span>
               </div>
             </div>
 

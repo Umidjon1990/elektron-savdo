@@ -131,8 +131,10 @@ export default function Inventory() {
     supplierCurrency: "uzs",
     supplierCurrencyRate: "",
     supplierOriginalPrice: "",
-    isNew: false
+    isNew: false,
+    unit: "dona"
   });
+  const [inventoryTab, setInventoryTab] = useState<"all" | "available" | "low" | "out">("all");
   const [newCategoryName, setNewCategoryName] = useState("");
   const [newSupplierName, setNewSupplierName] = useState("");
   const [newSupplierPhone, setNewSupplierPhone] = useState("");
@@ -164,7 +166,7 @@ export default function Inventory() {
     if (!isAddDialogOpen) {
       setStep(1);
       setEditingId(null);
-      setNewProduct({ name: "", author: "", price: "", costPrice: "", barcodePrice: "", wholesalePrice: "", stock: "", category: "", barcode: "", image: "", videoUrl: "", supplier: "", supplierPaymentMethod: "naqd", supplierCurrency: "uzs", supplierCurrencyRate: "", supplierOriginalPrice: "", isNew: false });
+      setNewProduct({ name: "", author: "", price: "", costPrice: "", barcodePrice: "", wholesalePrice: "", stock: "", category: "", barcode: "", image: "", videoUrl: "", supplier: "", supplierPaymentMethod: "naqd", supplierCurrency: "uzs", supplierCurrencyRate: "", supplierOriginalPrice: "", isNew: false, unit: "dona" });
       setCustomFieldValues({});
     }
   }, [isAddDialogOpen]);
@@ -188,7 +190,8 @@ export default function Inventory() {
       supplierCurrency: (product as any).supplierCurrency || "uzs",
       supplierCurrencyRate: ((product as any).supplierCurrencyRate || "").toString(),
       supplierOriginalPrice: ((product as any).supplierOriginalPrice || "").toString(),
-      isNew: product.isNew || false
+      isNew: product.isNew || false,
+      unit: (product as any).unit || "dona"
     });
     setCustomFieldValues({
       description: (product as any).description || "",
@@ -357,7 +360,8 @@ export default function Inventory() {
           image: newProduct.image,
           videoUrl: newProduct.videoUrl || undefined,
           metadata: Object.keys(extraMetadata).length > 0 ? extraMetadata : undefined,
-          isNew: newProduct.isNew
+          isNew: newProduct.isNew,
+          unit: newProduct.unit || "dona"
         });
         toast({
           title: "O'zgartirildi",
@@ -382,7 +386,8 @@ export default function Inventory() {
           image: newProduct.image || "https://images.unsplash.com/photo-1543002588-bfa74002ed7e?auto=format&fit=crop&q=80&w=300&h=400",
           videoUrl: newProduct.videoUrl || undefined,
           metadata: Object.keys(extraMetadata).length > 0 ? extraMetadata : undefined,
-          isNew: newProduct.isNew
+          isNew: newProduct.isNew,
+          unit: newProduct.unit || "dona"
         });
         toast({
           title: "Muvaffaqiyatli qo'shildi",
@@ -404,12 +409,12 @@ export default function Inventory() {
   const handleRestock = (e: React.FormEvent) => {
     e.preventDefault();
     if (restockProduct && restockAmount) {
-      const amount = parseInt(restockAmount);
+      const amount = parseFloat(restockAmount);
       if (amount > 0) {
         updateStock(restockProduct.id, amount);
         toast({
           title: "Kirim qilindi",
-          description: `${restockProduct.name} +${amount} dona qo'shildi`,
+          description: `${restockProduct.name} +${amount} ${(restockProduct as any)?.unit || "dona"} qo'shildi`,
           className: "bg-green-500 text-white border-none",
         });
         setRestockProduct(null);
@@ -420,11 +425,25 @@ export default function Inventory() {
     }
   };
 
-  const filteredProducts = products.filter(product =>
+  const searchFiltered = products.filter(product =>
     product.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
     product.author.toLowerCase().includes(searchQuery.toLowerCase()) ||
     product.barcode.includes(searchQuery)
   );
+
+  const filteredProducts = searchFiltered.filter(product => {
+    if (inventoryTab === "available") return product.stock > 5;
+    if (inventoryTab === "low") return product.stock > 0 && product.stock <= 5;
+    if (inventoryTab === "out") return product.stock <= 0;
+    return true;
+  });
+
+  const tabCounts = {
+    all: searchFiltered.length,
+    available: searchFiltered.filter(p => p.stock > 5).length,
+    low: searchFiltered.filter(p => p.stock > 0 && p.stock <= 5).length,
+    out: searchFiltered.filter(p => p.stock <= 0).length,
+  };
 
   const moveProduct = async (index: number, direction: "up" | "down") => {
     const newIndex = direction === "up" ? index - 1 : index + 1;
@@ -475,6 +494,37 @@ export default function Inventory() {
         </header>
 
         <div className="p-4 md:p-6 flex-1 overflow-hidden flex flex-col">
+          <div className="flex gap-1 mb-4 bg-white rounded-lg p-1 border overflow-x-auto">
+            {[
+              { key: "all" as const, label: "Barchasi", count: tabCounts.all },
+              { key: "available" as const, label: "Mavjud", count: tabCounts.available },
+              { key: "low" as const, label: "Kam qolgan", count: tabCounts.low },
+              { key: "out" as const, label: "Qolmagan", count: tabCounts.out },
+            ].map(tab => (
+              <button
+                key={tab.key}
+                onClick={() => setInventoryTab(tab.key)}
+                className={cn(
+                  "flex-1 min-w-[80px] px-3 py-2 rounded-md text-sm font-medium transition-all whitespace-nowrap",
+                  inventoryTab === tab.key
+                    ? tab.key === "out" ? "bg-red-500 text-white shadow-sm" 
+                      : tab.key === "low" ? "bg-orange-500 text-white shadow-sm"
+                      : "bg-primary text-white shadow-sm"
+                    : "text-muted-foreground hover:bg-gray-100"
+                )}
+                data-testid={`tab-inventory-${tab.key}`}
+              >
+                {tab.label}
+                <span className={cn(
+                  "ml-1.5 text-xs px-1.5 py-0.5 rounded-full",
+                  inventoryTab === tab.key ? "bg-white/20" : "bg-gray-100"
+                )}>
+                  {tab.count}
+                </span>
+              </button>
+            ))}
+          </div>
+
           <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between mb-6 gap-3">
             <div className="relative flex-1 w-full md:max-w-md">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
@@ -935,15 +985,32 @@ export default function Inventory() {
                             )}
                           </div>
                           <div className="space-y-1">
-                            <Label htmlFor="stock" className="text-xs text-muted-foreground">Soni (dona)</Label>
-                            <Input 
-                              id="stock" 
-                              type="number" 
-                              required
-                              value={newProduct.stock}
-                              onChange={(e) => setNewProduct({...newProduct, stock: e.target.value})}
-                              className="bg-white h-9"
-                            />
+                            <Label htmlFor="stock" className="text-xs text-muted-foreground">
+                              Miqdori ({newProduct.unit === "dona" ? "dona" : newProduct.unit})
+                            </Label>
+                            <div className="flex gap-2">
+                              <Input 
+                                id="stock" 
+                                type="number" 
+                                step={newProduct.unit === "dona" ? "1" : "0.1"}
+                                required
+                                value={newProduct.stock}
+                                onChange={(e) => setNewProduct({...newProduct, stock: e.target.value})}
+                                className="bg-white h-9 flex-1"
+                                data-testid="input-stock"
+                              />
+                              <Select value={newProduct.unit} onValueChange={(val) => setNewProduct({...newProduct, unit: val})}>
+                                <SelectTrigger className="w-24 h-9" data-testid="select-unit">
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="dona">Dona</SelectItem>
+                                  <SelectItem value="litr">Litr</SelectItem>
+                                  <SelectItem value="kg">Kg</SelectItem>
+                                  <SelectItem value="metr">Metr</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            </div>
                           </div>
                         </div>
 
@@ -1074,7 +1141,7 @@ export default function Inventory() {
                       </TableCell>
                       <TableCell className="text-right">
                         <span className={`font-medium ${product.stock < 10 ? 'text-red-500' : 'text-green-600'}`}>
-                          {product.stock}
+                          {product.stock} {(product as any).unit || "dona"}
                         </span>
                       </TableCell>
                       <TableCell>
@@ -1189,7 +1256,7 @@ export default function Inventory() {
                         <div className="flex items-center gap-2 text-xs">
                           <span className="text-muted-foreground">Qoldiq:</span>
                           <span className={`font-medium ${product.stock < 10 ? 'text-red-500' : 'text-green-600'}`}>
-                            {product.stock}
+                            {product.stock} {(product as any).unit || "dona"}
                           </span>
                         </div>
                       </div>
@@ -1226,10 +1293,11 @@ export default function Inventory() {
               <div className="font-medium">{restockProduct?.name}</div>
             </div>
             <div className="space-y-2">
-              <Label htmlFor="amount">Soni (dona)</Label>
+              <Label htmlFor="amount">Miqdori ({(restockProduct as any)?.unit || "dona"})</Label>
               <Input
                 id="amount"
                 type="number"
+                step={(restockProduct as any)?.unit === "dona" || !(restockProduct as any)?.unit ? "1" : "0.1"}
                 value={restockAmount}
                 onChange={(e) => setRestockAmount(e.target.value)}
               />

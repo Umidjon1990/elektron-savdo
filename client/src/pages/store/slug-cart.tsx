@@ -54,7 +54,7 @@ export default function SlugCartPage() {
     name: "",
     phone: "",
     telegramPhone: "",
-    deliveryType: "delivery_free",
+    deliveryType: "delivery_paid",
     paymentMethod: "click",
     address: "",
     shippingType: "BTS",
@@ -115,7 +115,6 @@ export default function SlugCartPage() {
     { key: "phone", label: "Aloqa uchun telefon", enabled: true, required: true },
     { key: "telegramPhone", label: "Telegram telefon", enabled: true, required: true },
     { key: "deliveryType", label: "Yetkazib berish turi", enabled: true, required: false, options: [
-      { id: "delivery_free", label: "Kuryer (bepul)", type: "delivery" },
       { id: "delivery_paid", label: "Kuryer (pullik)", type: "delivery" },
       { id: "pickup", label: "Olib ketish", type: "pickup" },
     ]},

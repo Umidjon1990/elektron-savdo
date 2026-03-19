@@ -67,7 +67,6 @@ const DEFAULT_ORDER_FORM_FIELDS: OrderFormField[] = [
   { key: "phone", label: "Aloqa uchun telefon", enabled: true, required: true },
   { key: "telegramPhone", label: "Telegram telefon", enabled: true, required: true },
   { key: "deliveryType", label: "Yetkazib berish turi", enabled: true, required: false, options: [
-    { id: "delivery_free", label: "Kuryer (bepul)", type: "delivery" },
     { id: "delivery_paid", label: "Kuryer (pullik)", type: "delivery" },
     { id: "pickup", label: "Olib ketish", type: "pickup" },
   ]},

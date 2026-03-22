@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Minus, Plus, Trash2, PlusCircle, MinusCircle } from "lucide-react";
+import { Minus, Plus, Trash2, Percent } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import type { CartItem as CartItemType } from "@/pages/dashboard";
@@ -94,27 +94,22 @@ export function CartItem({ item, onUpdateQuantity, onUpdateDiscount, onRemove }:
             </div>
             
             <div className="flex items-center gap-1">
-              <Button 
-                variant="ghost" 
-                size="icon" 
+              <button
                 className={cn(
-                  "h-6 w-6 rounded-full",
+                  "h-8 w-8 rounded-xl flex items-center justify-center font-bold text-sm transition-all duration-200 cursor-pointer select-none",
+                  "shadow-[0_3px_0_0] active:shadow-[0_1px_0_0] active:translate-y-[2px]",
                   showAdjustment || adjustmentAmount !== 0
                     ? adjustmentAmount < 0
-                      ? "text-orange-600 bg-orange-50"
-                      : "text-green-600 bg-green-50"
-                    : "text-blue-500 hover:bg-blue-50"
+                      ? "bg-gradient-to-b from-orange-400 to-orange-600 text-white shadow-orange-700"
+                      : "bg-gradient-to-b from-emerald-400 to-emerald-600 text-white shadow-emerald-700"
+                    : "bg-gradient-to-b from-blue-400 to-blue-600 text-white shadow-blue-700 hover:from-blue-500 hover:to-blue-700"
                 )}
                 onClick={() => setShowAdjustment(!showAdjustment)}
                 title="Skidka / Ustama"
                 data-testid={`button-adjustment-${item.product.id}`}
               >
-                {adjustmentAmount < 0 ? (
-                  <PlusCircle className="h-3.5 w-3.5" />
-                ) : (
-                  <MinusCircle className="h-3.5 w-3.5" />
-                )}
-              </Button>
+                <Percent className="h-4 w-4" strokeWidth={3} />
+              </button>
               <Button 
                 variant="outline" 
                 size="icon" 
@@ -140,15 +135,16 @@ export function CartItem({ item, onUpdateQuantity, onUpdateDiscount, onRemove }:
       </div>
       
       {showAdjustment && (
-        <div className="mt-2.5 ml-[60px] space-y-2">
-          <div className="flex gap-1">
+        <div className="mt-3 ml-[60px] space-y-2.5">
+          <div className="flex gap-1.5">
             <button
               onClick={() => handleTypeChange("skidka")}
               className={cn(
-                "flex-1 text-xs py-1.5 px-2 rounded-md font-medium transition-all",
+                "flex-1 py-2 px-3 rounded-xl text-sm font-bold transition-all duration-200 select-none",
+                "shadow-[0_3px_0_0] active:shadow-[0_1px_0_0] active:translate-y-[2px]",
                 adjType === "skidka"
-                  ? "bg-red-500 text-white shadow-sm"
-                  : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                  ? "bg-gradient-to-b from-red-400 to-red-600 text-white shadow-red-700"
+                  : "bg-gradient-to-b from-gray-100 to-gray-200 text-gray-500 shadow-gray-300 hover:from-gray-200 hover:to-gray-300"
               )}
               data-testid="btn-type-skidka"
             >
@@ -157,10 +153,11 @@ export function CartItem({ item, onUpdateQuantity, onUpdateDiscount, onRemove }:
             <button
               onClick={() => handleTypeChange("ustama")}
               className={cn(
-                "flex-1 text-xs py-1.5 px-2 rounded-md font-medium transition-all",
+                "flex-1 py-2 px-3 rounded-xl text-sm font-bold transition-all duration-200 select-none",
+                "shadow-[0_3px_0_0] active:shadow-[0_1px_0_0] active:translate-y-[2px]",
                 adjType === "ustama"
-                  ? "bg-orange-500 text-white shadow-sm"
-                  : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                  ? "bg-gradient-to-b from-orange-400 to-orange-600 text-white shadow-orange-700"
+                  : "bg-gradient-to-b from-gray-100 to-gray-200 text-gray-500 shadow-gray-300 hover:from-gray-200 hover:to-gray-300"
               )}
               data-testid="btn-type-ustama"
             >
@@ -169,14 +166,14 @@ export function CartItem({ item, onUpdateQuantity, onUpdateDiscount, onRemove }:
           </div>
 
           <div className="flex items-center gap-1.5">
-            <div className="flex bg-gray-100 rounded-md p-0.5 shrink-0">
+            <div className="flex bg-gray-100 rounded-xl p-0.5 shrink-0 shadow-inner">
               <button
                 onClick={() => handleInputTypeChange("summa")}
                 className={cn(
-                  "text-xs py-1 px-2.5 rounded font-medium transition-all",
+                  "py-1.5 px-3 rounded-lg text-sm font-bold transition-all duration-200 select-none",
                   adjInputType === "summa"
-                    ? "bg-white shadow-sm text-gray-800"
-                    : "text-gray-500 hover:text-gray-700"
+                    ? "bg-white shadow-md text-gray-800"
+                    : "text-gray-400 hover:text-gray-600"
                 )}
                 data-testid="btn-input-summa"
               >
@@ -185,10 +182,10 @@ export function CartItem({ item, onUpdateQuantity, onUpdateDiscount, onRemove }:
               <button
                 onClick={() => handleInputTypeChange("percent")}
                 className={cn(
-                  "text-xs py-1 px-2.5 rounded font-medium transition-all",
+                  "py-1.5 px-3 rounded-lg text-sm font-bold transition-all duration-200 select-none",
                   adjInputType === "percent"
-                    ? "bg-white shadow-sm text-gray-800"
-                    : "text-gray-500 hover:text-gray-700"
+                    ? "bg-white shadow-md text-gray-800"
+                    : "text-gray-400 hover:text-gray-600"
                 )}
                 data-testid="btn-input-percent"
               >
@@ -200,26 +197,26 @@ export function CartItem({ item, onUpdateQuantity, onUpdateDiscount, onRemove }:
               placeholder="0"
               value={adjValue}
               onChange={(e) => handleAdjustmentChange(e.target.value)}
-              className="h-7 text-sm flex-1"
+              className="h-9 text-sm font-semibold flex-1"
               data-testid={`input-adjustment-${item.product.id}`}
             />
             {adjustmentAmount !== 0 && (
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-7 w-7 shrink-0 text-gray-400 hover:text-red-500"
+              <button
+                className="h-8 w-8 rounded-xl flex items-center justify-center bg-gradient-to-b from-gray-200 to-gray-300 text-gray-500 shadow-[0_2px_0_0] shadow-gray-400 active:shadow-[0_0px_0_0] active:translate-y-[2px] transition-all duration-150 hover:from-red-100 hover:to-red-200 hover:text-red-600 shrink-0"
                 onClick={clearAdjustment}
                 title="Tozalash"
               >
-                <Trash2 className="h-3 w-3" />
-              </Button>
+                <Trash2 className="h-3.5 w-3.5" />
+              </button>
             )}
           </div>
 
           {adjustmentAmount !== 0 && (
             <div className={cn(
-              "text-xs font-medium px-2 py-1 rounded",
-              adjType === "skidka" ? "bg-red-50 text-red-600" : "bg-orange-50 text-orange-600"
+              "text-sm font-bold px-3 py-1.5 rounded-xl text-center",
+              adjType === "skidka"
+                ? "bg-gradient-to-r from-red-50 to-red-100 text-red-600 border border-red-200"
+                : "bg-gradient-to-r from-orange-50 to-orange-100 text-orange-600 border border-orange-200"
             )}>
               {adjType === "skidka" ? "−" : "+"}{Math.abs(adjustmentAmount).toLocaleString()} so'm
               {adjInputType === "percent" && adjValue && ` (${adjValue}%)`}

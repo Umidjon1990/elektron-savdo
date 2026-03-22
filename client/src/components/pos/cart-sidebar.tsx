@@ -247,10 +247,16 @@ export function CartSidebar({ items, onUpdateQuantity, onUpdateDiscount, onRemov
             <span className="text-muted-foreground">Jami mahsulot:</span>
             <span className="font-semibold text-base">{itemCount} dona/birlik</span>
           </div>
-          {totalDiscount > 0 && (
+          {skidkaTotal > 0 && (
             <div className="flex justify-between text-sm">
               <span className="text-muted-foreground">Skidka:</span>
-              <span className="font-semibold font-mono text-red-500 text-base">-{totalDiscount.toLocaleString()} so'm</span>
+              <span className="font-semibold font-mono text-red-500 text-base">-{skidkaTotal.toLocaleString()} so'm</span>
+            </div>
+          )}
+          {ustamaTotal > 0 && (
+            <div className="flex justify-between text-sm">
+              <span className="text-muted-foreground">Ustama:</span>
+              <span className="font-semibold font-mono text-green-600 text-base">+{ustamaTotal.toLocaleString()} so'm</span>
             </div>
           )}
           <Separator className="my-3" />

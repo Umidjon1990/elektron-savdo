@@ -29,7 +29,7 @@ interface CourierItem {
 interface CartSidebarProps {
   items: CartItemType[];
   onUpdateQuantity: (id: string, delta: number) => void;
-  onUpdateDiscount: (id: string, discount: number) => void;
+  onUpdateDiscount: (id: string, discount: number, adjustmentType?: "skidka" | "ustama", adjustmentInputType?: "summa" | "percent", adjustmentValue?: number) => void;
   onRemove: (id: string) => void;
   onClear: () => void;
   onCheckout: (method: string, customerData?: { customerName?: string; customerPhone?: string; customerInfo?: Record<string, string> }, nasiyaData?: { dueDate: string }, deliveryData?: { courierId: string; courierName: string; address: string; customerName: string; customerPhone: string }) => void;
@@ -74,7 +74,10 @@ const FIELD_ICONS: Record<string, React.ReactNode> = {
 export function CartSidebar({ items, onUpdateQuantity, onUpdateDiscount, onRemove, onClear, onCheckout, paymentMethods, customerFields, deliveryEnabled, couriers }: CartSidebarProps) {
   const getEffectivePrice = (product: any) => product.price > 0 ? product.price : (product.barcodePrice || product.wholesalePrice || 0);
   const subtotal = items.reduce((acc, item) => acc + (getEffectivePrice(item.product) * item.quantity), 0);
+  // discount > 0 = skidka (ayiriladi), discount < 0 = ustama (qo'shiladi)
   const totalDiscount = items.reduce((acc, item) => acc + (item.discount || 0), 0);
+  const skidkaTotal = items.reduce((acc, item) => item.discount && item.discount > 0 ? acc + item.discount : acc, 0);
+  const ustamaTotal = items.reduce((acc, item) => item.discount && item.discount < 0 ? acc + Math.abs(item.discount) : acc, 0);
   const total = subtotal - totalDiscount;
   const itemCount = items.reduce((acc, item) => acc + item.quantity, 0);
   const [showCustomer, setShowCustomer] = useState(false);

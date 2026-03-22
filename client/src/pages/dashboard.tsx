@@ -31,7 +31,10 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/co
 export interface CartItem {
   product: Product;
   quantity: number;
-  discount?: number;
+  discount?: number;           // Hisoblangan so'm miqdori (musbat = skidka, manfiy = ustama)
+  adjustmentType?: "skidka" | "ustama";
+  adjustmentInputType?: "summa" | "percent";
+  adjustmentValue?: number;    // Kiritilgan qiymat (% yoki so'm)
 }
 
 const popSound = typeof window !== 'undefined' ? new Audio("https://codeskulptor-demos.commondatastorage.googleapis.com/pang/pop.mp3") : null;
@@ -271,10 +274,12 @@ export default function Dashboard() {
     }));
   };
 
-  const updateDiscount = (id: string, discount: number) => {
+  const updateDiscount = (id: string, discount: number, adjustmentType?: "skidka" | "ustama", adjustmentInputType?: "summa" | "percent", adjustmentValue?: number) => {
     setCart(prev => prev.map(item => {
       if (item.product.id === id) {
-        return { ...item, discount: Math.max(0, discount) };
+        // discount > 0 = skidka (ayiriladi), discount < 0 = ustama (qo'shiladi)
+        const signedDiscount = adjustmentType === "ustama" ? -Math.abs(discount) : Math.abs(discount);
+        return { ...item, discount: signedDiscount, adjustmentType, adjustmentInputType, adjustmentValue };
       }
       return item;
     }));

@@ -5,7 +5,7 @@ import { useProducts } from "@/lib/product-context";
 import { useAuth } from "@/lib/auth-context";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Search, Plus, Filter, MoreHorizontal, ScanBarcode, ArrowRight, Check, X, RotateCcw, PackagePlus, ScanText, Upload, Image as ImageIcon, Loader2, Youtube, Trash2, ChevronUp, ChevronDown, GripVertical, Printer, Truck } from "lucide-react";
+import { Search, Plus, Filter, MoreHorizontal, ScanBarcode, ArrowRight, Check, X, RotateCcw, PackagePlus, ScanText, Upload, Image as ImageIcon, Loader2, Youtube, Trash2, ChevronUp, ChevronDown, GripVertical, Printer, Truck, DollarSign, CreditCard, Banknote, ArrowUpDown } from "lucide-react";
 import BarcodePrintDialog from "@/components/barcode-print";
 import { ScannerOverlay } from "@/components/pos/scanner-overlay";
 import { KNOWN_BOOKS_DB } from "@/data/mock-external-books";
@@ -107,8 +107,34 @@ export default function Inventory() {
   const [step, setStep] = useState<1 | 2>(1); // 1: Scan/Enter ISBN, 2: Details
   const { toast } = useToast();
 
-  const [restockProduct, setRestockProduct] = useState<Product | null>(null);
+  const [restockProductState, setRestockProductState] = useState<Product | null>(null);
   const [restockAmount, setRestockAmount] = useState<string>("10");
+  const [restockData, setRestockData] = useState({
+    supplier: "",
+    supplierPaymentMethod: "naqd",
+    supplierCurrency: "uzs",
+    supplierCurrencyRate: "",
+    supplierOriginalPrice: "",
+    costPrice: "",
+    price: "",
+  });
+
+  const restockProduct = restockProductState;
+  const setRestockProduct = (product: Product | null) => {
+    setRestockProductState(product);
+    if (product) {
+      setRestockAmount("10");
+      setRestockData({
+        supplier: (product as any).supplier || "",
+        supplierPaymentMethod: (product as any).supplierPaymentMethod || "naqd",
+        supplierCurrency: (product as any).supplierCurrency || "uzs",
+        supplierCurrencyRate: ((product as any).supplierCurrencyRate || "").toString(),
+        supplierOriginalPrice: ((product as any).supplierOriginalPrice || "").toString(),
+        costPrice: ((product as any).costPrice || "").toString(),
+        price: (product.price || "").toString(),
+      });
+    }
+  };
   
   const [editingId, setEditingId] = useState<string | null>(null);
   const [printProducts, setPrintProducts] = useState<Array<{ id: string; name: string; barcode: string; price: number; barcodePrice?: number }>>([]);
@@ -406,21 +432,51 @@ export default function Inventory() {
     }
   };
 
-  const handleRestock = (e: React.FormEvent) => {
+  const handleRestock = async (e: React.FormEvent) => {
     e.preventDefault();
     if (restockProduct && restockAmount) {
       const amount = parseFloat(restockAmount);
       if (amount > 0) {
-        updateStock(restockProduct.id, amount);
-        toast({
-          title: "Kirim qilindi",
-          description: `${restockProduct.name} +${amount} ${(restockProduct as any)?.unit || "dona"} qo'shildi`,
-          className: "bg-green-500 text-white border-none",
-        });
-        setRestockProduct(null);
-        setRestockAmount("10");
-        // Also close main dialog if it was open (e.g. came from scan)
-        setIsAddDialogOpen(false);
+        try {
+          const updates: any = {
+            stock: Math.max(0, restockProduct.stock + amount),
+            supplier: restockData.supplier || "",
+            supplierPaymentMethod: restockData.supplierPaymentMethod || "naqd",
+            supplierCurrency: restockData.supplierCurrency || "uzs",
+          };
+
+          if (restockData.supplierCurrency === "usd") {
+            updates.supplierOriginalPrice = restockData.supplierOriginalPrice ? Number(restockData.supplierOriginalPrice) : 0;
+            updates.supplierCurrencyRate = restockData.supplierCurrencyRate ? Number(restockData.supplierCurrencyRate) : 0;
+            if (updates.supplierOriginalPrice && updates.supplierCurrencyRate) {
+              updates.costPrice = updates.supplierOriginalPrice * updates.supplierCurrencyRate;
+            } else if (restockData.costPrice) {
+              updates.costPrice = Number(restockData.costPrice);
+            }
+          } else {
+            updates.supplierOriginalPrice = 0;
+            updates.supplierCurrencyRate = 0;
+            updates.costPrice = restockData.costPrice ? Number(restockData.costPrice) : 0;
+          }
+
+          if (restockData.price) updates.price = Number(restockData.price);
+
+          await updateProduct(restockProduct.id, updates);
+          toast({
+            title: "Kirim qilindi",
+            description: `${restockProduct.name} +${amount} ${(restockProduct as any)?.unit || "dona"} qo'shildi`,
+            className: "bg-green-500 text-white border-none",
+          });
+          setRestockProduct(null);
+          setRestockAmount("10");
+          setIsAddDialogOpen(false);
+        } catch (error) {
+          toast({
+            title: "Xatolik",
+            description: "Kirim saqlashda xatolik yuz berdi. Qaytadan urinib ko'ring.",
+            variant: "destructive",
+          });
+        }
       }
     }
   };
@@ -1283,30 +1339,230 @@ export default function Inventory() {
       />
 
       <Dialog open={!!restockProduct} onOpenChange={(open) => !open && setRestockProduct(null)}>
-        <DialogContent className="sm:max-w-[425px]">
-          <DialogHeader>
-            <DialogTitle>Omborga kirim qilish</DialogTitle>
-          </DialogHeader>
-          <div className="grid gap-4 py-4">
-            <div className="space-y-2">
-              <Label>Tovar</Label>
-              <div className="font-medium">{restockProduct?.name}</div>
+        <DialogContent className="sm:max-w-[500px] p-0 overflow-hidden">
+          <div className="bg-gradient-to-r from-blue-600 to-blue-700 px-6 py-4">
+            <div className="flex items-center gap-3">
+              <div className="h-10 w-10 rounded-xl bg-white/20 flex items-center justify-center">
+                <PackagePlus className="h-5 w-5 text-white" />
+              </div>
+              <div>
+                <DialogTitle className="text-white text-lg font-bold">Omborga kirim qilish</DialogTitle>
+                <p className="text-blue-100 text-sm mt-0.5">{restockProduct?.name}</p>
+              </div>
             </div>
+          </div>
+          
+          <div className="px-6 py-5 space-y-4 max-h-[70vh] overflow-y-auto">
+            <div className="bg-blue-50 rounded-xl p-4 border border-blue-100">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-xs text-blue-500 font-medium">Hozirgi zaxira</p>
+                  <p className="text-2xl font-bold text-blue-700">{restockProduct?.stock || 0} <span className="text-sm font-normal">{(restockProduct as any)?.unit || "dona"}</span></p>
+                </div>
+                <ArrowRight className="h-5 w-5 text-blue-300" />
+                <div>
+                  <p className="text-xs text-green-500 font-medium">Yangi zaxira</p>
+                  <p className="text-2xl font-bold text-green-600">{((restockProduct?.stock || 0) + (parseFloat(restockAmount) || 0)).toFixed(1).replace(/\.0$/, '')} <span className="text-sm font-normal">{(restockProduct as any)?.unit || "dona"}</span></p>
+                </div>
+              </div>
+            </div>
+
             <div className="space-y-2">
-              <Label htmlFor="amount">Miqdori ({(restockProduct as any)?.unit || "dona"})</Label>
+              <Label className="text-sm font-semibold text-gray-700">Qo'shiladigan miqdor ({(restockProduct as any)?.unit || "dona"})</Label>
               <Input
-                id="amount"
                 type="number"
                 step={(restockProduct as any)?.unit === "dona" || !(restockProduct as any)?.unit ? "1" : "0.1"}
                 value={restockAmount}
                 onChange={(e) => setRestockAmount(e.target.value)}
+                className="h-12 text-lg font-bold text-center border-2 border-blue-200 focus:border-blue-500"
+                data-testid="input-restock-amount"
               />
             </div>
+
+            <div className="border-t pt-4 space-y-3">
+              <p className="text-sm font-bold text-gray-800 flex items-center gap-2">
+                <Truck className="h-4 w-4 text-gray-500" />
+                Tovar beruvchi ma'lumotlari
+              </p>
+              
+              <div className="space-y-2">
+                <Label className="text-xs text-gray-500">Tovar beruvchi</Label>
+                <select
+                  value={restockData.supplier}
+                  onChange={(e) => setRestockData(d => ({ ...d, supplier: e.target.value }))}
+                  className="w-full h-10 px-3 rounded-lg border border-gray-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  data-testid="select-restock-supplier"
+                >
+                  <option value="">Tanlang...</option>
+                  {(suppliersList || []).filter((s: any) => s.isActive).map((s: any) => (
+                    <option key={s.id} value={s.name}>{s.name}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="space-y-2">
+                <Label className="text-xs text-gray-500">To'lov usuli</Label>
+                <div className="grid grid-cols-3 gap-2">
+                  {[
+                    { value: "naqd", label: "Naqd", icon: Banknote },
+                    { value: "nasiya", label: "Nasiya", icon: CreditCard },
+                    { value: "plastik", label: "Plastik", icon: CreditCard },
+                  ].map(({ value, label, icon: Icon }) => (
+                    <button
+                      key={value}
+                      type="button"
+                      onClick={() => setRestockData(d => ({ ...d, supplierPaymentMethod: value }))}
+                      className={cn(
+                        "flex flex-col items-center gap-1 py-2.5 px-2 rounded-xl text-xs font-semibold transition-all border-2",
+                        restockData.supplierPaymentMethod === value
+                          ? "border-blue-500 bg-blue-50 text-blue-700 shadow-sm"
+                          : "border-gray-200 bg-white text-gray-500 hover:border-gray-300"
+                      )}
+                      data-testid={`btn-payment-${value}`}
+                    >
+                      <Icon className="h-4 w-4" />
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            <div className="border-t pt-4 space-y-3">
+              <p className="text-sm font-bold text-gray-800 flex items-center gap-2">
+                <DollarSign className="h-4 w-4 text-gray-500" />
+                Narx ma'lumotlari
+              </p>
+
+              <div className="space-y-2">
+                <Label className="text-xs text-gray-500">Valyuta</Label>
+                <div className="grid grid-cols-2 gap-2">
+                  {[
+                    { value: "uzs", label: "So'm (UZS)" },
+                    { value: "usd", label: "Dollar (USD)" },
+                  ].map(({ value, label }) => (
+                    <button
+                      key={value}
+                      type="button"
+                      onClick={() => setRestockData(d => ({
+                        ...d,
+                        supplierCurrency: value,
+                        ...(value === "uzs" ? { supplierOriginalPrice: "", supplierCurrencyRate: "" } : {})
+                      }))}
+                      className={cn(
+                        "py-2.5 px-3 rounded-xl text-sm font-semibold transition-all border-2",
+                        restockData.supplierCurrency === value
+                          ? "border-blue-500 bg-blue-50 text-blue-700 shadow-sm"
+                          : "border-gray-200 bg-white text-gray-500 hover:border-gray-300"
+                      )}
+                      data-testid={`btn-currency-${value}`}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {restockData.supplierCurrency === "usd" && (
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <Label className="text-xs text-gray-500">Dollar narxi</Label>
+                    <div className="relative">
+                      <Input
+                        type="number"
+                        step="0.01"
+                        placeholder="0.00"
+                        value={restockData.supplierOriginalPrice}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setRestockData(d => ({
+                            ...d,
+                            supplierOriginalPrice: val,
+                            costPrice: val && d.supplierCurrencyRate
+                              ? (Number(val) * Number(d.supplierCurrencyRate)).toString()
+                              : d.costPrice
+                          }));
+                        }}
+                        className="h-10 pr-8"
+                        data-testid="input-restock-usd-price"
+                      />
+                      <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-gray-400 font-medium">$</span>
+                    </div>
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs text-gray-500">Kurs (1$ = ? so'm)</Label>
+                    <Input
+                      type="number"
+                      step="1"
+                      placeholder="12800"
+                      value={restockData.supplierCurrencyRate}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setRestockData(d => ({
+                          ...d,
+                          supplierCurrencyRate: val,
+                          costPrice: d.supplierOriginalPrice && val
+                            ? (Number(d.supplierOriginalPrice) * Number(val)).toString()
+                            : d.costPrice
+                        }));
+                      }}
+                      className="h-10"
+                      data-testid="input-restock-rate"
+                    />
+                  </div>
+                </div>
+              )}
+
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label className="text-xs text-gray-500">Tan narxi (so'm)</Label>
+                  <div className="relative">
+                    <Input
+                      type="number"
+                      step="1"
+                      placeholder="0"
+                      value={restockData.costPrice}
+                      onChange={(e) => setRestockData(d => ({ ...d, costPrice: e.target.value }))}
+                      className="h-10"
+                      readOnly={restockData.supplierCurrency === "usd" && !!restockData.supplierOriginalPrice && !!restockData.supplierCurrencyRate}
+                      data-testid="input-restock-cost-price"
+                    />
+                  </div>
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs text-gray-500">Sotish narxi (so'm)</Label>
+                  <Input
+                    type="number"
+                    step="1"
+                    placeholder="0"
+                    value={restockData.price}
+                    onChange={(e) => setRestockData(d => ({ ...d, price: e.target.value }))}
+                    className="h-10"
+                    data-testid="input-restock-price"
+                  />
+                </div>
+              </div>
+
+              {restockData.costPrice && restockData.price && Number(restockData.price) > Number(restockData.costPrice) && (
+                <div className="bg-green-50 rounded-xl p-3 border border-green-100 flex items-center justify-between">
+                  <span className="text-xs text-green-600 font-medium">Foyda (1 dona)</span>
+                  <span className="text-sm font-bold text-green-700">
+                    +{(Number(restockData.price) - Number(restockData.costPrice)).toLocaleString()} so'm
+                  </span>
+                </div>
+              )}
+            </div>
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setRestockProduct(null)}>Bekor qilish</Button>
-            <Button onClick={handleRestock}>Saqlash</Button>
-          </DialogFooter>
+
+          <div className="px-6 py-4 border-t bg-gray-50 flex gap-3">
+            <Button variant="outline" onClick={() => setRestockProduct(null)} className="flex-1" data-testid="btn-restock-cancel">
+              Bekor qilish
+            </Button>
+            <Button onClick={handleRestock} className="flex-1 bg-blue-600 hover:bg-blue-700" data-testid="btn-restock-save">
+              <PackagePlus className="h-4 w-4 mr-2" />
+              Kirim qilish
+            </Button>
+          </div>
         </DialogContent>
       </Dialog>
     </div>

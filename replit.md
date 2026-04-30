@@ -33,6 +33,11 @@ The backend is powered by Express.js and TypeScript, using Drizzle ORM with Post
 - Image upload (`useUpload` hook): 15s timeout on canvas compression, 15s on presigned URL request, 60s on R2 PUT — never hangs on "Yuklanmoqda…". HEIC/HEIF files bypass canvas (iOS camera). Object URLs revoked.
 - Receipt dialog: `max-h-[90vh] flex flex-col` with inner `overflow-y-auto` body and sticky `shrink-0` footer so "Chop etish" button always remains visible/tappable.
 
+### Print System
+- Receipt printing is scoped behind `body.print-receipt-mode` class. ReceiptDialog adds the class before `window.print()` and removes it via `afterprint` event (with 10s safety-net timeout). Container content is emptied when dialog closes.
+- Named CSS `@page receiptPage { size: 80mm auto; margin: 0 }` is opted into only in receipt mode — other print flows (Finance reports via `window.print()`, barcode-print popup) keep default paper size.
+- Previous bug: `visibility: hidden` left elements occupying layout space → 368 A4 pages on XP-365B thermal printer. Replaced with `display: none` scoped to receipt mode → single 80mm page.
+
 ### Data Storage
 PostgreSQL serves as the primary database, with Drizzle ORM managing schema and queries. Tenant isolation is enforced by filtering all queries by `tenant_id`. The database schema, defined in `/shared/schema.ts`, includes tables for tenants, users, products, orders, categories, transactions, income/expense categories, and shift handovers. Barcodes maintain uniqueness across each tenant.
 

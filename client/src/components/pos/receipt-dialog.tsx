@@ -188,7 +188,7 @@ export function ReceiptDialog({ transaction, isOpen, onClose }: ReceiptDialogPro
       window.print();
       return;
     }
-    
+
     const images = printContainer.querySelectorAll('img');
     const imagePromises = Array.from(images).map(img => {
       if (img.complete) return Promise.resolve();
@@ -198,10 +198,27 @@ export function ReceiptDialog({ transaction, isOpen, onClose }: ReceiptDialogPro
         setTimeout(resolve, 2000);
       });
     });
-    
+
     await Promise.all(imagePromises);
     await new Promise(resolve => setTimeout(resolve, 300));
-    window.print();
+
+    // Activate receipt-only print mode (scoped CSS in index.css)
+    document.body.classList.add('print-receipt-mode');
+
+    const cleanup = () => {
+      document.body.classList.remove('print-receipt-mode');
+      window.removeEventListener('afterprint', cleanup);
+    };
+    window.addEventListener('afterprint', cleanup);
+    // Safety net in case afterprint never fires (some browsers)
+    setTimeout(cleanup, 10000);
+
+    try {
+      window.print();
+    } catch (err) {
+      cleanup();
+      console.error('Print failed:', err);
+    }
   };
 
   useEffect(() => {
@@ -296,6 +313,16 @@ export function ReceiptDialog({ transaction, isOpen, onClose }: ReceiptDialogPro
       console.error("Receipt print error:", err);
     }
   }, [isOpen, transaction, settings, receiptLogo, tenantSettings]);
+
+  // Cleanup: empty the print container when dialog closes so its stale content
+  // cannot accidentally appear in other print jobs (e.g. Finance reports).
+  useEffect(() => {
+    if (isOpen) return;
+    const printContainer = document.getElementById('receipt-print-container');
+    if (printContainer) {
+      printContainer.innerHTML = '';
+    }
+  }, [isOpen]);
 
   if (!transaction) return null;
 

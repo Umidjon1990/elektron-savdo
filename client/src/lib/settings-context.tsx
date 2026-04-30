@@ -17,7 +17,7 @@ interface SettingsContextType {
 }
 
 const defaultSettings: Settings = {
-  autoPrint: false,
+  autoPrint: true,
   soundEnabled: true,
   notifications: true,
   storeName: "Ixlos Books",
@@ -29,17 +29,30 @@ const defaultSettings: Settings = {
 
 const SettingsContext = createContext<SettingsContextType | undefined>(undefined);
 
+// One-time migration: existing installs have explicit `autoPrint: false` in
+// localStorage from when that was the default. We now want auto-print on by
+// default. Force-enable it once, recording a marker so future toggles by the
+// user are respected.
+const AUTOPRINT_MIGRATION_KEY = "pos_settings_autoprint_migrated_v1";
+
 export function SettingsProvider({ children }: { children: ReactNode }) {
   const [settings, setSettings] = useState<Settings>(() => {
     const saved = localStorage.getItem("pos_settings");
+    let merged: Settings = defaultSettings;
     if (saved) {
       try {
-        return { ...defaultSettings, ...JSON.parse(saved) };
+        merged = { ...defaultSettings, ...JSON.parse(saved) };
       } catch {
-        return defaultSettings;
+        merged = defaultSettings;
       }
     }
-    return defaultSettings;
+    try {
+      if (!localStorage.getItem(AUTOPRINT_MIGRATION_KEY)) {
+        merged = { ...merged, autoPrint: true };
+        localStorage.setItem(AUTOPRINT_MIGRATION_KEY, "1");
+      }
+    } catch {}
+    return merged;
   });
 
   useEffect(() => {

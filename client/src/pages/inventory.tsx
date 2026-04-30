@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { SidebarNav } from "@/components/layout/sidebar-nav";
 import { useProducts } from "@/lib/product-context";
@@ -481,25 +481,39 @@ export default function Inventory() {
     }
   };
 
-  const searchFiltered = products.filter(product =>
-    product.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    product.author.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    product.barcode.includes(searchQuery)
-  );
+  // Memoize search + tab filtering and counters so they don't re-scan the whole
+  // product list on every keystroke / unrelated re-render. With thousands of
+  // products this was a major cause of UI freezes during navigation.
+  const searchFiltered = useMemo(() => {
+    const q = searchQuery.toLowerCase();
+    if (!q) return products;
+    return products.filter(product =>
+      product.name.toLowerCase().includes(q) ||
+      product.author.toLowerCase().includes(q) ||
+      product.barcode.includes(searchQuery)
+    );
+  }, [products, searchQuery]);
 
-  const filteredProducts = searchFiltered.filter(product => {
-    if (inventoryTab === "available") return product.stock > 5;
-    if (inventoryTab === "low") return product.stock > 0 && product.stock <= 5;
-    if (inventoryTab === "out") return product.stock <= 0;
-    return true;
-  });
+  const filteredProducts = useMemo(() => {
+    if (inventoryTab === "all") return searchFiltered;
+    return searchFiltered.filter(product => {
+      if (inventoryTab === "available") return product.stock > 5;
+      if (inventoryTab === "low") return product.stock > 0 && product.stock <= 5;
+      if (inventoryTab === "out") return product.stock <= 0;
+      return true;
+    });
+  }, [searchFiltered, inventoryTab]);
 
-  const tabCounts = {
-    all: searchFiltered.length,
-    available: searchFiltered.filter(p => p.stock > 5).length,
-    low: searchFiltered.filter(p => p.stock > 0 && p.stock <= 5).length,
-    out: searchFiltered.filter(p => p.stock <= 0).length,
-  };
+  // Single-pass counter computation instead of 3 separate filter passes.
+  const tabCounts = useMemo(() => {
+    let available = 0, low = 0, out = 0;
+    for (const p of searchFiltered) {
+      if (p.stock > 5) available++;
+      else if (p.stock > 0) low++;
+      else out++;
+    }
+    return { all: searchFiltered.length, available, low, out };
+  }, [searchFiltered]);
 
   const moveProduct = async (index: number, direction: "up" | "down") => {
     const newIndex = direction === "up" ? index - 1 : index + 1;

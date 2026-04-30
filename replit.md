@@ -31,7 +31,14 @@ The backend is powered by Express.js and TypeScript, using Drizzle ORM with Post
 
 ### Mobile UX Fixes
 - Image upload (`useUpload` hook): 6s timeout on canvas compression (kept short so iOS Safari never feels frozen), 15s on presigned URL request, 60s on R2 PUT — never hangs on "Yuklanmoqda…". HEIC/HEIF files bypass canvas (iOS camera). Object URLs revoked.
-- Receipt dialog: `max-h-[90vh] flex flex-col` with inner `overflow-y-auto` body and sticky `shrink-0` footer so "Chop etish" button always remains visible/tappable.
+- Receipt dialog: `max-h-[90vh] flex flex-col` with inner `overflow-y-auto` body and sticky `shrink-0` footer so "Chop etish" button always remains visible/tappable. Manual "Chop etish" click also auto-closes the dialog after ~600ms so the user never has to tap "Yopish" separately.
+
+### Navigation Performance
+- `preloadAdminPages()` in `App.tsx` is now scheduled via `requestIdleCallback` (with `setTimeout(1500)` fallback) so heavy admin bundles (`dashboard`, `inventory`, `history`, `customers`, `settings`, `categories`) only load when the browser is idle, never competing with the user's first sidebar clicks.
+- `inventory.tsx` filtering (`searchFiltered`, `filteredProducts`, `tabCounts`) wrapped in `useMemo` with single-pass tab counter — eliminates 4 full array scans per render on the inventory page.
+
+### Settings
+- `settings.autoPrint` defaults to `true` for new installs. A one-time migration (`pos_settings_autoprint_migrated_v1` localStorage key) force-enables it once for existing installs that explicitly had `autoPrint: false`. Future user toggles are respected.
 
 ### Print System
 - **Receipt printing**: uses `window.open()` popup with self-contained HTML (`buildReceiptHtml` in `receipt-dialog.tsx`) — same proven pattern as `barcode-print.tsx`. The popup's `<head>` includes `@page { size: 80mm auto; margin: 0 }` and `html/body { width: 80mm }`. The popup's own inline script waits for images to load (or 3s timeout), calls `window.print()`, then `window.close()`. Logo and Telegram QR are preloaded via `new Image()` for cache warmth.

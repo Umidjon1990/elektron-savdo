@@ -207,11 +207,11 @@ export function ReceiptDialog({ transaction, isOpen, onClose, autoPrint, consume
   };
 
 
-  const triggerPrint = (silent: boolean) => {
-    if (!transaction) return;
+  const triggerPrint = (silent: boolean): boolean => {
+    if (!transaction) return false;
 
     const html = buildReceiptHtml();
-    if (!html) return;
+    if (!html) return false;
 
     // Prefer a window the parent already opened synchronously inside a user
     // gesture (auto-print path). Falls back to a fresh window.open() for the
@@ -227,15 +227,32 @@ export function ReceiptDialog({ transaction, isOpen, onClose, autoPrint, consume
       } else {
         console.warn("Auto-print blocked — popup window denied by browser");
       }
-      return;
+      return false;
     }
 
-    printWindow.document.open();
-    printWindow.document.write(html);
-    printWindow.document.close();
+    try {
+      printWindow.document.open();
+      printWindow.document.write(html);
+      printWindow.document.close();
+      return true;
+    } catch (err) {
+      console.error("Print window write failed:", err);
+      try { printWindow.close(); } catch {}
+      return false;
+    }
   };
 
-  const handlePrint = () => triggerPrint(false);
+  const handlePrint = () => {
+    const ok = triggerPrint(false);
+    // Only auto-close the dialog if the print popup actually opened and was
+    // written to. If the popup was blocked or the write failed, keep the
+    // dialog visible so the user can retry or close it manually.
+    if (ok) {
+      setTimeout(() => {
+        try { onClose(); } catch {}
+      }, 600);
+    }
+  };
 
   // Auto-print: when dialog opens with autoPrint enabled, fire the popup once.
   // Use a small timeout so React/dialog renders first; ref prevents double-fire on re-render.

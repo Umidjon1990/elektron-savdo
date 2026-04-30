@@ -58,12 +58,24 @@ const AttendanceCheckPage = lazy(importAttendanceCheck);
 const CourierDeliveriesPage = lazy(importCourierDeliveries);
 
 function preloadAdminPages() {
-  importDashboard();
-  importInventory();
-  importHistory();
-  importCustomers();
-  importSettings();
-  importCategories();
+  // Defer admin-page bundle preloading to browser idle time so it never
+  // competes with the user's first interactions / sidebar navigation. On
+  // slow devices, eagerly evaluating these heavy modules right after auth
+  // was blocking the main thread for a long time and made every sidebar
+  // click feel frozen.
+  const schedule = (cb: () => void) => {
+    if (typeof (window as any).requestIdleCallback === "function") {
+      (window as any).requestIdleCallback(cb, { timeout: 3000 });
+    } else {
+      setTimeout(cb, 1500);
+    }
+  };
+  schedule(() => importDashboard());
+  schedule(() => importInventory());
+  schedule(() => importHistory());
+  schedule(() => importCustomers());
+  schedule(() => importSettings());
+  schedule(() => importCategories());
 }
 
 function PageLoader() {

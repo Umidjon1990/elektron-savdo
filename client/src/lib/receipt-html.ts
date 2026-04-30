@@ -147,25 +147,30 @@ export function buildReceiptHtml({ transaction, settings, tenantSettings }: Buil
         if (printed) return;
         printed = true;
         try { window.focus(); window.print(); } catch (e) { console.error(e); }
-        setTimeout(function() { try { window.close(); } catch (e) {} }, 500);
+        setTimeout(function() { try { window.close(); } catch (e) {} }, 300);
       }
       var imgs = document.images;
       if (!imgs || imgs.length === 0) {
-        setTimeout(doPrint, 100);
+        // No images — print on next frame, with timeout fallback in case
+        // requestAnimationFrame is throttled (background tab, mobile etc.).
+        requestAnimationFrame(doPrint);
+        setTimeout(doPrint, 200);
         return;
       }
       var loaded = 0;
       var total = imgs.length;
       function check() {
         loaded++;
-        if (loaded >= total) setTimeout(doPrint, 150);
+        if (loaded >= total) requestAnimationFrame(doPrint);
       }
       for (var i = 0; i < total; i++) {
         var im = imgs[i];
         if (im.complete) { check(); }
         else { im.onload = check; im.onerror = check; }
       }
-      setTimeout(doPrint, 3000);
+      // Hard cap: print after 800ms even if images haven't all loaded
+      // (e.g. external QR API is slow). Receipt is more important than QR.
+      setTimeout(doPrint, 800);
     })();
   </script>
 </body>

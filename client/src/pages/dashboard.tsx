@@ -105,6 +105,21 @@ export default function Dashboard() {
     productsRef.current = products;
   }, [products]);
 
+  // Preload receipt images (logo + Telegram QR) so when "Sotildi" fires the
+  // print popup, both images are already cached and the popup can print
+  // immediately instead of waiting for them to download.
+  useEffect(() => {
+    const logo = tenantSettings?.receiptLogo || tenantSettings?.logo;
+    if (logo) {
+      const img = new Image();
+      img.src = logo;
+    }
+    if (settings.telegramUsername) {
+      const qr = new Image();
+      qr.src = `https://api.qrserver.com/v1/create-qr-code/?size=100x100&data=https://t.me/${encodeURIComponent(settings.telegramUsername)}&color=000000`;
+    }
+  }, [tenantSettings?.receiptLogo, tenantSettings?.logo, settings.telegramUsername]);
+
   useEffect(() => {
     const processBarcodeFromBuffer = (code: string) => {
       const normalize = (s: string) => s.replace(/[^0-9]/g, "");

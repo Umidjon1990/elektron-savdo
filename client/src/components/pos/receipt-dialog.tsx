@@ -1,19 +1,11 @@
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { type Transaction } from "@/lib/transaction-context";
-import { Printer, Zap } from "lucide-react";
-import React, { useEffect, useState } from "react";
+import { Printer } from "lucide-react";
+import React, { useEffect } from "react";
 import { useSettings } from "@/lib/settings-context";
 import { useAuth } from "@/lib/auth-context";
 import { useQuery } from "@tanstack/react-query";
-import {
-  checkBridge,
-  printViaBridge,
-  getSavedPrinterName,
-  setBridgePrinter,
-  type PrintReceiptPayload,
-} from "@/lib/print-bridge";
-import { useToast } from "@/hooks/use-toast";
 
 class ReceiptErrorBoundary extends React.Component<
   { children: React.ReactNode; onError?: () => void },
@@ -175,10 +167,7 @@ function escapeHtml(s: unknown): string {
 export function ReceiptDialog({ transaction, isOpen, onClose }: ReceiptDialogProps) {
   const { settings } = useSettings();
   const { token } = useAuth();
-  const { toast } = useToast();
-  const [bridgeAvailable, setBridgeAvailable] = useState(false);
-  const [printing, setPrinting] = useState(false);
-
+  
   const { data: tenantSettings } = useQuery<any>({
     queryKey: ["tenant-settings"],
     queryFn: async () => {
@@ -193,27 +182,6 @@ export function ReceiptDialog({ transaction, isOpen, onClose }: ReceiptDialogPro
   });
 
   const receiptLogo = tenantSettings?.receiptLogo || tenantSettings?.logo;
-
-  // Check Print Bridge on dialog open (lightweight ping)
-  useEffect(() => {
-    if (!isOpen) return;
-    let cancelled = false;
-    (async () => {
-      const status = await checkBridge(800);
-      if (cancelled) return;
-      setBridgeAvailable(status.available);
-      // Push saved printer name to bridge so it always uses the user-selected one
-      if (status.available) {
-        const saved = getSavedPrinterName();
-        if (saved) {
-          setBridgePrinter(saved).catch(() => {});
-        }
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [isOpen]);
 
   const getPaymentLabel = (method: string) => {
     if (tenantSettings?.paymentMethods) {
@@ -365,31 +333,9 @@ export function ReceiptDialog({ transaction, isOpen, onClose }: ReceiptDialogPro
 </html>`;
   };
 
-  const buildBridgePayload = (): PrintReceiptPayload | null => {
-    if (!transaction) return null;
-    const safeItems = (transaction.items || []).filter((it: any) => it && it.product);
-    return {
-      id: transaction.id,
-      date: new Date(transaction.date).toLocaleString("uz-UZ"),
-      storeName: settings.storeName || "",
-      storeAddress: settings.storeAddress || "",
-      storePhone: settings.storePhone || "",
-      customerName: transaction.customerName || undefined,
-      customerPhone: transaction.customerPhone || undefined,
-      items: safeItems.map((it: any) => ({
-        name: String(it.product.name || ""),
-        quantity: Number(it.quantity || 0),
-        price: Number(it.product.price || 0),
-        total: Number(it.quantity || 0) * Number(it.product.price || 0),
-      })),
-      totalAmount: Number(transaction.totalAmount || 0),
-      paymentMethod: getPaymentLabel(transaction.paymentMethod || "cash"),
-      footer: settings.receiptFooter || "",
-      telegramUsername: settings.telegramUsername || undefined,
-    };
-  };
+  const handlePrint = () => {
+    if (!transaction) return;
 
-  const printWithPopup = () => {
     const html = buildReceiptHtml();
     if (!html) return;
 
@@ -404,35 +350,6 @@ export function ReceiptDialog({ transaction, isOpen, onClose }: ReceiptDialogPro
     printWindow.document.close();
   };
 
-  const handlePrint = async () => {
-    if (!transaction || printing) return;
-
-    if (bridgeAvailable) {
-      const payload = buildBridgePayload();
-      if (!payload) return;
-      setPrinting(true);
-      try {
-        const result = await printViaBridge(payload);
-        if (result.ok) {
-          toast({ title: "Chek chop etildi" });
-          onClose();
-        } else {
-          toast({
-            title: "Bridge xatosi",
-            description: (result.error || "Noma'lum xato") + " — brauzer chop etishi ishlatilmoqda",
-            variant: "destructive",
-          });
-          printWithPopup();
-        }
-      } finally {
-        setPrinting(false);
-      }
-      return;
-    }
-
-    printWithPopup();
-  };
-
   if (!transaction) return null;
 
   return (
@@ -444,27 +361,13 @@ export function ReceiptDialog({ transaction, isOpen, onClose }: ReceiptDialogPro
           </ReceiptErrorBoundary>
         </div>
 
-        {bridgeAvailable && (
-          <div
-            className="shrink-0 px-4 py-1.5 bg-emerald-50 border-t border-emerald-200 flex items-center justify-center gap-1.5 text-[11px] font-semibold text-emerald-700"
-            data-testid="badge-bridge-active"
-          >
-            <Zap className="h-3 w-3" />
-            <span>Tezkor printer ulangan</span>
-          </div>
-        )}
         <div className="shrink-0 p-4 bg-gray-50 border-t flex gap-2 sticky bottom-0">
           <Button variant="outline" className="flex-1" onClick={onClose} data-testid="button-close-receipt">
             Yopish
           </Button>
-          <Button
-            className="flex-1 gap-2"
-            onClick={handlePrint}
-            disabled={printing}
-            data-testid="button-print-receipt"
-          >
+          <Button className="flex-1 gap-2" onClick={handlePrint} data-testid="button-print-receipt">
             <Printer className="h-4 w-4" />
-            {printing ? "Chop etilmoqda…" : "Chop etish"}
+            Chop etish
           </Button>
         </div>
       </DialogContent>

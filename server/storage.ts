@@ -22,6 +22,7 @@ export interface IStorage {
   // Products (tenant-scoped)
   getAllProducts(tenantId: string): Promise<Product[]>;
   getProductsPaginated(tenantId: string, limit: number, offset: number): Promise<{ products: Product[]; total: number }>;
+  getProductCountsByTenants(tenantIds: string[]): Promise<Map<string, number>>;
   getProduct(id: string, tenantId?: string): Promise<Product | undefined>;
   getProductByBarcode(barcode: string, tenantId: string): Promise<Product | undefined>;
   createProduct(product: InsertProduct): Promise<Product>;
@@ -150,18 +151,33 @@ export class DatabaseStorage implements IStorage {
 
   async getAllTenantsWithStats(): Promise<(Tenant & { productsCount: number; ordersCount: number; usersCount: number })[]> {
     const allTenants = await db.select().from(tenants).orderBy(desc(tenants.createdAt));
-    const results = await Promise.all(allTenants.map(async (tenant) => {
-      const [prodCount] = await db.select({ count: sql<number>`count(*)::int` }).from(products).where(eq(products.tenantId, tenant.id));
-      const [orderCount] = await db.select({ count: sql<number>`count(*)::int` }).from(orders).where(eq(orders.tenantId, tenant.id));
-      const [userCount] = await db.select({ count: sql<number>`count(*)::int` }).from(users).where(eq(users.tenantId, tenant.id));
-      return {
-        ...tenant,
-        productsCount: prodCount?.count || 0,
-        ordersCount: orderCount?.count || 0,
-        usersCount: userCount?.count || 0,
-      };
+    if (allTenants.length === 0) return [];
+
+    const [prodCounts, orderCounts, userCounts] = await Promise.all([
+      db.select({
+        tenantId: products.tenantId,
+        count: sql<number>`count(*)::int`,
+      }).from(products).groupBy(products.tenantId),
+      db.select({
+        tenantId: orders.tenantId,
+        count: sql<number>`count(*)::int`,
+      }).from(orders).groupBy(orders.tenantId),
+      db.select({
+        tenantId: users.tenantId,
+        count: sql<number>`count(*)::int`,
+      }).from(users).groupBy(users.tenantId),
+    ]);
+
+    const prodMap = new Map(prodCounts.map(r => [r.tenantId, r.count]));
+    const orderMap = new Map(orderCounts.map(r => [r.tenantId, r.count]));
+    const userMap = new Map(userCounts.map(r => [r.tenantId, r.count]));
+
+    return allTenants.map(tenant => ({
+      ...tenant,
+      productsCount: prodMap.get(tenant.id) || 0,
+      ordersCount: orderMap.get(tenant.id) || 0,
+      usersCount: userMap.get(tenant.id) || 0,
     }));
-    return results;
   }
 
   async deleteTenant(id: string): Promise<boolean> {
@@ -219,6 +235,17 @@ export class DatabaseStorage implements IStorage {
       .orderBy(products.sortOrder, products.name);
   }
 
+  async getProductCountsByTenants(tenantIds: string[]): Promise<Map<string, number>> {
+    if (tenantIds.length === 0) return new Map();
+    const rows = await db.select({
+      tenantId: products.tenantId,
+      count: sql<number>`count(*)::int`,
+    }).from(products)
+      .where(inArray(products.tenantId, tenantIds))
+      .groupBy(products.tenantId);
+    return new Map(rows.map(r => [r.tenantId, r.count]));
+  }
+
   async getProductsPaginated(tenantId: string, limit: number, offset: number): Promise<{ products: Product[]; total: number }> {
     const [productList, countResult] = await Promise.all([
       db.select().from(products)
@@ -232,9 +259,17 @@ export class DatabaseStorage implements IStorage {
   }
 
   async reorderProducts(orderedIds: string[], tenantId?: string): Promise<void> {
-    for (let i = 0; i < orderedIds.length; i++) {
-      await db.update(products).set({ sortOrder: i }).where(eq(products.id, orderedIds[i]));
-    }
+    if (orderedIds.length === 0) return;
+    const cases = sql.join(
+      orderedIds.map((id, i) => sql`when ${products.id} = ${id} then ${i}`),
+      sql.raw(' ')
+    );
+    const whereClause = tenantId
+      ? and(inArray(products.id, orderedIds), eq(products.tenantId, tenantId))
+      : inArray(products.id, orderedIds);
+    await db.update(products)
+      .set({ sortOrder: sql`case ${cases} end` })
+      .where(whereClause);
   }
 
   async getProduct(id: string, tenantId?: string): Promise<Product | undefined> {
@@ -365,13 +400,14 @@ export class DatabaseStorage implements IStorage {
   }
 
   async reorderCategories(orderedIds: string[], tenantId: string): Promise<void> {
-    await db.transaction(async (tx) => {
-      for (let i = 0; i < orderedIds.length; i++) {
-        await tx.update(categories)
-          .set({ sortOrder: i })
-          .where(and(eq(categories.id, orderedIds[i]), eq(categories.tenantId, tenantId)));
-      }
-    });
+    if (orderedIds.length === 0) return;
+    const cases = sql.join(
+      orderedIds.map((id, i) => sql`when ${categories.id} = ${id} then ${i}`),
+      sql.raw(' ')
+    );
+    await db.update(categories)
+      .set({ sortOrder: sql`case ${cases} end` })
+      .where(and(inArray(categories.id, orderedIds), eq(categories.tenantId, tenantId)));
   }
 
   // Transactions (tenant-scoped)
@@ -412,15 +448,23 @@ export class DatabaseStorage implements IStorage {
     }
     
     const items = existing.items as Array<{product: {id: string; stock: number}, quantity: number}>;
-    for (const item of items) {
-      const product = await this.getProduct(item.product.id);
-      if (product) {
-        await this.updateProduct(item.product.id, { 
-          stock: product.stock + item.quantity 
-        });
+    if (items && items.length > 0) {
+      const productIds = items.map(i => i.product.id);
+      const qtyById = new Map<string, number>();
+      for (const item of items) {
+        qtyById.set(item.product.id, (qtyById.get(item.product.id) || 0) + item.quantity);
       }
+
+      await db.transaction(async (tx) => {
+        const dbProducts = await tx.select().from(products).where(inArray(products.id, productIds));
+        await Promise.all(dbProducts.map(p =>
+          tx.update(products)
+            .set({ stock: p.stock + (qtyById.get(p.id) || 0) })
+            .where(eq(products.id, p.id))
+        ));
+      });
     }
-    
+
     const [updated] = await db
       .update(transactions)
       .set({ status: "voided" })

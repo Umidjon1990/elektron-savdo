@@ -150,17 +150,15 @@ export async function registerRoutes(
     try {
       const allTenants = await storage.getAllTenants();
       const activeStores = allTenants.filter(t => t.status === "active");
-      const publicData = await Promise.all(activeStores.map(async (t) => {
-        const products = await storage.getAllProducts(t.id);
-        return {
-          id: t.id,
-          slug: t.slug,
-          name: t.name,
-          logo: t.logo,
-          brandColor: t.brandColor,
-          status: t.status,
-          productsCount: products.length,
-        };
+      const counts = await storage.getProductCountsByTenants(activeStores.map(t => t.id));
+      const publicData = activeStores.map((t) => ({
+        id: t.id,
+        slug: t.slug,
+        name: t.name,
+        logo: t.logo,
+        brandColor: t.brandColor,
+        status: t.status,
+        productsCount: counts.get(t.id) || 0,
       }));
       res.json(publicData);
     } catch (error) {
@@ -586,20 +584,22 @@ export async function registerRoutes(
 
       const botToken = tenant.telegramBotToken || process.env.TELEGRAM_BOT_TOKEN;
       const chatId = tenant.telegramChatId || process.env.TELEGRAM_CHAT_ID;
-      if (botToken && chatId) {
-        sendTelegramNotification({
-          id: order.id,
-          customerName: order.customerName,
-          customerPhone: order.customerPhone,
-          customerTelegram: order.customerTelegram,
-          items: order.items as any[],
-          totalAmount: order.totalAmount,
-          paymentMethod: order.paymentMethod,
-          deliveryType: order.deliveryType,
-          createdAt: order.createdAt,
-        }, botToken, chatId).catch(err => console.error('Failed to send Telegram notification:', err));
-      }
       res.status(201).json(order);
+      if (botToken && chatId) {
+        setImmediate(() => {
+          sendTelegramNotification({
+            id: order.id,
+            customerName: order.customerName,
+            customerPhone: order.customerPhone,
+            customerTelegram: order.customerTelegram,
+            items: order.items as any[],
+            totalAmount: order.totalAmount,
+            paymentMethod: order.paymentMethod,
+            deliveryType: order.deliveryType,
+            createdAt: order.createdAt,
+          }, botToken, chatId).catch(err => console.error('Failed to send Telegram notification:', err));
+        });
+      }
     } catch (error) {
       console.error("Error creating store order:", error);
       res.status(500).json({ error: "Failed to create order" });
@@ -624,25 +624,31 @@ export async function registerRoutes(
       const validatedData = insertOrderSchema.parse(orderBody);
       const order = await storage.createOrder(validatedData);
       
-      const tenant = await getTenantById(tenantId);
-      const botToken = tenant?.telegramBotToken || process.env.TELEGRAM_BOT_TOKEN;
-      const chatId = tenant?.telegramChatId || process.env.TELEGRAM_CHAT_ID;
-
-      if (botToken && chatId) {
-        sendTelegramNotification({
-          id: order.id,
-          customerName: order.customerName,
-          customerPhone: order.customerPhone,
-          customerTelegram: order.customerTelegram,
-          items: order.items as any[],
-          totalAmount: order.totalAmount,
-          paymentMethod: order.paymentMethod,
-          deliveryType: order.deliveryType,
-          createdAt: order.createdAt,
-        }, botToken, chatId).catch(err => console.error('Failed to send Telegram notification:', err));
-      }
-      
       res.status(201).json(order);
+
+      setImmediate(async () => {
+        try {
+          const tenant = await getTenantById(tenantId);
+          const botToken = tenant?.telegramBotToken || process.env.TELEGRAM_BOT_TOKEN;
+          const chatId = tenant?.telegramChatId || process.env.TELEGRAM_CHAT_ID;
+
+          if (botToken && chatId) {
+            await sendTelegramNotification({
+              id: order.id,
+              customerName: order.customerName,
+              customerPhone: order.customerPhone,
+              customerTelegram: order.customerTelegram,
+              items: order.items as any[],
+              totalAmount: order.totalAmount,
+              paymentMethod: order.paymentMethod,
+              deliveryType: order.deliveryType,
+              createdAt: order.createdAt,
+            }, botToken, chatId);
+          }
+        } catch (err) {
+          console.error('Failed to send Telegram notification:', err);
+        }
+      });
     } catch (error) {
       console.error("Error creating order:", error);
       res.status(400).json({ error: "Invalid order data" });

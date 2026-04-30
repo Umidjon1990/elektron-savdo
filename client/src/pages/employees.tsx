@@ -163,7 +163,8 @@ export default function EmployeesPage() {
       return res.json();
     },
     enabled: !!token,
-    refetchInterval: 30000,
+    refetchOnWindowFocus: true,
+    staleTime: 60000,
   });
 
   const getAttDateRange = () => {

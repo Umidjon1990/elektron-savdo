@@ -18,7 +18,16 @@ Authentication relies on JWT tokens with a 30-day expiration, secured using bcry
 The frontend is built with React 18 and TypeScript, utilizing Wouter for routing and React Context API for state management. Server-side data fetching is managed by TanStack Query. UI components are developed using `shadcn/ui` (built on Radix UI) and styled with Tailwind CSS v4. Vite is used as the build tool. The system supports offline functionality via IndexedDB and Dexie.js.
 
 ### Backend Architecture
-The backend is powered by Express.js and TypeScript, using Drizzle ORM with PostgreSQL for database interactions. It exposes RESTful API endpoints, with rate limiting and gzip compression for efficiency. Key backend components include route definitions with authentication and tenant context, a tenant-scoped database access layer, JWT authentication middleware, tenant resolution, and a per-tenant Telegram notification system.
+The backend is powered by Express.js and TypeScript, using Drizzle ORM with PostgreSQL for database interactions. It exposes RESTful API endpoints, with rate limiting and gzip compression for efficiency. Key backend components include route definitions with authentication and tenant context, a tenant-scoped database access layer, JWT authentication middleware, tenant resolution, and a per-tenant Telegram notification system (fire-and-forget via `setImmediate`).
+
+### Performance Optimizations
+- DB indexes: 21+ tenant_id indexes on hot tables (products, transactions, orders, categories, suppliers, customers, users, expenses, staff_members) plus composites (tenant_id, date DESC), (tenant_id, status), (tenant_id, stock).
+- Connection pool: pg pool max=20, min=2, idleTimeout=30s, statement_timeout=30s, keepAlive enabled.
+- N+1 elimination: `getAllTenantsWithStats` uses 3 GROUP BY queries instead of 3*N. `voidTransaction` uses single `IN` query + parallel updates. `/api/stores` uses `getProductCountsByTenants` (single GROUP BY).
+- Reorder batching: `reorderProducts` and `reorderCategories` use single CASE WHEN UPDATE instead of N updates.
+- Telegram notifications: deferred via `setImmediate` so order POST responds immediately.
+- Log middleware: response body logging only in dev, truncated to 500 chars.
+- Frontend refetch: courier-deliveries and employees use `refetchOnWindowFocus + staleTime` instead of 30s polling.
 
 ### Data Storage
 PostgreSQL serves as the primary database, with Drizzle ORM managing schema and queries. Tenant isolation is enforced by filtering all queries by `tenant_id`. The database schema, defined in `/shared/schema.ts`, includes tables for tenants, users, products, orders, categories, transactions, income/expense categories, and shift handovers. Barcodes maintain uniqueness across each tenant.

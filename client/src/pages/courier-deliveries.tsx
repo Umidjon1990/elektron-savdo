@@ -55,7 +55,8 @@ export default function CourierDeliveriesPage() {
       return res.json();
     },
     enabled: !!token,
-    refetchInterval: 30000,
+    refetchOnWindowFocus: true,
+    staleTime: 60000,
   });
 
   const markDelivered = useMutation({

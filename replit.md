@@ -34,9 +34,10 @@ The backend is powered by Express.js and TypeScript, using Drizzle ORM with Post
 - Receipt dialog: `max-h-[90vh] flex flex-col` with inner `overflow-y-auto` body and sticky `shrink-0` footer so "Chop etish" button always remains visible/tappable.
 
 ### Print System
-- Receipt printing is scoped behind `body.print-receipt-mode` class. ReceiptDialog adds the class before `window.print()` and removes it via `afterprint` event (with 10s safety-net timeout). Container content is emptied when dialog closes.
-- Named CSS `@page receiptPage { size: 80mm auto; margin: 0 }` is opted into only in receipt mode — other print flows (Finance reports via `window.print()`, barcode-print popup) keep default paper size.
-- Previous bug: `visibility: hidden` left elements occupying layout space → 368 A4 pages on XP-365B thermal printer. Replaced with `display: none` scoped to receipt mode → single 80mm page.
+- **Receipt printing**: uses `window.open()` popup with self-contained HTML (`buildReceiptHtml` in `receipt-dialog.tsx`) — same proven pattern as `barcode-print.tsx`. The popup's `<head>` includes `@page { size: 80mm auto; margin: 0 }` and `html/body { width: 80mm }`. The popup's own inline script waits for images to load (or 3s timeout), calls `window.print()`, then `window.close()`. Logo and Telegram QR are preloaded via `new Image()` for cache warmth.
+- **Why popup vs. in-page CSS**: thermal printer drivers (XP-365B) ignored named `@page` rules in the main app's stylesheet, so the receipt rendered at A4 width → 700+ pages. An isolated popup document gets a fresh print context where `@page` is honored.
+- **XSS protection**: `escapeHtml()` helper escapes all user-supplied content (product/customer names, store info, footer text, payment labels, IDs, dates).
+- **Finance reports & other print flows**: use plain `window.print()`. Only `.no-print` CSS class remains in `index.css` to hide toolbar buttons during print. Receipt printing no longer affects this stylesheet at all.
 
 ### Data Storage
 PostgreSQL serves as the primary database, with Drizzle ORM managing schema and queries. Tenant isolation is enforced by filtering all queries by `tenant_id`. The database schema, defined in `/shared/schema.ts`, includes tables for tenants, users, products, orders, categories, transactions, income/expense categories, and shift handovers. Barcodes maintain uniqueness across each tenant.

@@ -155,6 +155,15 @@ function ReceiptContent({ transaction, settings, receiptLogo, paymentMethods }: 
   );
 }
 
+function escapeHtml(s: unknown): string {
+  return String(s ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 export function ReceiptDialog({ transaction, isOpen, onClose }: ReceiptDialogProps) {
   const { settings } = useSettings();
   const { token } = useAuth();
@@ -182,160 +191,177 @@ export function ReceiptDialog({ transaction, isOpen, onClose }: ReceiptDialogPro
     return PAYMENT_LABELS[method] || method;
   };
 
-  const handlePrint = async () => {
-    const printContainer = document.getElementById('receipt-print-container');
-    if (!printContainer) {
-      window.print();
-      return;
-    }
-
-    const images = printContainer.querySelectorAll('img');
-    const imagePromises = Array.from(images).map(img => {
-      if (img.complete) return Promise.resolve();
-      return new Promise<void>((resolve) => {
-        img.onload = () => resolve();
-        img.onerror = () => resolve();
-        setTimeout(resolve, 2000);
-      });
-    });
-
-    await Promise.all(imagePromises);
-    await new Promise(resolve => setTimeout(resolve, 300));
-
-    // Activate receipt-only print mode (scoped CSS in index.css)
-    document.body.classList.add('print-receipt-mode');
-
-    const cleanup = () => {
-      document.body.classList.remove('print-receipt-mode');
-      window.removeEventListener('afterprint', cleanup);
-    };
-    window.addEventListener('afterprint', cleanup);
-    // Safety net in case afterprint never fires (some browsers)
-    setTimeout(cleanup, 10000);
-
-    try {
-      window.print();
-    } catch (err) {
-      cleanup();
-      console.error('Print failed:', err);
-    }
-  };
-
+  // Preload images so they're cached when the print window opens
   useEffect(() => {
     if (!transaction) return;
     if (receiptLogo) {
       const logoImg = new Image();
       logoImg.src = receiptLogo;
     }
-    
     if (settings.telegramUsername) {
       const qrImg = new Image();
       qrImg.src = `https://api.qrserver.com/v1/create-qr-code/?size=100x100&data=https://t.me/${settings.telegramUsername}&color=000000`;
     }
   }, [settings.telegramUsername, receiptLogo, transaction]);
 
-  useEffect(() => {
-    if (!isOpen || !transaction) return;
-    
-    let printContainer = document.getElementById('receipt-print-container');
-    if (!printContainer) {
-      printContainer = document.createElement('div');
-      printContainer.id = 'receipt-print-container';
-      printContainer.style.cssText = 'position:fixed;left:-9999px;top:0;width:80mm;background:white;padding:2mm;';
-      document.body.appendChild(printContainer);
+  const buildReceiptHtml = (): string => {
+    if (!transaction) return '';
+
+    const logoHtml = receiptLogo
+      ? `<img src="${escapeHtml(receiptLogo)}" alt="Logo" style="width:45px;height:45px;display:block;margin:0 auto 4px;object-fit:contain;">`
+      : `<div style="width:45px;height:45px;border-radius:50%;background:#eef2ff;display:flex;align-items:center;justify-content:center;margin:0 auto 4px;"><span style="font-size:24px;font-weight:900;color:#4f46e5;">${escapeHtml((settings.storeName || 'S').charAt(0).toUpperCase())}</span></div>`;
+
+    const customerHtml = (transaction.customerName || transaction.customerPhone) ? `
+      <div style="border-top:1px dashed #666;margin:4px 0;"></div>
+      <div style="font-size:10px;color:#000;margin-bottom:4px;">
+        ${transaction.customerName ? `<p style="margin:0;font-weight:600;">Mijoz: ${escapeHtml(transaction.customerName)}</p>` : ''}
+        ${transaction.customerPhone ? `<p style="margin:0;font-weight:600;">Tel: ${escapeHtml(transaction.customerPhone)}</p>` : ''}
+        ${transaction.customerInfo && typeof transaction.customerInfo === 'object' ? Object.values(transaction.customerInfo).map(v => `<p style="margin:0;font-weight:600;">${escapeHtml(v)}</p>`).join('') : ''}
+      </div>
+    ` : '';
+
+    const safeItems = (transaction.items || []).filter((item: any) => item && item.product);
+
+    const itemsHtml = safeItems.map((item: any) => `
+      <div style="margin-bottom:4px;color:#000;">
+        <div style="font-size:11px;font-weight:700;">${escapeHtml(item.product.name)}</div>
+        <div style="display:flex;justify-content:space-between;font-size:10px;">
+          <span style="font-weight:600;">${escapeHtml(item.quantity)} x ${Number(item.product.price || 0).toLocaleString()}</span>
+          <span style="font-weight:700;font-family:monospace;">${(item.quantity * Number(item.product.price || 0)).toLocaleString()}</span>
+        </div>
+      </div>
+    `).join('');
+
+    const qrHtml = settings.telegramUsername ? `
+      <div style="text-align:center;margin:10px 0;">
+        <img src="https://api.qrserver.com/v1/create-qr-code/?size=100x100&data=https://t.me/${encodeURIComponent(settings.telegramUsername)}&color=000000" alt="QR" style="width:60px;height:60px;display:block;margin:0 auto;">
+      </div>` : '';
+
+    return `<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Chek</title>
+<style>
+  @page { size: 80mm auto; margin: 0; }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0;
+    padding: 0;
+    width: 80mm;
+    background: #fff;
+    color: #000;
+    font-family: Arial, sans-serif;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  .receipt {
+    width: 80mm;
+    padding: 2mm;
+    page-break-inside: avoid;
+    break-inside: avoid;
+  }
+  p { margin: 0; }
+  table { border-collapse: collapse; }
+</style>
+</head>
+<body>
+  <div class="receipt">
+    <div style="text-align:center;margin-bottom:8px;">
+      ${logoHtml}
+      <h2 style="font-size:14px;font-weight:900;margin:0;color:#000;">${escapeHtml((settings.storeName || '').toUpperCase())}</h2>
+      <p style="font-size:10px;color:#000;margin:2px 0;font-weight:600;">${escapeHtml(settings.storeAddress || '')}</p>
+      <p style="font-size:10px;color:#000;margin:0;font-weight:600;">${escapeHtml(settings.storePhone || '')}</p>
+    </div>
+    <div style="border-top:1px dashed #000;margin:6px 0;"></div>
+    <div style="font-size:10px;color:#000;margin-bottom:6px;font-weight:600;text-align:center;">
+      <p style="margin:0;">Chek: ${escapeHtml((transaction.id || '').slice(0, 8))}</p>
+      <p style="margin:2px 0 0;">Sana: ${escapeHtml(new Date(transaction.date).toLocaleDateString())}</p>
+    </div>
+    ${customerHtml}
+    <div style="border-top:1px dashed #000;margin:6px 0;"></div>
+    <div style="margin-bottom:6px;">${itemsHtml}</div>
+    <div style="border-top:1px dashed #000;margin:6px 0;"></div>
+    <table style="width:100%;font-size:11px;color:#000;margin-bottom:6px;">
+      <tr>
+        <td style="font-weight:600;">Jami:</td>
+        <td style="text-align:right;font-family:monospace;font-weight:600;">${Number(transaction.totalAmount || 0).toLocaleString()} so'm</td>
+      </tr>
+      <tr>
+        <td style="font-size:13px;font-weight:900;">TO'LANDI:</td>
+        <td style="text-align:right;font-family:monospace;font-size:13px;font-weight:900;">${Number(transaction.totalAmount || 0).toLocaleString()} so'm</td>
+      </tr>
+      <tr>
+        <td colspan="2" style="text-align:right;font-size:9px;font-weight:600;">To'lov: ${escapeHtml(getPaymentLabel(transaction.paymentMethod || 'cash'))}</td>
+      </tr>
+    </table>
+    ${qrHtml}
+    <div style="text-align:center;">
+      <p style="font-size:10px;color:#000;margin:0;font-weight:700;">${escapeHtml(settings.receiptFooter || '')}</p>
+      ${settings.telegramUsername ? `<p style="font-size:9px;color:#000;margin:2px 0 0;font-weight:600;">Telegram: @${escapeHtml(settings.telegramUsername)}</p>` : ''}
+    </div>
+  </div>
+  <script>
+    (function() {
+      var printed = false;
+      function doPrint() {
+        if (printed) return;
+        printed = true;
+        try { window.focus(); window.print(); } catch (e) { console.error(e); }
+        setTimeout(function() { try { window.close(); } catch (e) {} }, 500);
+      }
+      var imgs = document.images;
+      if (!imgs || imgs.length === 0) {
+        setTimeout(doPrint, 100);
+        return;
+      }
+      var loaded = 0;
+      var total = imgs.length;
+      function check() {
+        loaded++;
+        if (loaded >= total) setTimeout(doPrint, 150);
+      }
+      for (var i = 0; i < total; i++) {
+        var im = imgs[i];
+        if (im.complete) { check(); }
+        else { im.onload = check; im.onerror = check; }
+      }
+      setTimeout(doPrint, 3000);
+    })();
+  </script>
+</body>
+</html>`;
+  };
+
+  const handlePrint = () => {
+    if (!transaction) return;
+
+    const html = buildReceiptHtml();
+    if (!html) return;
+
+    const printWindow = window.open('', '_blank', 'width=400,height=600');
+    if (!printWindow) {
+      alert("Pop-up oynalarni ruxsat bering va qayta urinib ko'ring");
+      return;
     }
-    
-    try {
-      const logoHtml = receiptLogo
-        ? `<img src="${receiptLogo}" alt="Logo" style="width:45px;height:45px;display:block;margin:0 auto 4px;object-fit:contain;">`
-        : `<div style="width:45px;height:45px;border-radius:50%;background:#eef2ff;display:flex;align-items:center;justify-content:center;margin:0 auto 4px;"><span style="font-size:24px;font-weight:900;color:#4f46e5;">${(settings.storeName || 'S').charAt(0).toUpperCase()}</span></div>`;
 
-      const customerHtml = (transaction.customerName || transaction.customerPhone) ? `
-        <div style="border-top:1px dashed #666;margin:4px 0;"></div>
-        <div style="font-size:10px;color:#000;margin-bottom:4px;">
-          ${transaction.customerName ? `<p style="margin:0;font-weight:600;">Mijoz: ${transaction.customerName}</p>` : ''}
-          ${transaction.customerPhone ? `<p style="margin:0;font-weight:600;">Tel: ${transaction.customerPhone}</p>` : ''}
-          ${transaction.customerInfo && typeof transaction.customerInfo === 'object' ? Object.values(transaction.customerInfo).map(v => `<p style="margin:0;font-weight:600;">${String(v || '')}</p>`).join('') : ''}
-        </div>
-      ` : '';
-
-      const safeItems = (transaction.items || []).filter((item: any) => item && item.product);
-
-      printContainer.innerHTML = `
-        <div style="text-align:center;margin-bottom:8px;">
-          ${logoHtml}
-          <h2 style="font-size:14px;font-weight:900;margin:0;color:#000;">${(settings.storeName || '').toUpperCase()}</h2>
-          <p style="font-size:10px;color:#000;margin:2px 0;font-weight:600;">${settings.storeAddress || ''}</p>
-          <p style="font-size:10px;color:#000;margin:0;font-weight:600;">${settings.storePhone || ''}</p>
-        </div>
-        <div style="border-top:1px dashed #000;margin:6px 0;"></div>
-        <div style="font-size:10px;color:#000;margin-bottom:6px;font-weight:600;text-align:center;">
-          <p style="margin:0;">Chek: ${(transaction.id || '').slice(0, 8)}</p>
-          <p style="margin:2px 0 0;">Sana: ${new Date(transaction.date).toLocaleDateString()}</p>
-        </div>
-        ${customerHtml}
-        <div style="border-top:1px dashed #000;margin:6px 0;"></div>
-        <div style="margin-bottom:6px;">
-          ${safeItems.map((item: any) => `
-            <div style="margin-bottom:4px;color:#000;">
-              <div style="font-size:11px;font-weight:700;">${item.product.name || ''}</div>
-              <div style="display:flex;justify-content:space-between;font-size:10px;">
-                <span style="font-weight:600;">${item.quantity} x ${Number(item.product.price || 0).toLocaleString()}</span>
-                <span style="font-weight:700;font-family:monospace;">${(item.quantity * Number(item.product.price || 0)).toLocaleString()}</span>
-              </div>
-            </div>
-          `).join('')}
-        </div>
-        <div style="border-top:1px dashed #000;margin:6px 0;"></div>
-        <table style="width:100%;font-size:11px;color:#000;margin-bottom:6px;">
-          <tr>
-            <td style="font-weight:600;">Jami:</td>
-            <td style="text-align:right;font-family:monospace;font-weight:600;">${Number(transaction.totalAmount || 0).toLocaleString()} so'm</td>
-          </tr>
-          <tr>
-            <td style="font-size:13px;font-weight:900;">TO'LANDI:</td>
-            <td style="text-align:right;font-family:monospace;font-size:13px;font-weight:900;">${Number(transaction.totalAmount || 0).toLocaleString()} so'm</td>
-          </tr>
-          <tr>
-            <td colspan="2" style="text-align:right;font-size:9px;font-weight:600;">To'lov: ${getPaymentLabel(transaction.paymentMethod || 'cash')}</td>
-          </tr>
-        </table>
-        ${settings.telegramUsername ? `
-        <div style="text-align:center;margin:10px 0;">
-          <img src="https://api.qrserver.com/v1/create-qr-code/?size=100x100&data=https://t.me/${settings.telegramUsername}&color=000000" alt="QR" style="width:60px;height:60px;display:block;margin:0 auto;">
-        </div>` : ''}
-        <div style="text-align:center;">
-          <p style="font-size:10px;color:#000;margin:0;font-weight:700;">${settings.receiptFooter || ''}</p>
-          ${settings.telegramUsername ? `<p style="font-size:9px;color:#000;margin:2px 0 0;font-weight:600;">Telegram: @${settings.telegramUsername}</p>` : ''}
-        </div>
-      `;
-    } catch (err) {
-      console.error("Receipt print error:", err);
-    }
-  }, [isOpen, transaction, settings, receiptLogo, tenantSettings]);
-
-  // Cleanup: empty the print container when dialog closes so its stale content
-  // cannot accidentally appear in other print jobs (e.g. Finance reports).
-  useEffect(() => {
-    if (isOpen) return;
-    const printContainer = document.getElementById('receipt-print-container');
-    if (printContainer) {
-      printContainer.innerHTML = '';
-    }
-  }, [isOpen]);
+    printWindow.document.open();
+    printWindow.document.write(html);
+    printWindow.document.close();
+  };
 
   if (!transaction) return null;
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-[380px] p-0 bg-white gap-0 no-print max-h-[90vh] flex flex-col overflow-hidden">
+      <DialogContent className="sm:max-w-[380px] p-0 bg-white gap-0 max-h-[90vh] flex flex-col overflow-hidden">
         <div className="flex-1 overflow-y-auto p-6 flex flex-col items-center text-center bg-white" id="receipt-area">
           <ReceiptErrorBoundary onError={onClose}>
             <ReceiptContent transaction={transaction} settings={settings} receiptLogo={receiptLogo} paymentMethods={tenantSettings?.paymentMethods} />
           </ReceiptErrorBoundary>
         </div>
 
-        <div className="shrink-0 p-4 bg-gray-50 border-t flex gap-2 no-print sticky bottom-0">
+        <div className="shrink-0 p-4 bg-gray-50 border-t flex gap-2 sticky bottom-0">
           <Button variant="outline" className="flex-1" onClick={onClose} data-testid="button-close-receipt">
             Yopish
           </Button>

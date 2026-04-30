@@ -54,11 +54,12 @@ async function compressImage(
       resolve(result);
     };
 
-    // Hard timeout: if image never loads/decodes within 15s, skip compression and upload original
+    // Hard timeout: if image never loads/decodes within 6s, skip compression and upload original.
+    // iOS Safari can hang on certain HEIC/large images — keep this short so the UI never feels frozen.
     const timeoutId = setTimeout(() => {
       console.warn("Image compression timed out, uploading original");
       finish(file);
-    }, 15000);
+    }, 6000);
 
     img.onload = () => {
       clearTimeout(timeoutId);

@@ -21,6 +21,7 @@ import {
 import { ScannerOverlay } from "@/components/pos/scanner-overlay";
 import { ProductInfoDialog } from "@/components/pos/product-info-dialog";
 import { ReceiptDialog } from "@/components/pos/receipt-dialog";
+import { buildReceiptHtml } from "@/lib/receipt-html";
 import { ReceiptsListDialog } from "@/components/pos/receipts-list-dialog";
 import { SoldItemsDialog } from "@/components/pos/sold-items-dialog";
 import { useToast } from "@/hooks/use-toast";
@@ -367,8 +368,40 @@ export default function Dashboard() {
       });
 
       setLastTransaction(transaction);
-      setIsReceiptOpen(true);
       setIsMobileCartOpen(false);
+
+      // AUTO-PRINT FAST PATH: skip the on-screen receipt dialog entirely.
+      // Write the receipt HTML straight into the popup we pre-opened during
+      // the click. The popup's own inline script calls window.print() and then
+      // closes itself — so the user just clicks "Sotildi" and the printer
+      // dialog appears immediately with no extra clicks.
+      let autoPrintSucceeded = false;
+      if (settings.autoPrint && preOpenedPrintWindowRef.current) {
+        const printWin = preOpenedPrintWindowRef.current;
+        preOpenedPrintWindowRef.current = null;
+        if (!printWin.closed) {
+          try {
+            const html = buildReceiptHtml({ transaction, settings, tenantSettings });
+            printWin.document.open();
+            printWin.document.write(html);
+            printWin.document.close();
+            autoPrintSucceeded = true;
+          } catch (err) {
+            console.error("Auto-print write failed:", err);
+            try { printWin.close(); } catch {}
+          }
+        } else {
+          console.warn("Auto-print popup was closed before we could write to it");
+        }
+      }
+
+      // Fall back to the on-screen dialog when:
+      //  - autoPrint is off (manual mode), OR
+      //  - autoPrint was on but the pre-opened popup was blocked / closed / errored.
+      // This guarantees the user always has a way to see/print the receipt.
+      if (!autoPrintSucceeded) {
+        setIsReceiptOpen(true);
+      }
 
       toast({
         title: deliveryData ? "Buyurtma yaratildi va kuriyerga biriktirildi!" : "To'lov qabul qilindi!",
@@ -768,12 +801,6 @@ export default function Dashboard() {
             } catch {}
             preOpenedPrintWindowRef.current = null;
           }
-        }}
-        autoPrint={settings.autoPrint}
-        consumePreOpenedWindow={() => {
-          const w = preOpenedPrintWindowRef.current;
-          preOpenedPrintWindowRef.current = null;
-          return w && !w.closed ? w : null;
         }}
       />
 

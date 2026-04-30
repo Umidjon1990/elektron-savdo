@@ -382,7 +382,7 @@ export default function SettingsPage() {
     <div className="flex min-h-screen bg-slate-50">
       <SidebarNav />
       
-      <main className="flex-1 p-4 md:p-6 pb-20 md:pb-6">
+      <main className="flex-1 min-w-0 p-4 md:p-6 pb-20 md:pb-6">
         <div className="max-w-4xl mx-auto">
           <div className="mb-6">
             <h1 className="text-2xl font-bold text-slate-900" data-testid="text-page-title">Sozlamalar</h1>

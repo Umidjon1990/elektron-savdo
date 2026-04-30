@@ -1,9 +1,11 @@
 import { Link, useLocation } from "wouter";
 import { cn } from "@/lib/utils";
-import { LayoutDashboard, Package, Settings, LogOut, Store, Users, Download, MoreHorizontal, Layers, Crown, Wallet, UserCheck } from "lucide-react";
+import { LayoutDashboard, Package, Settings, LogOut, Store, Users, Download, MoreHorizontal, Layers, Crown, Wallet, UserCheck, ChevronsLeft, ChevronsRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useState, useEffect } from "react";
 import { useAuth } from "@/lib/auth-context";
+
+const SIDEBAR_PREF_KEY = "esavdo-sidebar-expanded";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -30,7 +32,22 @@ export function SidebarNav() {
   const [location] = useLocation();
   const [installPrompt, setInstallPrompt] = useState<any>(null);
   const [isInstalled, setIsInstalled] = useState(false);
+  // Default to expanded so labels are clearly readable. User can collapse
+  // to the original compact mode via the toggle button. Preference persists.
+  const [expanded, setExpanded] = useState<boolean>(() => {
+    if (typeof window === "undefined") return true;
+    const stored = window.localStorage.getItem(SIDEBAR_PREF_KEY);
+    return stored === null ? true : stored === "true";
+  });
   const { user, tenant, logout } = useAuth();
+
+  const toggleExpanded = () => {
+    setExpanded((prev) => {
+      const next = !prev;
+      try { window.localStorage.setItem(SIDEBAR_PREF_KEY, String(next)); } catch {}
+      return next;
+    });
+  };
 
   const slug = tenant?.slug;
   const navItems = getNavItems(slug);
@@ -66,60 +83,122 @@ export function SidebarNav() {
 
   return (
     <>
-      {/* Desktop Sidebar */}
-      <div className="hidden md:flex w-20 bg-gradient-to-b from-slate-900 to-slate-800 flex-col items-center py-3 gap-2 h-screen sticky top-0 left-0 z-40 text-white shadow-2xl">
-        <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-blue-600 rounded-2xl flex items-center justify-center shadow-lg shadow-blue-500/30 text-white shrink-0">
-          <Store className="h-6 w-6" />
+      {/* Desktop Sidebar — width adapts to expanded preference */}
+      <div className={cn(
+        "hidden md:flex bg-gradient-to-b from-slate-900 to-slate-800 flex-col py-3 gap-2 h-screen sticky top-0 left-0 z-40 text-white shadow-2xl transition-all duration-200",
+        expanded ? "w-52 items-stretch px-3" : "w-20 items-center"
+      )}>
+        {/* Header: logo + collapse/expand toggle */}
+        <div className={cn(
+          "flex items-center shrink-0",
+          expanded ? "justify-between gap-2" : "justify-center"
+        )}>
+          <div className={cn(
+            "bg-gradient-to-br from-blue-500 to-blue-600 rounded-2xl flex items-center justify-center shadow-lg shadow-blue-500/30 text-white shrink-0",
+            expanded ? "w-11 h-11" : "w-12 h-12"
+          )}>
+            <Store className={expanded ? "h-5 w-5" : "h-6 w-6"} />
+          </div>
+          <button
+            onClick={toggleExpanded}
+            className={cn(
+              "rounded-lg text-slate-400 hover:text-white hover:bg-white/10 transition-all flex items-center justify-center shrink-0",
+              expanded ? "w-8 h-8" : "w-7 h-7 mt-1"
+            )}
+            title={expanded ? "Yig'ish" : "Kengaytirish"}
+            data-testid="button-toggle-sidebar"
+          >
+            {expanded ? <ChevronsLeft className="h-4 w-4" /> : <ChevronsRight className="h-4 w-4" />}
+          </button>
         </div>
 
-        <nav className="flex-1 flex flex-col gap-1 w-full px-2 overflow-y-auto overflow-x-hidden min-h-0 scrollbar-none">
+        <nav className={cn(
+          "flex-1 flex flex-col gap-1 w-full overflow-y-auto overflow-x-hidden min-h-0 scrollbar-none",
+          expanded ? "" : "px-2"
+        )}>
           {navItems.map((item) => (
             <Link key={item.href} href={item.href} className={cn(
-              "flex flex-col items-center justify-center p-2 rounded-xl transition-all gap-1 group cursor-pointer shrink-0",
-              location === item.href 
-                ? "bg-white/15 text-white shadow-lg" 
-                : "text-slate-400 hover:text-white hover:bg-white/5"
+              "rounded-xl transition-all group cursor-pointer shrink-0 flex",
+              expanded
+                ? "flex-row items-center gap-3 px-3 py-2.5"
+                : "flex-col items-center justify-center p-2 gap-1",
+              location === item.href
+                ? "bg-white/15 text-white shadow-lg"
+                : "text-slate-300 hover:text-white hover:bg-white/5"
             )}>
               <div className={cn(
-                "w-9 h-9 rounded-xl flex items-center justify-center transition-all",
-                location === item.href 
-                  ? "bg-gradient-to-br from-blue-500 to-blue-600 shadow-lg shadow-blue-500/30" 
+                "rounded-xl flex items-center justify-center transition-all shrink-0",
+                expanded ? "w-10 h-10" : "w-10 h-10",
+                location === item.href
+                  ? "bg-gradient-to-br from-blue-500 to-blue-600 shadow-lg shadow-blue-500/30"
                   : "group-hover:bg-white/10"
               )}>
-                <item.icon className={cn("h-4.5 w-4.5", location === item.href ? "text-white" : "")} />
+                <item.icon className={cn(
+                  expanded ? "h-5 w-5" : "h-5 w-5",
+                  location === item.href ? "text-white" : ""
+                )} />
               </div>
-              <span className={cn("text-[9px] font-medium leading-tight", location === item.href && "font-semibold")}>{item.label}</span>
+              {expanded ? (
+                <span className={cn(
+                  "text-sm leading-tight truncate",
+                  location === item.href ? "font-semibold" : "font-medium"
+                )}>{item.label}</span>
+              ) : (
+                <span className={cn(
+                  "text-[10px] font-medium leading-tight",
+                  location === item.href && "font-semibold"
+                )}>{item.label}</span>
+              )}
             </Link>
           ))}
         </nav>
 
-        <div className="px-2 w-full space-y-1 shrink-0">
+        <div className={cn("w-full space-y-1 shrink-0", expanded ? "" : "px-2")}>
           {user?.isSuper && (
             <Link href={superAdminHref} className={cn(
-              "w-full h-12 rounded-xl flex flex-col items-center justify-center gap-0.5 border transition-all",
+              "w-full rounded-xl border transition-all flex",
+              expanded
+                ? "flex-row items-center gap-3 px-3 py-2.5"
+                : "flex-col items-center justify-center gap-0.5 h-12",
               location === superAdminHref
                 ? "bg-amber-500/20 text-amber-400 border-amber-500/30"
                 : "bg-amber-500/10 text-amber-400 hover:text-amber-300 hover:bg-amber-500/20 border-amber-500/20"
             )} data-testid="link-super-admin">
-              <Crown className="h-4 w-4" />
-              <span className="text-[8px] font-medium">Super Admin</span>
+              <Crown className={expanded ? "h-5 w-5 shrink-0" : "h-4 w-4"} />
+              <span className={expanded ? "text-sm font-semibold" : "text-[9px] font-medium"}>Super Admin</span>
             </Link>
           )}
           {!isInstalled && (
-            <Button 
-              variant="ghost" 
+            <Button
+              variant="ghost"
               onClick={installPrompt ? handleInstall : () => {
                 alert("O'rnatish uchun:\n1. Chrome/Edge brauzerida oching\n2. Manzil satrida ⋮ menyusini bosing\n3. 'Ilovani o'rnatish' ni tanlang");
               }}
-              className="w-full h-12 rounded-xl bg-green-500/10 text-green-400 hover:text-green-300 hover:bg-green-500/20 flex flex-col items-center justify-center gap-0.5 border border-green-500/20"
+              className={cn(
+                "w-full rounded-xl bg-green-500/10 text-green-400 hover:text-green-300 hover:bg-green-500/20 border border-green-500/20 flex",
+                expanded
+                  ? "flex-row items-center justify-start gap-3 px-3 py-2.5 h-auto"
+                  : "flex-col items-center justify-center gap-0.5 h-12"
+              )}
               data-testid="button-install"
             >
-              <Download className="h-4 w-4" />
-              <span className="text-[8px] font-medium">O'rnatish</span>
+              <Download className={expanded ? "h-5 w-5 shrink-0" : "h-4 w-4"} />
+              <span className={expanded ? "text-sm font-semibold" : "text-[9px] font-medium"}>O'rnatish</span>
             </Button>
           )}
-          <Button variant="ghost" size="icon" className="w-full h-10 rounded-xl text-slate-500 hover:text-red-400 hover:bg-red-500/10" onClick={logout}>
-            <LogOut className="h-4 w-4" />
+          <Button
+            variant="ghost"
+            className={cn(
+              "w-full rounded-xl text-slate-400 hover:text-red-400 hover:bg-red-500/10 flex",
+              expanded
+                ? "flex-row items-center justify-start gap-3 px-3 py-2.5 h-auto"
+                : "flex-col items-center justify-center h-10 p-0"
+            )}
+            onClick={logout}
+            data-testid="button-logout"
+          >
+            <LogOut className={expanded ? "h-5 w-5 shrink-0" : "h-4 w-4"} />
+            {expanded && <span className="text-sm font-medium">Chiqish</span>}
           </Button>
         </div>
       </div>

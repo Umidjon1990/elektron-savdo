@@ -48,6 +48,11 @@ For tenants with thousands of products, the following changes prevent UI freezes
 - **Dashboard's `filteredProducts` is `useMemo`'d** with the search query lowercased once outside the filter loop. Returns the original `products` reference unchanged when no filters are active (keeps memo equality stable downstream).
 - **`<img>` elements have explicit `width`/`height` + `decoding="async"`** to prevent layout thrash and unblock the main thread during image decoding. `loading="lazy"` was already present.
 
+### Sidebar (Desktop)
+- `SidebarNav` (desktop) supports two widths: compact `w-20` (icons + tiny text-[10px] labels) and expanded `w-52` (icons + horizontal text-sm labels). Toggle button (ChevronsLeft/Right) lives in the sidebar header. Preference persisted to localStorage key `esavdo-sidebar-expanded`. **Default = expanded** so labels like "Kassa", "Ombor" are clearly readable.
+- All admin page main containers use `flex-1 min-w-0` after `<SidebarNav />` to prevent horizontal overflow when sidebar widens (verified in customers, settings, categories, employees, history, dashboard, inventory, finance).
+- Mobile bottom nav unchanged (untouched).
+
 ### Settings
 - `settings.autoPrint` defaults to `true` for new installs. A one-time migration (`pos_settings_autoprint_migrated_v1` localStorage key) force-enables it once for existing installs that explicitly had `autoPrint: false`. Future user toggles are respected.
 

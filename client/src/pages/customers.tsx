@@ -251,7 +251,7 @@ export default function CustomersPage() {
   return (
     <div className="flex min-h-screen bg-slate-50">
       <SidebarNav />
-      <main className="flex-1 p-4 md:p-8 pb-24 md:pb-8">
+      <main className="flex-1 min-w-0 p-4 md:p-8 pb-24 md:pb-8">
         <div className="max-w-7xl mx-auto">
           <div className="flex items-center justify-between mb-6">
             <div>

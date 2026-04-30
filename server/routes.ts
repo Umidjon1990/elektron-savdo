@@ -2142,5 +2142,114 @@ export async function registerRoutes(
     }
   });
 
+  // Bulk-pay supplier debt: distributes a payment across the supplier's
+  // unpaid nasiya products (oldest first), updating each product's debt
+  // status. Optionally records an expense entry so the cash register
+  // reflects the outflow.
+  app.post("/api/suppliers/pay-debt", authMiddleware, async (req: any, res) => {
+    try {
+      const { supplierName, amount, paymentMethod, expenseCategoryId, note, recordExpense } = req.body || {};
+      const payAmount = Number(amount);
+      if (!supplierName || !payAmount || payAmount <= 0) {
+        return res.status(400).json({ error: "supplierName va musbat amount kerak" });
+      }
+      const method = paymentMethod === "karta" ? "karta" : "naqd";
+
+      // If recording an expense, validate the category exists for this tenant
+      // BEFORE we apply any debt updates (avoid partial-failure surprises).
+      if (recordExpense !== false && expenseCategoryId) {
+        const tenantCategories = await storage.getExpenseCategories(req.tenantId);
+        if (!tenantCategories.some((c: any) => c.id === expenseCategoryId)) {
+          return res.status(400).json({ error: "Xarajat kategoriyasi topilmadi" });
+        }
+      }
+
+      const allProducts = await storage.getAllProducts(req.tenantId);
+      // Deterministic ordering: existing storage order (sortOrder) is used as
+      // a stable secondary key. Without a per-product createdAt we cannot do
+      // strict oldest-first; debts are paid down in the order returned by
+      // storage which is consistent across requests.
+      const debts = allProducts
+        .filter((p: any) =>
+          (p.supplier || "") === supplierName &&
+          (p.supplierPaymentMethod || "naqd") === "nasiya" &&
+          (p.supplierDebtStatus || "pending") !== "paid"
+        )
+        .map((p: any) => ({
+          id: p.id,
+          name: p.name,
+          amount: (p.costPrice || 0) * (p.stock || 0),
+          paidAmount: p.supplierPaidAmount || 0,
+        }))
+        .filter(p => p.amount - p.paidAmount > 0);
+
+      const totalDebt = debts.reduce((s, p) => s + (p.amount - p.paidAmount), 0);
+      if (totalDebt <= 0) {
+        return res.status(400).json({ error: "Bu yetkazib beruvchida qarz yo'q" });
+      }
+      if (payAmount > totalDebt) {
+        return res.status(400).json({
+          error: `To'lov miqdori qarzdan oshib ketdi. Maksimal: ${totalDebt.toLocaleString()} so'm`,
+        });
+      }
+
+      let remaining = payAmount;
+      const used = payAmount;
+      const updates: { id: string; status: "paid" | "partial"; paidAmount: number }[] = [];
+
+      for (const p of debts) {
+        if (remaining <= 0) break;
+        const owed = p.amount - p.paidAmount;
+        if (remaining >= owed) {
+          updates.push({ id: p.id, status: "paid", paidAmount: p.amount });
+          remaining -= owed;
+        } else {
+          updates.push({ id: p.id, status: "partial", paidAmount: p.paidAmount + remaining });
+          remaining = 0;
+        }
+      }
+
+      // Apply updates in parallel (per-product PATCH equivalent)
+      await Promise.all(updates.map(u =>
+        storage.updateProduct(u.id, {
+          supplierDebtStatus: u.status,
+          supplierPaidAmount: u.paidAmount,
+        } as any, req.tenantId)
+      ));
+
+      // Optionally create an expense so the cash register reflects the outflow
+      let expenseId: string | undefined;
+      if (recordExpense !== false && expenseCategoryId) {
+        try {
+          const description = note?.trim()
+            ? `${supplierName}: ${note.trim()} (${method === "karta" ? "Karta" : "Naqd"})`
+            : `${supplierName} - tovar qarzi to'lovi (${method === "karta" ? "Karta" : "Naqd"})`;
+          const expense = await storage.createExpense({
+            tenantId: req.tenantId,
+            amount: used,
+            categoryId: expenseCategoryId,
+            description,
+            date: new Date(),
+          } as any);
+          expenseId = (expense as any)?.id;
+        } catch (e) {
+          // Expense creation should not block the debt payment itself.
+          console.error("[pay-debt] failed to create expense:", e);
+        }
+      }
+
+      res.json({
+        success: true,
+        used,
+        leftover: payAmount - used,
+        productsUpdated: updates.length,
+        expenseId,
+      });
+    } catch (error) {
+      console.error("[pay-debt] error:", error);
+      res.status(500).json({ error: "To'lovni amalga oshirib bo'lmadi" });
+    }
+  });
+
   return httpServer;
 }

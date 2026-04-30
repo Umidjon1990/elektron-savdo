@@ -1293,7 +1293,21 @@ export default function FinancePage() {
                     <p className="text-sm text-gray-500 text-center py-4">Tovar beruvchilar topilmadi</p>
                   ) : (
                     (supplierSummary?.suppliers || []).map((s: any, idx: number) => (
-                      <SupplierCard key={idx} supplier={s} token={token} onUpdate={() => queryClient.invalidateQueries({ queryKey: ["supplier-summary"] })} />
+                      <SupplierCard
+                        key={idx}
+                        supplier={s}
+                        token={token}
+                        categories={categories}
+                        onUpdate={() => {
+                          queryClient.invalidateQueries({ queryKey: ["supplier-summary"] });
+                          queryClient.invalidateQueries({ queryKey: ["expenses"] });
+                          queryClient.invalidateQueries({ queryKey: ["finance-summary"] });
+                          queryClient.invalidateQueries({ queryKey: ["finance-daily"] });
+                          queryClient.invalidateQueries({ queryKey: ["cash-balance"] });
+                          queryClient.invalidateQueries({ queryKey: ["cash-entries"] });
+                          queryClient.invalidateQueries({ queryKey: ["debts"] });
+                        }}
+                      />
                     ))
                   )}
                 </CardContent>
@@ -1731,17 +1745,85 @@ function CategoryDialog({ isOpen, onClose, category, onSave, isLoading }: any) {
   );
 }
 
-function SupplierCard({ supplier, token, onUpdate }: { supplier: any; token: string | null; onUpdate: () => void }) {
+function SupplierCard({ supplier, token, categories, onUpdate }: { supplier: any; token: string | null; categories?: any[]; onUpdate: () => void }) {
   const [expanded, setExpanded] = useState(false);
   const { toast } = useToast();
   const [payDialogProduct, setPayDialogProduct] = useState<any>(null);
   const [payAmount, setPayAmount] = useState("");
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
 
+  // Bulk debt-payment dialog state
+  const [bulkPayOpen, setBulkPayOpen] = useState(false);
+  const [bulkAmount, setBulkAmount] = useState("");
+  const [bulkMethod, setBulkMethod] = useState<"naqd" | "karta">("naqd");
+  const [bulkCategoryId, setBulkCategoryId] = useState<string>("");
+  const [bulkRecordExpense, setBulkRecordExpense] = useState(true);
+  const [bulkSubmitting, setBulkSubmitting] = useState(false);
+
   const nasiyaProducts = (supplier.products || []).filter((p: any) => p.paymentMethod === "nasiya");
   const nasiyaTotal = nasiyaProducts.reduce((s: number, p: any) => s + p.amount, 0);
   const nasiyaPaid = nasiyaProducts.reduce((s: number, p: any) => s + (p.paidAmount || 0), 0);
   const nasiyaRemaining = nasiyaTotal - nasiyaPaid;
+
+  const openBulkPay = () => {
+    setBulkAmount(String(nasiyaRemaining));
+    setBulkMethod("naqd");
+    // Pre-select a "Tovar" / "Yetkazib beruvchi" themed category if one exists,
+    // otherwise the first category.
+    const cats = categories || [];
+    const preferred = cats.find((c: any) =>
+      /tovar|yetkaz|tov|qarz|maxsulot|mahsulot/i.test(c.name || "")
+    );
+    setBulkCategoryId(preferred?.id || cats[0]?.id || "");
+    setBulkRecordExpense(true);
+    setBulkPayOpen(true);
+  };
+
+  const submitBulkPay = async () => {
+    const amt = Number(bulkAmount);
+    if (!amt || amt <= 0) {
+      toast({ title: "Miqdorni kiriting", variant: "destructive" });
+      return;
+    }
+    if (amt > nasiyaRemaining) {
+      toast({ title: "Miqdor qarzdan ko'p bo'la olmaydi", variant: "destructive" });
+      return;
+    }
+    if (bulkRecordExpense && !bulkCategoryId) {
+      toast({ title: "Xarajat kategoriyasini tanlang yoki yozuvni o'chiring", variant: "destructive" });
+      return;
+    }
+    setBulkSubmitting(true);
+    try {
+      const res = await fetch("/api/suppliers/pay-debt", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          supplierName: supplier.name,
+          amount: amt,
+          paymentMethod: bulkMethod,
+          recordExpense: bulkRecordExpense,
+          expenseCategoryId: bulkRecordExpense ? bulkCategoryId : undefined,
+        }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || "Xato");
+      }
+      const data = await res.json();
+      toast({
+        title: "To'lov amalga oshirildi",
+        description: `${data.used.toLocaleString()} so'm taqsimlandi (${data.productsUpdated} tovar)`,
+        className: "bg-green-500 text-white border-none",
+      });
+      setBulkPayOpen(false);
+      onUpdate();
+    } catch (e: any) {
+      toast({ title: e?.message || "Xato", variant: "destructive" });
+    } finally {
+      setBulkSubmitting(false);
+    }
+  };
 
   const updateDebtStatus = async (productId: string, status: string, paidAmt?: number) => {
     try {
@@ -1760,11 +1842,12 @@ function SupplierCard({ supplier, token, onUpdate }: { supplier: any; token: str
   return (
     <>
       <div className="border rounded-lg overflow-hidden" data-testid={`supplier-card-${supplier.name}`}>
-        <button
-          onClick={() => setExpanded(!expanded)}
-          className="w-full flex items-center justify-between p-3 hover:bg-gray-50 transition-colors text-left"
-        >
-          <div className="flex items-center gap-3 min-w-0">
+        <div className="w-full flex items-center justify-between p-3 hover:bg-gray-50 transition-colors text-left gap-2">
+          <button
+            onClick={() => setExpanded(!expanded)}
+            className="flex items-center gap-3 min-w-0 flex-1 text-left"
+            data-testid={`btn-toggle-supplier-${supplier.name}`}
+          >
             <div className="w-9 h-9 rounded-full bg-blue-100 flex items-center justify-center shrink-0">
               <Truck className="h-4 w-4 text-blue-600" />
             </div>
@@ -1773,7 +1856,7 @@ function SupplierCard({ supplier, token, onUpdate }: { supplier: any; token: str
               {supplier.phone && <p className="text-xs text-gray-500">{supplier.phone}</p>}
               <p className="text-xs text-gray-400">{supplier.totalProducts} tovar, {supplier.totalItems} birlik</p>
             </div>
-          </div>
+          </button>
           <div className="flex items-center gap-3 shrink-0">
             <div className="text-right">
               <p className="font-bold text-sm">{supplier.totalAmount.toLocaleString()} so'm</p>
@@ -1789,9 +1872,26 @@ function SupplierCard({ supplier, token, onUpdate }: { supplier: any; token: str
                 <p className="text-[10px] text-red-500 font-medium mt-0.5">Qarz: {nasiyaRemaining.toLocaleString()} so'm</p>
               )}
             </div>
-            <ChevronDown className={`h-4 w-4 text-gray-400 transition-transform ${expanded ? "rotate-180" : ""}`} />
+            {nasiyaRemaining > 0 && (
+              <Button
+                size="sm"
+                onClick={(e) => { e.stopPropagation(); openBulkPay(); }}
+                className="h-8 px-2.5 bg-emerald-600 hover:bg-emerald-700 text-white shrink-0 gap-1"
+                data-testid={`btn-pay-supplier-${supplier.name}`}
+              >
+                <HandCoins className="h-3.5 w-3.5" />
+                <span className="text-xs font-semibold">To'lash</span>
+              </Button>
+            )}
+            <button
+              onClick={() => setExpanded(!expanded)}
+              className="p-1 rounded hover:bg-gray-200"
+              data-testid={`btn-expand-supplier-${supplier.name}`}
+            >
+              <ChevronDown className={`h-4 w-4 text-gray-400 transition-transform ${expanded ? "rotate-180" : ""}`} />
+            </button>
           </div>
-        </button>
+        </div>
         {expanded && (
           <div className="border-t bg-gray-50 p-3 space-y-3">
             <table className="w-full text-xs">
@@ -1938,6 +2038,131 @@ function SupplierCard({ supplier, token, onUpdate }: { supplier: any; token: str
               data-testid="btn-confirm-partial-pay"
             >
               To'lash
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={bulkPayOpen} onOpenChange={(open) => { if (!open && !bulkSubmitting) setBulkPayOpen(false); }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Yetkazib beruvchiga to'lov</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="rounded-lg bg-amber-50 border border-amber-200 p-3 space-y-1">
+              <p className="text-sm font-semibold text-amber-900">{supplier.name}</p>
+              {supplier.phone && <p className="text-xs text-amber-700">{supplier.phone}</p>}
+              <div className="flex items-center justify-between pt-1">
+                <span className="text-xs text-amber-700">Jami qarz:</span>
+                <span className="text-base font-bold text-amber-900" data-testid="text-bulk-debt-total">
+                  {nasiyaRemaining.toLocaleString()} so'm
+                </span>
+              </div>
+            </div>
+
+            <div>
+              <Label>To'lov miqdori (so'm)</Label>
+              <Input
+                type="number"
+                placeholder="0"
+                value={bulkAmount}
+                onChange={(e) => setBulkAmount(e.target.value)}
+                className="mt-1"
+                data-testid="input-bulk-pay-amount"
+              />
+              <div className="flex gap-1 mt-1.5">
+                <button
+                  type="button"
+                  onClick={() => setBulkAmount(String(Math.round(nasiyaRemaining / 2)))}
+                  className="text-[10px] px-2 py-0.5 rounded bg-gray-100 hover:bg-gray-200 text-gray-700"
+                >
+                  Yarmi
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setBulkAmount(String(nasiyaRemaining))}
+                  className="text-[10px] px-2 py-0.5 rounded bg-emerald-100 hover:bg-emerald-200 text-emerald-700 font-medium"
+                >
+                  Hammasi
+                </button>
+              </div>
+            </div>
+
+            <div>
+              <Label>To'lov usuli</Label>
+              <div className="grid grid-cols-2 gap-2 mt-1">
+                <button
+                  type="button"
+                  onClick={() => setBulkMethod("naqd")}
+                  className={`p-2 rounded-lg border-2 text-sm font-medium transition-all ${
+                    bulkMethod === "naqd"
+                      ? "border-green-500 bg-green-50 text-green-700"
+                      : "border-gray-200 text-gray-600 hover:border-gray-300"
+                  }`}
+                  data-testid="btn-bulk-method-naqd"
+                >
+                  Naqd
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setBulkMethod("karta")}
+                  className={`p-2 rounded-lg border-2 text-sm font-medium transition-all ${
+                    bulkMethod === "karta"
+                      ? "border-blue-500 bg-blue-50 text-blue-700"
+                      : "border-gray-200 text-gray-600 hover:border-gray-300"
+                  }`}
+                  data-testid="btn-bulk-method-karta"
+                >
+                  Karta
+                </button>
+              </div>
+            </div>
+
+            <div className="rounded-lg border p-2.5 space-y-2 bg-gray-50">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={bulkRecordExpense}
+                  onChange={(e) => setBulkRecordExpense(e.target.checked)}
+                  className="h-4 w-4"
+                  data-testid="checkbox-bulk-record-expense"
+                />
+                <span className="text-xs font-medium text-gray-700">Xarajat sifatida yozilsin (kassadan ayrilsin)</span>
+              </label>
+              {bulkRecordExpense && (
+                <Select value={bulkCategoryId} onValueChange={setBulkCategoryId}>
+                  <SelectTrigger className="h-8 text-xs" data-testid="select-bulk-category">
+                    <SelectValue placeholder="Xarajat kategoriyasi" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {(categories || []).map((c: any) => (
+                      <SelectItem key={c.id} value={c.id} className="text-xs">{c.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+            </div>
+
+            <p className="text-[11px] text-gray-500 leading-relaxed">
+              To'lov eng eski qarzdan boshlab tarqatiladi. Tovarlar ro'yxatidagi qarz holati avtomatik yangilanadi.
+            </p>
+          </div>
+          <DialogFooter className="gap-2">
+            <Button
+              variant="outline"
+              onClick={() => setBulkPayOpen(false)}
+              disabled={bulkSubmitting}
+              data-testid="btn-bulk-cancel"
+            >
+              Bekor qilish
+            </Button>
+            <Button
+              onClick={submitBulkPay}
+              disabled={bulkSubmitting || !bulkAmount || Number(bulkAmount) <= 0}
+              className="bg-emerald-600 hover:bg-emerald-700"
+              data-testid="btn-bulk-confirm"
+            >
+              {bulkSubmitting ? "Saqlanmoqda..." : "Tasdiqlash"}
             </Button>
           </DialogFooter>
         </DialogContent>

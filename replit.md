@@ -78,7 +78,7 @@ PostgreSQL serves as the primary database, with Drizzle ORM managing schema and 
 - **Delivery Management**: Courier assignment, delivery tracking, and public courier delivery pages.
 - **Product Units**: Support for multiple measurement units (dona, litr, kg, metr) with decimal stock quantities.
 - **Inventory Tabs**: Ombor page has filterable tabs — Barchasi, Mavjud (stock > 5), Kam qolgan (stock 1-5), Qolmagan (stock = 0).
-- **Supplier Management**: CRUD for suppliers, supplier payment methods, and debt tracking.
+- **Supplier Management**: CRUD for suppliers, supplier payment methods, and debt tracking. **Bulk debt payment**: from Finance → Tovar beruvchi tab, each supplier card with outstanding nasiya debt has a green "To'lash" button that opens a dialog with amount input (Yarmi/Hammasi shortcuts), payment method (Naqd/Karta), optional expense recording with category picker. Payment is distributed across the supplier's unpaid nasiya products (oldest first) via `POST /api/suppliers/pay-debt` — products are auto-marked as paid/partial. If "record expense" is checked, an expense entry is created so the cash register reflects the outflow.
 - **CRM Hub**: A unified customer relationship management interface combining customers, orders, deliveries, and debtors with advanced filtering and workflow capabilities.
 - **Store QR Code**: On-the-fly QR code generation for store access.
 - **Tenant Configuration**: Tenants can configure payment methods, product form fields, customer fields, and receipt logos.

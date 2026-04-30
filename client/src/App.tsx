@@ -57,31 +57,46 @@ const EmployeesPage = lazy(importEmployees);
 const AttendanceCheckPage = lazy(importAttendanceCheck);
 const CourierDeliveriesPage = lazy(importCourierDeliveries);
 
+let adminPagesPreloaded = false;
 function preloadAdminPages() {
-  // Defer admin-page bundle preloading to browser idle time so it never
-  // competes with the user's first interactions / sidebar navigation. On
-  // slow devices, eagerly evaluating these heavy modules right after auth
-  // was blocking the main thread for a long time and made every sidebar
-  // click feel frozen.
-  const schedule = (cb: () => void) => {
-    if (typeof (window as any).requestIdleCallback === "function") {
-      (window as any).requestIdleCallback(cb, { timeout: 3000 });
-    } else {
-      setTimeout(cb, 1500);
-    }
-  };
-  schedule(() => importDashboard());
-  schedule(() => importInventory());
-  schedule(() => importHistory());
-  schedule(() => importCustomers());
-  schedule(() => importSettings());
-  schedule(() => importCategories());
+  // Idempotent — guard against StrictMode double-effect and multiple
+  // ProtectedRoute mounts (each layout switch was retriggering this).
+  if (adminPagesPreloaded) return;
+  adminPagesPreloaded = true;
+
+  // The sidebar lives INSIDE each lazy-loaded page, so route switches
+  // unmount the entire page (sidebar included) and show <PageLoader />
+  // until the next chunk finishes downloading. On a slow desktop POS
+  // network this looked like a blank white screen for several seconds.
+  // Solution: kick off ALL admin chunk downloads in parallel as soon as
+  // the user is authenticated, so by the time they click the sidebar
+  // the chunk is already in browser cache and the route swap is instant.
+  // 100ms delay — small enough that even a fast first sidebar click
+  // catches up to the preload, but lets the initial dashboard paint first.
+  // .catch on each: prevents "unhandled rejection" noise if a chunk load
+  // fails (network blip), while still letting React Suspense retry on demand.
+  setTimeout(() => {
+    importDashboard().catch(() => {});
+    importInventory().catch(() => {});
+    importHistory().catch(() => {});
+    importCustomers().catch(() => {});
+    importSettings().catch(() => {});
+    importCategories().catch(() => {});
+    importFinance().catch(() => {});
+    importEmployees().catch(() => {});
+  }, 100);
 }
 
 function PageLoader() {
   return (
-    <div className="flex items-center justify-center h-32">
-      <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-indigo-600"></div>
+    <div
+      className="flex flex-col items-center justify-center"
+      style={{ minHeight: "100vh", background: "#f1f5f9" }}
+    >
+      <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-indigo-600 mb-4"></div>
+      <p style={{ color: "#64748b", fontSize: 14, fontWeight: 500 }}>
+        Yuklanmoqda...
+      </p>
     </div>
   );
 }

@@ -34,7 +34,10 @@ The backend is powered by Express.js and TypeScript, using Drizzle ORM with Post
 - Receipt dialog: `max-h-[90vh] flex flex-col` with inner `overflow-y-auto` body and sticky `shrink-0` footer so "Chop etish" button always remains visible/tappable. Manual "Chop etish" click also auto-closes the dialog after ~600ms so the user never has to tap "Yopish" separately.
 
 ### Navigation Performance
-- `preloadAdminPages()` in `App.tsx` is now scheduled via `requestIdleCallback` (with `setTimeout(1500)` fallback) so heavy admin bundles (`dashboard`, `inventory`, `history`, `customers`, `settings`, `categories`) only load when the browser is idle, never competing with the user's first sidebar clicks.
+- `preloadAdminPages()` in `App.tsx` runs once via `setTimeout(100ms)` after auth (was: `requestIdleCallback`, which often never fired on busy POS terminals). Module-level `adminPagesPreloaded` flag makes it idempotent across StrictMode / multiple `ProtectedRoute` mounts. Preloads ALL 8 admin chunks in parallel: `dashboard`, `inventory`, `history`, `customers`, `settings`, `categories`, `finance`, `employees`. After this fires, `lazy()` resolves synchronously → sidebar route switches show no Suspense fallback at all.
+- **Why eager preload matters**: Each admin page renders its OWN `SidebarNav` inside its layout. Before this fix, every sidebar click unmounted the entire current page (including sidebar) → tiny Suspense fallback shown → entire screen looked blank/white until next chunk downloaded (seconds on slow desktop network).
+- `PageLoader` upgraded from a small `h-32` spinner to a full-viewport `min-h-screen` loader with "Yuklanmoqda..." text, so the first navigation (or a slow chunk fetch) shows an obviously-working loading state instead of a blank white screen.
+- Each preload import is `.catch(() => {})` to suppress unhandled-rejection noise on transient network failures; React Suspense will retry on actual demand.
 - `inventory.tsx` filtering (`searchFiltered`, `filteredProducts`, `tabCounts`) wrapped in `useMemo` with single-pass tab counter — eliminates 4 full array scans per render on the inventory page.
 
 ### Large-Tenant Performance (e.g. "Kitoblar")

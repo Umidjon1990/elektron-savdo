@@ -126,6 +126,31 @@ export async function runMigrations() {
           ALTER TABLE tenants ADD COLUMN default_dollar_rate INTEGER NOT NULL DEFAULT 0;
         END IF;
       END $$;
+
+      -- ============================================
+      -- PERFORMANCE INDEXES (multi-tenant filtering)
+      -- ============================================
+      CREATE INDEX IF NOT EXISTS products_tenant_id_idx ON products(tenant_id);
+      CREATE INDEX IF NOT EXISTS products_tenant_stock_idx ON products(tenant_id, stock);
+      CREATE INDEX IF NOT EXISTS transactions_tenant_id_idx ON transactions(tenant_id);
+      CREATE INDEX IF NOT EXISTS transactions_tenant_date_idx ON transactions(tenant_id, date DESC);
+      CREATE INDEX IF NOT EXISTS orders_tenant_id_idx ON orders(tenant_id);
+      CREATE INDEX IF NOT EXISTS orders_tenant_status_idx ON orders(tenant_id, status);
+      CREATE INDEX IF NOT EXISTS orders_tenant_created_idx ON orders(tenant_id, created_at DESC);
+      CREATE INDEX IF NOT EXISTS categories_tenant_id_idx ON categories(tenant_id);
+      CREATE INDEX IF NOT EXISTS suppliers_tenant_id_idx ON suppliers(tenant_id);
+      CREATE INDEX IF NOT EXISTS users_tenant_id_idx ON users(tenant_id);
+      CREATE INDEX IF NOT EXISTS customers_tenant_id_idx ON customers(tenant_id);
+      CREATE INDEX IF NOT EXISTS expense_categories_tenant_id_idx ON expense_categories(tenant_id);
+      CREATE INDEX IF NOT EXISTS income_categories_tenant_id_idx ON income_categories(tenant_id);
+      CREATE INDEX IF NOT EXISTS expenses_tenant_id_idx ON expenses(tenant_id);
+      CREATE INDEX IF NOT EXISTS staff_members_tenant_id_idx ON staff_members(tenant_id);
+      CREATE INDEX IF NOT EXISTS attendance_records_tenant_id_idx ON attendance_records(tenant_id);
+      CREATE INDEX IF NOT EXISTS audit_logs_tenant_id_idx ON audit_logs(tenant_id);
+      CREATE INDEX IF NOT EXISTS shift_handovers_tenant_id_idx ON shift_handovers(tenant_id);
+      CREATE INDEX IF NOT EXISTS deliveries_tenant_id_idx ON deliveries(tenant_id);
+      CREATE INDEX IF NOT EXISTS debt_payments_tenant_id_idx ON debt_payments(tenant_id);
+      CREATE INDEX IF NOT EXISTS cash_register_entries_tenant_id_idx ON cash_register_entries(tenant_id);
     `);
     
     console.log("Database migrations completed successfully!");

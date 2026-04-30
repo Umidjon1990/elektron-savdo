@@ -93,14 +93,7 @@ export default function LandingPage() {
             </span>
           </div>
           <div className="flex items-center gap-3">
-            <Button
-              variant="ghost"
-              className="text-white/70 hover:text-white hover:bg-white/10 hidden sm:flex"
-              onClick={() => setLocation("/register")}
-              data-testid="button-register-nav"
-            >
-              Ro'yxatdan o'tish
-            </Button>
+            {/* Public self-registration is disabled. Only Kirish remains. */}
             <Button
               className="bg-gradient-to-r from-indigo-500 to-violet-600 hover:from-indigo-600 hover:to-violet-700 text-white rounded-full px-6 shadow-lg shadow-indigo-500/25"
               onClick={() => setLocation("/login")}
@@ -188,25 +181,17 @@ export default function LandingPage() {
             transition={{ duration: 0.8, delay: 0.4 }}
             className="flex flex-col sm:flex-row items-center justify-center gap-4"
           >
+            {/* Public self-registration is disabled. Only the login CTA remains;
+                new tenants are created by the platform admin. */}
             <Button
               size="lg"
               className="bg-gradient-to-r from-indigo-500 to-violet-600 hover:from-indigo-600 hover:to-violet-700 text-white rounded-full px-8 py-6 text-lg shadow-2xl shadow-indigo-500/30 group w-full sm:w-auto"
-              onClick={() => setLocation("/register")}
-              data-testid="button-hero-register"
-            >
-              <Rocket className="mr-2 h-5 w-5 group-hover:animate-bounce" />
-              Bepul boshlash
-              <ChevronRight className="ml-2 h-5 w-5 group-hover:translate-x-1 transition-transform" />
-            </Button>
-            <Button
-              size="lg"
-              variant="outline"
-              className="border-white/10 text-white/80 hover:bg-white/5 hover:text-white rounded-full px-8 py-6 text-lg backdrop-blur-sm w-full sm:w-auto"
               onClick={() => setLocation("/login")}
               data-testid="button-hero-login"
             >
               <LayoutDashboard className="mr-2 h-5 w-5" />
               Kabinetga kirish
+              <ChevronRight className="ml-2 h-5 w-5 group-hover:translate-x-1 transition-transform" />
             </Button>
             {!isInstalled && (
               <Button
@@ -456,26 +441,18 @@ export default function LandingPage() {
               Hoziroq boshlang!
             </h2>
             <p className="text-white/40 mb-8 text-lg">
-              Do'koningizni zamonaviy tizim bilan boshqaring. 14 kun bepul sinov davri.
+              Do'koningizni zamonaviy tizim bilan boshqaring. Yangi do'kon ochish uchun administrator bilan bog'laning.
             </p>
             <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
+              {/* Public self-registration is disabled. */}
               <Button
                 size="lg"
                 className="bg-gradient-to-r from-indigo-500 to-violet-600 hover:from-indigo-600 hover:to-violet-700 text-white rounded-full px-10 py-6 text-lg shadow-2xl shadow-indigo-500/30 group w-full sm:w-auto"
-                onClick={() => setLocation("/register")}
-                data-testid="button-cta-register"
-              >
-                Bepul ro'yxatdan o'tish
-                <ArrowRight className="ml-2 h-5 w-5 group-hover:translate-x-1 transition-transform" />
-              </Button>
-              <Button
-                size="lg"
-                variant="outline"
-                className="border-white/10 text-white/70 hover:bg-white/5 hover:text-white rounded-full px-10 py-6 text-lg w-full sm:w-auto"
                 onClick={() => setLocation("/login")}
                 data-testid="button-cta-login"
               >
                 Kabinetga kirish
+                <ArrowRight className="ml-2 h-5 w-5 group-hover:translate-x-1 transition-transform" />
               </Button>
             </div>
           </motion.div>

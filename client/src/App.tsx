@@ -20,7 +20,7 @@ const importCustomers = () => import("@/pages/customers");
 const importStoreHome = () => import("@/pages/store/home");
 const importCart = () => import("@/pages/store/cart");
 const importLogin = () => import("@/pages/auth/login");
-const importRegister = () => import("@/pages/auth/register");
+// importRegister removed: public self-registration is disabled.
 const importSettings = () => import("@/pages/settings");
 const importCategories = () => import("@/pages/categories");
 const importNotFound = () => import("@/pages/not-found");
@@ -49,7 +49,6 @@ const CustomersPage = lazy(importCustomers);
 const StoreHome = lazy(importStoreHome);
 const CartPage = lazy(importCart);
 const LoginPage = lazy(importLogin);
-const RegisterPage = lazy(importRegister);
 const SettingsPage = lazy(importSettings);
 const CategoriesPage = lazy(importCategories);
 const FinancePage = lazy(importFinance);
@@ -283,7 +282,11 @@ function Router() {
       <Route path="/attendance/:token" component={AttendanceCheckPage} />
       <Route path="/courier/:token" component={CourierDeliveriesPage} />
       <Route path="/login" component={LoginPage} />
-      <Route path="/register" component={RegisterPage} />
+      {/* Public self-registration is disabled. Redirect any old /register
+          links to the login page so users contact the admin instead. */}
+      <Route path="/register">
+        <Redirect to="/login" />
+      </Route>
       
       {/* Slug-scoped Admin Routes (must be before /store/:slug to avoid matching) */}
       <Route path="/store/:slug/admin/inventory">

@@ -3,7 +3,7 @@ import { useAuth } from "@/lib/auth-context";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Lock, Store, ArrowLeft, Eye, EyeOff, Loader2 } from "lucide-react";
+import { Lock, ArrowLeft, Eye, EyeOff, Loader2 } from "lucide-react";
 import { useLocation } from "wouter";
 import { motion } from "framer-motion";
 
@@ -173,17 +173,8 @@ export default function LoginPage() {
               </Button>
             </form>
 
-            <div className="mt-6 pt-6 border-t border-white/5 flex flex-col gap-3">
-              <Button
-                variant="outline"
-                onClick={() => setLocation("/register")}
-                className="w-full border-white/10 text-white/70 hover:bg-white/5 hover:text-white rounded-xl h-11"
-                data-testid="link-register"
-              >
-                <Store className="h-4 w-4 mr-2" />
-                Yangi do'kon ochish
-              </Button>
-            </div>
+            {/* Public self-registration is disabled. Only super admin can
+                create new tenants from the super admin panel. */}
           </div>
         </div>
       </motion.div>

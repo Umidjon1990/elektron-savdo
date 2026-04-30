@@ -20,59 +20,14 @@ export async function registerRoutes(
 
   // ============ AUTH ROUTES ============
 
-  app.post("/api/auth/register", async (req, res) => {
-    try {
-      const data = registerTenantSchema.parse(req.body);
-
-      const existingTenant = await storage.getTenantBySlug(data.slug);
-      if (existingTenant) {
-        return res.status(400).json({ error: "Bu slug allaqachon band" });
-      }
-
-      const trialEnd = new Date();
-      trialEnd.setDate(trialEnd.getDate() + 14);
-
-      const tenant = await storage.createTenant({
-        slug: data.slug,
-        name: data.storeName,
-        plan: "trial",
-        status: "active",
-        trialEnd,
-        maxProducts: 100,
-        maxUsers: 1,
-        ownerUsername: data.username,
-        ownerPassword: data.password,
-      });
-
-      const hashedPassword = await hashPassword(data.password);
-      const user = await storage.createUser({
-        username: data.username,
-        email: data.email || null,
-        password: hashedPassword,
-        role: "owner",
-        tenantId: tenant.id,
-        isSuper: false,
-      });
-
-      const token = generateToken({
-        userId: user.id,
-        tenantId: tenant.id,
-        role: "owner",
-        isSuper: false,
-      });
-
-      res.status(201).json({
-        token,
-        user: { id: user.id, username: user.username, role: user.role },
-        tenant: { id: tenant.id, slug: tenant.slug, name: tenant.name },
-      });
-    } catch (error: any) {
-      console.error("Register error:", error);
-      if (error?.name === 'ZodError') {
-        return res.status(400).json({ error: "Ma'lumotlar to'liq emas", details: error.errors });
-      }
-      res.status(500).json({ error: "Ro'yxatdan o'tishda xatolik" });
-    }
+  // Public self-registration is DISABLED. Only super admin can create new
+  // tenants (via the super admin panel → POST /api/admin/tenants). This
+  // endpoint is kept for backward-compat with any cached frontends and
+  // returns a clear error message in Uzbek.
+  app.post("/api/auth/register", async (_req, res) => {
+    return res.status(403).json({
+      error: "Yangi do'kon ochish o'chirilgan. Iltimos, administratorga murojaat qiling.",
+    });
   });
 
   app.post("/api/auth/login", async (req, res) => {

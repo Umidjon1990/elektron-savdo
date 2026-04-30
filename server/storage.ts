@@ -182,8 +182,24 @@ export class DatabaseStorage implements IStorage {
 
   async deleteTenant(id: string): Promise<boolean> {
     return await db.transaction(async (tx) => {
+      // Delete all tenant-scoped data so FK constraints don't block tenant
+      // deletion. Order matters: child rows (those whose own tables also
+      // reference other tenant tables, e.g. expenses → expenseCategories,
+      // attendance → staffMembers) are deleted before their parents.
+      await tx.delete(attendanceRecords).where(eq(attendanceRecords.tenantId, id));
+      await tx.delete(staffMembers).where(eq(staffMembers.tenantId, id));
+      await tx.delete(shiftHandovers).where(eq(shiftHandovers.tenantId, id));
+      await tx.delete(auditLogs).where(eq(auditLogs.tenantId, id));
+      await tx.delete(cashRegisterEntries).where(eq(cashRegisterEntries.tenantId, id));
+      await tx.delete(debtPayments).where(eq(debtPayments.tenantId, id));
+      await tx.delete(deliveries).where(eq(deliveries.tenantId, id));
       await tx.delete(transactions).where(eq(transactions.tenantId, id));
       await tx.delete(orders).where(eq(orders.tenantId, id));
+      await tx.delete(expenses).where(eq(expenses.tenantId, id));
+      await tx.delete(expenseCategories).where(eq(expenseCategories.tenantId, id));
+      await tx.delete(incomeCategories).where(eq(incomeCategories.tenantId, id));
+      await tx.delete(customers).where(eq(customers.tenantId, id));
+      await tx.delete(suppliers).where(eq(suppliers.tenantId, id));
       await tx.delete(products).where(eq(products.tenantId, id));
       await tx.delete(categories).where(eq(categories.tenantId, id));
       await tx.delete(users).where(eq(users.tenantId, id));

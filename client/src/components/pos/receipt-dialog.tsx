@@ -47,6 +47,11 @@ interface ReceiptDialogProps {
   transaction: Transaction | null;
   isOpen: boolean;
   onClose: () => void;
+  autoPrint?: boolean;
+  // Optional callback to claim a popup window that the parent already opened
+  // synchronously inside a user gesture (avoids popup blockers for auto-print).
+  // Returns the window or null if none is available / it was closed.
+  consumePreOpenedWindow?: () => Window | null;
 }
 
 const PAYMENT_LABELS: Record<string, string> = {
@@ -164,7 +169,7 @@ function escapeHtml(s: unknown): string {
     .replace(/'/g, '&#39;');
 }
 
-export function ReceiptDialog({ transaction, isOpen, onClose }: ReceiptDialogProps) {
+export function ReceiptDialog({ transaction, isOpen, onClose, autoPrint, consumePreOpenedWindow }: ReceiptDialogProps) {
   const { settings } = useSettings();
   const { token } = useAuth();
   
@@ -333,15 +338,26 @@ export function ReceiptDialog({ transaction, isOpen, onClose }: ReceiptDialogPro
 </html>`;
   };
 
-  const handlePrint = () => {
+  const triggerPrint = (silent: boolean) => {
     if (!transaction) return;
 
     const html = buildReceiptHtml();
     if (!html) return;
 
-    const printWindow = window.open('', '_blank', 'width=400,height=600');
+    // Prefer a window the parent already opened synchronously inside a user
+    // gesture (auto-print path). Falls back to a fresh window.open() for the
+    // manual button case (which is itself triggered by a user click).
+    let printWindow: Window | null = consumePreOpenedWindow?.() ?? null;
+    if (!printWindow || printWindow.closed) {
+      printWindow = window.open('', '_blank', 'width=400,height=600');
+    }
+
     if (!printWindow) {
-      alert("Pop-up oynalarni ruxsat bering va qayta urinib ko'ring");
+      if (!silent) {
+        alert("Pop-up oynalarni ruxsat bering va qayta urinib ko'ring");
+      } else {
+        console.warn("Auto-print blocked — popup window denied by browser");
+      }
       return;
     }
 
@@ -349,6 +365,21 @@ export function ReceiptDialog({ transaction, isOpen, onClose }: ReceiptDialogPro
     printWindow.document.write(html);
     printWindow.document.close();
   };
+
+  const handlePrint = () => triggerPrint(false);
+
+  // Auto-print: when dialog opens with autoPrint enabled, fire the popup once.
+  // Use a small timeout so React/dialog renders first; ref prevents double-fire on re-render.
+  const autoPrintFiredRef = React.useRef<string | null>(null);
+  useEffect(() => {
+    if (!isOpen || !autoPrint || !transaction) return;
+    // Use transaction id as the "fingerprint" so each new transaction triggers exactly once
+    if (autoPrintFiredRef.current === transaction.id) return;
+    autoPrintFiredRef.current = transaction.id;
+    const t = setTimeout(() => triggerPrint(true), 300);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen, autoPrint, transaction?.id]);
 
   if (!transaction) return null;
 

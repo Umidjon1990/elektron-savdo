@@ -1099,9 +1099,10 @@ export default function SettingsPage() {
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="flex items-center justify-between">
-                  <div>
+                  <div className="pr-3">
                     <Label>Avtomatik chop etish</Label>
-                    <p className="text-sm text-slate-500">Har bir sotuvdan keyin chekni avtomatik chop etish</p>
+                    <p className="text-sm text-slate-500">"Sotildi" tugmasi bosilganda chek avtomatik chiqadi — qo'shimcha tugma bosish kerak emas.</p>
+                    <p className="text-xs text-amber-700 mt-1">⚠ Brauzerda pop-up oynalarga ruxsat berilgan bo'lishi shart.</p>
                   </div>
                   <Switch 
                     checked={settings.autoPrint} 

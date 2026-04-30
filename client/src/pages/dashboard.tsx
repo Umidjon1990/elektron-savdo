@@ -86,6 +86,10 @@ export default function Dashboard() {
   const [scannedProduct, setScannedProduct] = useState<Product | null>(null);
   const [lastTransaction, setLastTransaction] = useState<any>(null);
   const [isReceiptOpen, setIsReceiptOpen] = useState(false);
+  // Pre-opened popup window for auto-print. Opened synchronously inside the
+  // user click handler so popup blockers allow it; ReceiptDialog later writes
+  // the receipt HTML into this window.
+  const preOpenedPrintWindowRef = useRef<Window | null>(null);
   const [isMobileCartOpen, setIsMobileCartOpen] = useState(false);
   const [isReceiptsListOpen, setIsReceiptsListOpen] = useState(false);
   const [isSoldItemsOpen, setIsSoldItemsOpen] = useState(false);
@@ -298,7 +302,24 @@ export default function Dashboard() {
       const discount = item.discount || 0;
       return acc + (itemTotal - discount);
     }, 0);
-    
+
+    // SYNCHRONOUSLY open the print popup before any await. This keeps it inside
+    // the browser's user-activation window so popup blockers allow it.
+    // ReceiptDialog will later write the receipt HTML into this same window.
+    if (settings.autoPrint && !preOpenedPrintWindowRef.current) {
+      try {
+        const win = window.open("", "_blank", "width=400,height=600");
+        if (win) {
+          win.document.write(
+            '<!DOCTYPE html><html><head><meta charset="utf-8"><title>Chek tayyorlanmoqda…</title></head><body style="font-family:Arial,sans-serif;padding:30px;text-align:center;color:#666;font-size:14px;">Chek tayyorlanmoqda…</body></html>'
+          );
+          preOpenedPrintWindowRef.current = win;
+        }
+      } catch (e) {
+        // popup blocked — fall back to in-effect window.open inside ReceiptDialog
+      }
+    }
+
     try {
       const transaction = await addTransaction(cart, total, method, customerData, nasiyaData);
 
@@ -348,12 +369,6 @@ export default function Dashboard() {
       setLastTransaction(transaction);
       setIsReceiptOpen(true);
       setIsMobileCartOpen(false);
-      
-      if (settings.autoPrint) {
-        setTimeout(() => {
-          window.print();
-        }, 500);
-      }
 
       toast({
         title: deliveryData ? "Buyurtma yaratildi va kuriyerga biriktirildi!" : "To'lov qabul qilindi!",
@@ -363,6 +378,11 @@ export default function Dashboard() {
       setCart([]);
     } catch (error) {
       console.error("Checkout error:", error);
+      // Close orphan pre-opened print window so user is not left with a blank tab
+      if (preOpenedPrintWindowRef.current) {
+        try { preOpenedPrintWindowRef.current.close(); } catch {}
+        preOpenedPrintWindowRef.current = null;
+      }
       toast({
         title: "Xatolik!",
         description: "To'lovni qayta ishlashda xatolik yuz berdi",
@@ -739,7 +759,22 @@ export default function Dashboard() {
       <ReceiptDialog 
         transaction={lastTransaction}
         isOpen={isReceiptOpen}
-        onClose={() => setIsReceiptOpen(false)}
+        onClose={() => {
+          setIsReceiptOpen(false);
+          // If, for any reason, a pre-opened window was never consumed, close it now.
+          if (preOpenedPrintWindowRef.current) {
+            try {
+              if (!preOpenedPrintWindowRef.current.closed) preOpenedPrintWindowRef.current.close();
+            } catch {}
+            preOpenedPrintWindowRef.current = null;
+          }
+        }}
+        autoPrint={settings.autoPrint}
+        consumePreOpenedWindow={() => {
+          const w = preOpenedPrintWindowRef.current;
+          preOpenedPrintWindowRef.current = null;
+          return w && !w.closed ? w : null;
+        }}
       />
 
       <ReceiptsListDialog

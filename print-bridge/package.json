@@ -1,0 +1,26 @@
+{
+  "name": "esavdo-print-bridge",
+  "version": "1.0.0",
+  "description": "E-Savdo Print Bridge - Local HTTP server that prints receipts to thermal printers via ESC/POS",
+  "main": "bridge.js",
+  "type": "commonjs",
+  "scripts": {
+    "start": "node bridge.js",
+    "build:win": "pkg . --targets node18-win-x64 --output dist/EsavdoPrintBridge.exe --compress GZip"
+  },
+  "bin": "bridge.js",
+  "dependencies": {
+    "express": "^4.21.2",
+    "cors": "^2.8.5",
+    "node-thermal-printer": "^4.4.4"
+  },
+  "devDependencies": {
+    "pkg": "^5.8.1"
+  },
+  "pkg": {
+    "assets": [
+      "node_modules/node-thermal-printer/**/*"
+    ],
+    "outputPath": "dist"
+  }
+}

@@ -13,6 +13,7 @@ import { useUpload } from "@/hooks/use-upload";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Store, Bell, Printer, Database, Shield, Palette, Receipt, Link2, Copy, Check, ExternalLink, Bot, Send, CreditCard, Plus, Trash2, Edit2, X, Package, Users, Image as ImageIcon, Upload, Loader2, Eye, QrCode, Download, Share2, ShoppingCart, ToggleLeft, ChevronDown, ChevronRight, DollarSign } from "lucide-react";
 import { QRCodeCanvas } from "qrcode.react";
+import { PrintBridgeSection } from "@/components/settings/print-bridge-section";
 
 interface PaymentMethod {
   id: string;
@@ -1109,6 +1110,10 @@ export default function SettingsPage() {
                     data-testid="switch-auto-print"
                   />
                 </div>
+
+                <Separator />
+
+                <PrintBridgeSection />
               </CardContent>
             </Card>
 

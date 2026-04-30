@@ -32,24 +32,55 @@ async function compressImage(
     return file;
   }
 
-  return new Promise((resolve, reject) => {
+  // HEIC/HEIF (iOS camera) cannot be decoded by canvas in most browsers — skip compression
+  const lowerName = file.name.toLowerCase();
+  if (lowerName.endsWith(".heic") || lowerName.endsWith(".heif") || file.type === "image/heic" || file.type === "image/heif") {
+    return file;
+  }
+
+  return new Promise((resolve) => {
     const img = new Image();
-    const canvas = document.createElement("canvas");
-    const ctx = canvas.getContext("2d");
+    const objectUrl = URL.createObjectURL(file);
+    let settled = false;
+
+    const cleanup = () => {
+      try { URL.revokeObjectURL(objectUrl); } catch {}
+    };
+
+    const finish = (result: File) => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      resolve(result);
+    };
+
+    // Hard timeout: if image never loads/decodes within 15s, skip compression and upload original
+    const timeoutId = setTimeout(() => {
+      console.warn("Image compression timed out, uploading original");
+      finish(file);
+    }, 15000);
 
     img.onload = () => {
-      let { width, height } = img;
+      clearTimeout(timeoutId);
+      try {
+        let { width, height } = img;
 
-      if (width > maxWidth || height > maxHeight) {
-        const ratio = Math.min(maxWidth / width, maxHeight / height);
-        width = Math.round(width * ratio);
-        height = Math.round(height * ratio);
-      }
+        if (width > maxWidth || height > maxHeight) {
+          const ratio = Math.min(maxWidth / width, maxHeight / height);
+          width = Math.round(width * ratio);
+          height = Math.round(height * ratio);
+        }
 
-      canvas.width = width;
-      canvas.height = height;
+        const canvas = document.createElement("canvas");
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext("2d");
 
-      if (ctx) {
+        if (!ctx) {
+          finish(file);
+          return;
+        }
+
         ctx.fillStyle = "#FFFFFF";
         ctx.fillRect(0, 0, width, height);
         ctx.drawImage(img, 0, 0, width, height);
@@ -61,21 +92,27 @@ async function compressImage(
                 type: "image/jpeg",
                 lastModified: Date.now(),
               });
-              resolve(compressedFile);
+              finish(compressedFile);
             } else {
-              resolve(file);
+              finish(file);
             }
           },
           "image/jpeg",
           quality
         );
-      } else {
-        resolve(file);
+      } catch (err) {
+        console.warn("Image compression failed, uploading original:", err);
+        finish(file);
       }
     };
 
-    img.onerror = () => resolve(file);
-    img.src = URL.createObjectURL(file);
+    img.onerror = () => {
+      clearTimeout(timeoutId);
+      console.warn("Image load failed, uploading original");
+      finish(file);
+    };
+
+    img.src = objectUrl;
   });
 }
 
@@ -123,29 +160,42 @@ export function useUpload(options: UseUploadOptions = {}) {
    */
   const requestUploadUrl = useCallback(
     async (file: File): Promise<UploadResponse> => {
-      const response = await fetch("/api/r2/request-url", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          filename: file.name,
-          contentType: file.type || "application/octet-stream",
-        }),
-      });
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 15000);
 
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.error || "Failed to get upload URL");
+      try {
+        const response = await fetch("/api/r2/request-url", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            filename: file.name,
+            contentType: file.type || "application/octet-stream",
+          }),
+          signal: controller.signal,
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({}));
+          throw new Error(errorData.error || "Failed to get upload URL");
+        }
+
+        const data = await response.json();
+        return {
+          uploadUrl: data.uploadUrl,
+          objectKey: data.objectKey,
+          publicUrl: data.publicUrl,
+          objectPath: data.publicUrl,
+        };
+      } catch (err: any) {
+        if (err?.name === "AbortError") {
+          throw new Error("Server javob bermadi. Internetni tekshiring.");
+        }
+        throw err;
+      } finally {
+        clearTimeout(timeoutId);
       }
-
-      const data = await response.json();
-      return {
-        uploadUrl: data.uploadUrl,
-        objectKey: data.objectKey,
-        publicUrl: data.publicUrl,
-        objectPath: data.publicUrl,
-      };
     },
     []
   );
@@ -155,16 +205,30 @@ export function useUpload(options: UseUploadOptions = {}) {
    */
   const uploadToPresignedUrl = useCallback(
     async (file: File, uploadURL: string): Promise<void> => {
-      const response = await fetch(uploadURL, {
-        method: "PUT",
-        body: file,
-        headers: {
-          "Content-Type": file.type || "application/octet-stream",
-        },
-      });
+      // 60s timeout for the actual upload (slow mobile networks)
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 60000);
 
-      if (!response.ok) {
-        throw new Error("Failed to upload file to storage");
+      try {
+        const response = await fetch(uploadURL, {
+          method: "PUT",
+          body: file,
+          headers: {
+            "Content-Type": file.type || "application/octet-stream",
+          },
+          signal: controller.signal,
+        });
+
+        if (!response.ok) {
+          throw new Error("Failed to upload file to storage");
+        }
+      } catch (err: any) {
+        if (err?.name === "AbortError") {
+          throw new Error("Yuklash juda uzoq davom etdi. Internetni tekshiring.");
+        }
+        throw err;
+      } finally {
+        clearTimeout(timeoutId);
       }
     },
     []

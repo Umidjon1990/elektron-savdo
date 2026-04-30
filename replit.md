@@ -29,6 +29,10 @@ The backend is powered by Express.js and TypeScript, using Drizzle ORM with Post
 - Log middleware: response body logging only in dev, truncated to 500 chars.
 - Frontend refetch: courier-deliveries and employees use `refetchOnWindowFocus + staleTime` instead of 30s polling.
 
+### Mobile UX Fixes
+- Image upload (`useUpload` hook): 15s timeout on canvas compression, 15s on presigned URL request, 60s on R2 PUT — never hangs on "Yuklanmoqda…". HEIC/HEIF files bypass canvas (iOS camera). Object URLs revoked.
+- Receipt dialog: `max-h-[90vh] flex flex-col` with inner `overflow-y-auto` body and sticky `shrink-0` footer so "Chop etish" button always remains visible/tappable.
+
 ### Data Storage
 PostgreSQL serves as the primary database, with Drizzle ORM managing schema and queries. Tenant isolation is enforced by filtering all queries by `tenant_id`. The database schema, defined in `/shared/schema.ts`, includes tables for tenants, users, products, orders, categories, transactions, income/expense categories, and shift handovers. Barcodes maintain uniqueness across each tenant.
 

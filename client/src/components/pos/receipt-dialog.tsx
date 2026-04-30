@@ -301,18 +301,18 @@ export function ReceiptDialog({ transaction, isOpen, onClose }: ReceiptDialogPro
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-[380px] p-0 overflow-hidden bg-white gap-0 no-print">
-        <div className="p-6 flex flex-col items-center text-center bg-white" id="receipt-area">
+      <DialogContent className="sm:max-w-[380px] p-0 bg-white gap-0 no-print max-h-[90vh] flex flex-col overflow-hidden">
+        <div className="flex-1 overflow-y-auto p-6 flex flex-col items-center text-center bg-white" id="receipt-area">
           <ReceiptErrorBoundary onError={onClose}>
             <ReceiptContent transaction={transaction} settings={settings} receiptLogo={receiptLogo} paymentMethods={tenantSettings?.paymentMethods} />
           </ReceiptErrorBoundary>
         </div>
 
-        <div className="p-4 bg-gray-50 border-t flex gap-2 no-print">
-          <Button variant="outline" className="flex-1" onClick={onClose}>
+        <div className="shrink-0 p-4 bg-gray-50 border-t flex gap-2 no-print sticky bottom-0">
+          <Button variant="outline" className="flex-1" onClick={onClose} data-testid="button-close-receipt">
             Yopish
           </Button>
-          <Button className="flex-1 gap-2" onClick={handlePrint}>
+          <Button className="flex-1 gap-2" onClick={handlePrint} data-testid="button-print-receipt">
             <Printer className="h-4 w-4" />
             Chop etish
           </Button>

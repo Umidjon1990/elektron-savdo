@@ -37,6 +37,14 @@ The backend is powered by Express.js and TypeScript, using Drizzle ORM with Post
 - `preloadAdminPages()` in `App.tsx` is now scheduled via `requestIdleCallback` (with `setTimeout(1500)` fallback) so heavy admin bundles (`dashboard`, `inventory`, `history`, `customers`, `settings`, `categories`) only load when the browser is idle, never competing with the user's first sidebar clicks.
 - `inventory.tsx` filtering (`searchFiltered`, `filteredProducts`, `tabCounts`) wrapped in `useMemo` with single-pass tab counter — eliminates 4 full array scans per render on the inventory page.
 
+### Large-Tenant Performance (e.g. "Kitoblar")
+For tenants with thousands of products, the following changes prevent UI freezes:
+- **Product query no longer refetches on every page mount**: `product-context.tsx` sets `refetchOnMount: false`, `staleTime: 5min`, `gcTime: 30min`. Mutations still invalidate the cache, so freshness is preserved when the user adds/edits/deletes a product. Was the #1 source of lag — every navigation between Dashboard ↔ Ombor ↔ Tarix re-downloaded the entire product list (megabytes for Kitoblar) and re-decoded every image.
+- **`ProductCard` is `React.memo`'d** with custom equality (product ref + onClick + size). Without this, ANY state change on the dashboard (cart update, search keystroke, mobile cart toggle) re-rendered every product card.
+- **`addToCart` is `useCallback`'d** so its identity is stable across renders, allowing `ProductCard.memo` to actually skip re-renders.
+- **Dashboard's `filteredProducts` is `useMemo`'d** with the search query lowercased once outside the filter loop. Returns the original `products` reference unchanged when no filters are active (keeps memo equality stable downstream).
+- **`<img>` elements have explicit `width`/`height` + `decoding="async"`** to prevent layout thrash and unblock the main thread during image decoding. `loading="lazy"` was already present.
+
 ### Settings
 - `settings.autoPrint` defaults to `true` for new installs. A one-time migration (`pos_settings_autoprint_migrated_v1` localStorage key) force-enables it once for existing installs that explicitly had `autoPrint: false`. Future user toggles are respected.
 

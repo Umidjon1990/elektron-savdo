@@ -89,9 +89,16 @@ export function ProductProvider({ children }: { children: ReactNode }) {
       return products;
     },
     enabled: !isOffline && cacheLoaded && !!token,
-    staleTime: 30000,
+    // 5 min staleTime — mutations (add/update/delete product) invalidate
+    // the cache anyway, so this only affects passive freshness for things
+    // changed by other devices. Massively reduces refetches on Kitoblar-size
+    // tenants with thousands of products.
+    staleTime: 5 * 60 * 1000,
+    gcTime: 30 * 60 * 1000,
     refetchOnWindowFocus: false,
-    refetchOnMount: true,
+    // Was true — caused full /api/products refetch on EVERY page navigation.
+    // For a tenant with 2000 products + images, this was the #1 source of lag.
+    refetchOnMount: false,
     retry: 2,
   });
 

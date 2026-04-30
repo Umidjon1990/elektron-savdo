@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, memo } from "react";
 import { type Product } from "@/data/mock-products";
 import { Card } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
@@ -11,7 +11,7 @@ interface ProductCardProps {
   size?: "default" | "large";
 }
 
-export function ProductCard({ product, onClick, size = "default" }: ProductCardProps) {
+function ProductCardImpl({ product, onClick, size = "default" }: ProductCardProps) {
   const [imgLoaded, setImgLoaded] = useState(false);
   const [imgError, setImgError] = useState(false);
 
@@ -47,6 +47,9 @@ export function ProductCard({ product, onClick, size = "default" }: ProductCardP
             onLoad={() => setImgLoaded(true)}
             onError={() => setImgError(true)}
             loading="lazy"
+            decoding="async"
+            width={isLarge ? 300 : 200}
+            height={isLarge ? 400 : 200}
           />
         )}
         {(!imgLoaded || imgError) && (
@@ -135,3 +138,11 @@ export function ProductCard({ product, onClick, size = "default" }: ProductCardP
     </Card>
   );
 }
+
+// memo: re-render only when product reference, onClick, or size actually changes.
+// Without this, every cart update or search keystroke re-renders ALL cards.
+export const ProductCard = memo(ProductCardImpl, (prev, next) => {
+  return prev.product === next.product
+      && prev.onClick === next.onClick
+      && prev.size === next.size;
+});

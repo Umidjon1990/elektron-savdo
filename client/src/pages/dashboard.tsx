@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { SidebarNav } from "@/components/layout/sidebar-nav";
 import { ProductCard } from "@/components/pos/product-card";
@@ -224,7 +224,9 @@ export default function Dashboard() {
     return () => document.removeEventListener('keydown', handleKeyDown, true);
   }, []);
 
-  const addToCart = (product: Product) => {
+  // useCallback so memoized ProductCard doesn't re-render whenever
+  // unrelated state in dashboard changes (cart, search query, etc.).
+  const addToCart = useCallback((product: Product) => {
     if (product.stock <= 0) {
       toast({
         title: "Tovar tugagan",
@@ -260,7 +262,7 @@ export default function Dashboard() {
       popSound.volume = 0.5;
       popSound.play().catch(() => {});
     }
-  };
+  }, [toast]);
 
   const handleScannedProductAdd = (product: Product) => {
     if (product.stock <= 0) {
@@ -522,14 +524,22 @@ export default function Dashboard() {
     }
   }, [searchQuery, products]);
 
-  const filteredProducts = products.filter(product => {
-    const searchLower = searchQuery.toLowerCase();
-    const matchesSearch = product.name.toLowerCase().includes(searchLower) || 
-                          product.author.toLowerCase().includes(searchLower) ||
-                          product.barcode.includes(searchQuery);
-    const matchesCategory = selectedCategory === "Barchasi" || product.category === selectedCategory;
-    return matchesSearch && matchesCategory;
-  });
+  // Memoized — only re-filters when products list, query, or category change.
+  // Without this, every keystroke on cart, every state update, etc. would
+  // re-scan thousands of products. Lowercase the query ONCE outside the loop.
+  const filteredProducts = useMemo(() => {
+    const searchLower = searchQuery.toLowerCase().trim();
+    const isAllCategory = selectedCategory === "Barchasi";
+    if (!searchLower && isAllCategory) return products;
+
+    return products.filter(product => {
+      if (!isAllCategory && product.category !== selectedCategory) return false;
+      if (!searchLower) return true;
+      return product.name.toLowerCase().includes(searchLower)
+          || product.author.toLowerCase().includes(searchLower)
+          || product.barcode.includes(searchQuery);
+    });
+  }, [products, searchQuery, selectedCategory]);
 
   const cartItemCount = cart.reduce((acc, item) => acc + item.quantity, 0);
 

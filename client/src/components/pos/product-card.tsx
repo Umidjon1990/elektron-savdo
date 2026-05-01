@@ -97,11 +97,23 @@ function ProductCardImpl({ product, onClick, size = "default" }: ProductCardProp
           {product.name}
         </p>
         <p className={cn(
-          "text-slate-500 truncate mb-2",
+          "text-slate-500 truncate",
           isLarge ? "text-sm" : "text-xs"
         )}>
           {product.author}
         </p>
+        {product.barcode && (
+          <p
+            className={cn(
+              "text-slate-400 font-mono truncate mb-2",
+              isLarge ? "text-xs" : "text-[10px]"
+            )}
+            data-testid={`text-product-barcode-${product.id}`}
+          >
+            {product.barcode}
+          </p>
+        )}
+        {!product.barcode && <div className="mb-2" />}
         <div className="flex items-center justify-between">
           <span className={cn(
             "text-blue-600 font-bold font-mono",

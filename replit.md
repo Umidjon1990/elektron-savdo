@@ -29,7 +29,7 @@ The backend is powered by Express.js and TypeScript, using Drizzle ORM with Post
 - **Inventory & Product Customization**: Configurable product fields, multiple price types, supplier tracking, inline category creation, and supplier currency support. Supports multiple measurement units with decimal stock quantities.
 - **Staff Management**: Comprehensive staff attendance system with Face ID verification, GPS geofencing, and salary calculation.
 - **Delivery Management**: Courier assignment, delivery tracking, and public courier delivery pages.
-- **Supplier Management**: CRUD for suppliers, payment methods, and debt tracking with bulk payment options.
+- **Supplier Management**: CRUD for suppliers, payment methods, and debt tracking with bulk payment options. **USD payment support**: in Finance → Tovar beruvchi → "To'lash", suppliers with USD-currency nasiya products see a "So'm / Dollar" currency toggle. USD payments are distributed per-product with each portion converted back to UZS using THAT product's stored `supplierCurrencyRate` (not today's rate). Full-pay snaps `supplierPaidAmount` to `costPrice * stock` to eliminate rounding dust. The cash-register expense is recorded in UZS as the sum of per-product deltas. Default dialog currency is USD only when the supplier has zero UZS-only debt remaining.
 - **CRM Hub**: A unified customer relationship management interface.
 - **Tenant Configuration**: Tenants can configure payment methods, product form fields, customer fields, and receipt logos.
 

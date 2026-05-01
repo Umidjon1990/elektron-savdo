@@ -1754,6 +1754,7 @@ function SupplierCard({ supplier, token, categories, onUpdate }: { supplier: any
 
   // Bulk debt-payment dialog state
   const [bulkPayOpen, setBulkPayOpen] = useState(false);
+  const [bulkCurrency, setBulkCurrency] = useState<"uzs" | "usd">("uzs");
   const [bulkAmount, setBulkAmount] = useState("");
   const [bulkMethod, setBulkMethod] = useState<"naqd" | "karta">("naqd");
   const [bulkCategoryId, setBulkCategoryId] = useState<string>("");
@@ -1765,8 +1766,70 @@ function SupplierCard({ supplier, token, categories, onUpdate }: { supplier: any
   const nasiyaPaid = nasiyaProducts.reduce((s: number, p: any) => s + (p.paidAmount || 0), 0);
   const nasiyaRemaining = nasiyaTotal - nasiyaPaid;
 
+  // USD-currency nasiya breakdown — computed per-product so we can offer USD
+  // payment when the supplier's debt was originally entered in USD.
+  // We require a positive supplierCurrencyRate to be eligible for USD
+  // payment; without a rate the backend cannot convert the USD amount into
+  // a UZS expense / supplierPaidAmount and rejects the product. Keeping the
+  // same rule on the frontend ensures the displayed "USD remaining" matches
+  // what the user can actually pay.
+  const nasiyaUsdProducts = nasiyaProducts.filter(
+    (p: any) => p.supplierCurrency === "usd" && (p.supplierCurrencyRate || 0) > 0
+  );
+  const nasiyaUsdTotal = nasiyaUsdProducts.reduce((s: number, p: any) => s + (p.amountUsd || 0), 0);
+  const nasiyaUsdPaid = nasiyaUsdProducts.reduce((s: number, p: any) =>
+    s + ((p.paidAmount || 0) > 0
+      ? (p.paidAmount || 0) / p.supplierCurrencyRate
+      : 0), 0);
+  const nasiyaUsdRemaining = Math.max(0, nasiyaUsdTotal - nasiyaUsdPaid);
+  const hasUsdDebt = nasiyaUsdRemaining > 0.01;
+
+  // UZS-only debt (i.e. nasiya products whose supplier currency is NOT usd).
+  // Used to decide which currency the dialog opens in: if every nasiya entry
+  // is USD, we default the form to USD; otherwise UZS. We can't reuse
+  // nasiyaRemaining here because it is the total UZS-equivalent of ALL nasiya
+  // (including USD products converted), so it would be > 0 even when the
+  // supplier truly has no UZS-only debt.
+  const nasiyaUzsOnlyProducts = nasiyaProducts.filter((p: any) => p.supplierCurrency !== "usd");
+  const nasiyaUzsOnlyRemaining = Math.max(0,
+    nasiyaUzsOnlyProducts.reduce((s: number, p: any) => s + (p.amount - (p.paidAmount || 0)), 0)
+  );
+  const hasUzsOnlyDebt = nasiyaUzsOnlyRemaining > 0;
+
+  // Approximate USD→UZS rate weighted by remaining USD per product (so the
+  // preview shown to the user roughly matches what the cash register will
+  // actually show after the payment).
+  const weightedUsdRate = (() => {
+    let totalUsd = 0;
+    let totalUzs = 0;
+    for (const p of nasiyaUsdProducts) {
+      const rate = p.supplierCurrencyRate || 0;
+      const owedUsd = Math.max(0, (p.amountUsd || 0) - ((p.paidAmount || 0) && rate > 0 ? p.paidAmount / rate : 0));
+      if (owedUsd > 0 && rate > 0) {
+        totalUsd += owedUsd;
+        totalUzs += owedUsd * rate;
+      }
+    }
+    return totalUsd > 0 ? totalUzs / totalUsd : 0;
+  })();
+
+  // When paying in UZS, the cap is the UZS-only remaining if any USD debt
+  // exists (so a user can't accidentally over-pay against USD debts in
+  // so'm). When the supplier has no USD debt, fall back to nasiyaRemaining
+  // so existing UZS-only suppliers behave exactly as before.
+  const remainingForCurrency = bulkCurrency === "usd"
+    ? nasiyaUsdRemaining
+    : (hasUsdDebt ? nasiyaUzsOnlyRemaining : nasiyaRemaining);
+  const currencyLabel = bulkCurrency === "usd" ? "$" : "so'm";
+
   const openBulkPay = () => {
-    setBulkAmount(String(nasiyaRemaining));
+    // If the supplier has NO UZS-only debt remaining and has USD debt,
+    // default the dialog to USD. Otherwise UZS. We compare on
+    // hasUzsOnlyDebt rather than nasiyaRemaining because nasiyaRemaining is
+    // the total UZS-equivalent and would be > 0 for USD-only suppliers too.
+    const startCurrency: "uzs" | "usd" = (!hasUzsOnlyDebt && hasUsdDebt) ? "usd" : "uzs";
+    setBulkCurrency(startCurrency);
+    setBulkAmount(startCurrency === "usd" ? String(Math.round(nasiyaUsdRemaining * 100) / 100) : String(nasiyaUzsOnlyRemaining || nasiyaRemaining));
     setBulkMethod("naqd");
     // Pre-select a "Tovar" / "Yetkazib beruvchi" themed category if one exists,
     // otherwise the first category.
@@ -1779,13 +1842,25 @@ function SupplierCard({ supplier, token, categories, onUpdate }: { supplier: any
     setBulkPayOpen(true);
   };
 
+  // Switching currency mid-dialog: refill amount with the new currency's
+  // remaining debt so user gets a sensible default + the "Hammasi" target.
+  const switchBulkCurrency = (next: "uzs" | "usd") => {
+    if (next === bulkCurrency) return;
+    setBulkCurrency(next);
+    setBulkAmount(
+      next === "usd"
+        ? String(Math.round(nasiyaUsdRemaining * 100) / 100)
+        : String(hasUsdDebt ? nasiyaUzsOnlyRemaining : nasiyaRemaining)
+    );
+  };
+
   const submitBulkPay = async () => {
     const amt = Number(bulkAmount);
     if (!amt || amt <= 0) {
       toast({ title: "Miqdorni kiriting", variant: "destructive" });
       return;
     }
-    if (amt > nasiyaRemaining) {
+    if (amt > remainingForCurrency + (bulkCurrency === "usd" ? 0.01 : 0)) {
       toast({ title: "Miqdor qarzdan ko'p bo'la olmaydi", variant: "destructive" });
       return;
     }
@@ -1801,6 +1876,7 @@ function SupplierCard({ supplier, token, categories, onUpdate }: { supplier: any
         body: JSON.stringify({
           supplierName: supplier.name,
           amount: amt,
+          currency: bulkCurrency,
           paymentMethod: bulkMethod,
           recordExpense: bulkRecordExpense,
           expenseCategoryId: bulkRecordExpense ? bulkCategoryId : undefined,
@@ -1811,9 +1887,12 @@ function SupplierCard({ supplier, token, categories, onUpdate }: { supplier: any
         throw new Error(err.error || "Xato");
       }
       const data = await res.json();
+      const desc = bulkCurrency === "usd"
+        ? `$${data.used.toLocaleString()} ≈ ${(data.usedUzs || 0).toLocaleString()} so'm taqsimlandi (${data.productsUpdated} tovar)`
+        : `${data.used.toLocaleString()} so'm taqsimlandi (${data.productsUpdated} tovar)`;
       toast({
         title: "To'lov amalga oshirildi",
-        description: `${data.used.toLocaleString()} so'm taqsimlandi (${data.productsUpdated} tovar)`,
+        description: desc,
         className: "bg-green-500 text-white border-none",
       });
       setBulkPayOpen(false);
@@ -2053,17 +2132,61 @@ function SupplierCard({ supplier, token, categories, onUpdate }: { supplier: any
               <p className="text-sm font-semibold text-amber-900">{supplier.name}</p>
               {supplier.phone && <p className="text-xs text-amber-700">{supplier.phone}</p>}
               <div className="flex items-center justify-between pt-1">
-                <span className="text-xs text-amber-700">Jami qarz:</span>
-                <span className="text-base font-bold text-amber-900" data-testid="text-bulk-debt-total">
+                <span className="text-xs text-amber-700">So'm qarzi:</span>
+                <span className="text-sm font-bold text-amber-900" data-testid="text-bulk-debt-total">
                   {nasiyaRemaining.toLocaleString()} so'm
                 </span>
               </div>
+              {hasUsdDebt && (
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-amber-700">Dollar qarzi:</span>
+                  <span className="text-sm font-bold text-blue-700" data-testid="text-bulk-debt-total-usd">
+                    ${nasiyaUsdRemaining.toLocaleString(undefined, { maximumFractionDigits: 2 })}
+                  </span>
+                </div>
+              )}
             </div>
 
+            {/* Currency selector — only shown when supplier has USD debt; otherwise
+                we default to UZS and skip the toggle to keep the dialog simple. */}
+            {hasUsdDebt && (
+              <div>
+                <Label>To'lov valyutasi</Label>
+                <div className="grid grid-cols-2 gap-2 mt-1">
+                  <button
+                    type="button"
+                    onClick={() => switchBulkCurrency("uzs")}
+                    disabled={!hasUzsOnlyDebt}
+                    className={`p-2 rounded-lg border-2 text-sm font-medium transition-all ${
+                      bulkCurrency === "uzs"
+                        ? "border-amber-500 bg-amber-50 text-amber-700"
+                        : "border-gray-200 text-gray-600 hover:border-gray-300 disabled:opacity-50 disabled:cursor-not-allowed"
+                    }`}
+                    data-testid="btn-bulk-currency-uzs"
+                  >
+                    So'm
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => switchBulkCurrency("usd")}
+                    className={`p-2 rounded-lg border-2 text-sm font-medium transition-all ${
+                      bulkCurrency === "usd"
+                        ? "border-blue-500 bg-blue-50 text-blue-700"
+                        : "border-gray-200 text-gray-600 hover:border-gray-300"
+                    }`}
+                    data-testid="btn-bulk-currency-usd"
+                  >
+                    Dollar ($)
+                  </button>
+                </div>
+              </div>
+            )}
+
             <div>
-              <Label>To'lov miqdori (so'm)</Label>
+              <Label>To'lov miqdori ({currencyLabel})</Label>
               <Input
                 type="number"
+                step={bulkCurrency === "usd" ? "0.01" : "1"}
                 placeholder="0"
                 value={bulkAmount}
                 onChange={(e) => setBulkAmount(e.target.value)}
@@ -2073,19 +2196,33 @@ function SupplierCard({ supplier, token, categories, onUpdate }: { supplier: any
               <div className="flex gap-1 mt-1.5">
                 <button
                   type="button"
-                  onClick={() => setBulkAmount(String(Math.round(nasiyaRemaining / 2)))}
+                  onClick={() => setBulkAmount(
+                    bulkCurrency === "usd"
+                      ? String(Math.round((nasiyaUsdRemaining / 2) * 100) / 100)
+                      : String(Math.round(remainingForCurrency / 2))
+                  )}
                   className="text-[10px] px-2 py-0.5 rounded bg-gray-100 hover:bg-gray-200 text-gray-700"
                 >
                   Yarmi
                 </button>
                 <button
                   type="button"
-                  onClick={() => setBulkAmount(String(nasiyaRemaining))}
+                  onClick={() => setBulkAmount(
+                    bulkCurrency === "usd"
+                      ? String(Math.round(nasiyaUsdRemaining * 100) / 100)
+                      : String(remainingForCurrency)
+                  )}
                   className="text-[10px] px-2 py-0.5 rounded bg-emerald-100 hover:bg-emerald-200 text-emerald-700 font-medium"
                 >
                   Hammasi
                 </button>
               </div>
+              {bulkCurrency === "usd" && Number(bulkAmount) > 0 && weightedUsdRate > 0 && (
+                <p className="text-[11px] text-blue-600 mt-1.5" data-testid="text-bulk-usd-preview">
+                  ≈ {Math.round(Number(bulkAmount) * weightedUsdRate).toLocaleString()} so'm
+                  {" "}(har bir tovar o'z kursiga ko'ra hisoblanadi)
+                </p>
+              )}
             </div>
 
             <div>

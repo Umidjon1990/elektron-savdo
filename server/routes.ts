@@ -2103,12 +2103,19 @@ export async function registerRoutes(
   // reflects the outflow.
   app.post("/api/suppliers/pay-debt", authMiddleware, async (req: any, res) => {
     try {
-      const { supplierName, amount, paymentMethod, expenseCategoryId, note, recordExpense } = req.body || {};
+      const { supplierName, amount, paymentMethod, expenseCategoryId, note, recordExpense, currency } = req.body || {};
       const payAmount = Number(amount);
       if (!supplierName || !payAmount || payAmount <= 0) {
         return res.status(400).json({ error: "supplierName va musbat amount kerak" });
       }
       const method = paymentMethod === "karta" ? "karta" : "naqd";
+      // Currency the user is paying IN. "uzs" (default) = sums of costPrice*stock
+      // (UZS). "usd" = sums of supplierOriginalPrice*stock for products whose
+      // supplier price was originally entered in USD; we convert back to UZS
+      // per-product using each product's stored supplierCurrencyRate when
+      // updating the debt and computing the cash-register expense.
+      const payCurrency: "uzs" | "usd" = currency === "usd" ? "usd" : "uzs";
+      const currencyLabel = payCurrency === "usd" ? "$" : "so'm";
 
       // If recording an expense, validate the category exists for this tenant
       // BEFORE we apply any debt updates (avoid partial-failure surprises).
@@ -2124,43 +2131,101 @@ export async function registerRoutes(
       // a stable secondary key. Without a per-product createdAt we cannot do
       // strict oldest-first; debts are paid down in the order returned by
       // storage which is consistent across requests.
-      const debts = allProducts
-        .filter((p: any) =>
-          (p.supplier || "") === supplierName &&
-          (p.supplierPaymentMethod || "naqd") === "nasiya" &&
-          (p.supplierDebtStatus || "pending") !== "paid"
-        )
-        .map((p: any) => ({
-          id: p.id,
-          name: p.name,
-          amount: (p.costPrice || 0) * (p.stock || 0),
-          paidAmount: p.supplierPaidAmount || 0,
-        }))
-        .filter(p => p.amount - p.paidAmount > 0);
+      const baseFiltered = allProducts.filter((p: any) =>
+        (p.supplier || "") === supplierName &&
+        (p.supplierPaymentMethod || "naqd") === "nasiya" &&
+        (p.supplierDebtStatus || "pending") !== "paid"
+      );
 
-      const totalDebt = debts.reduce((s, p) => s + (p.amount - p.paidAmount), 0);
+      // Each "debt slot" carries: total UZS price, already-paid UZS, plus the
+      // USD originals so we can run the math in either currency without
+      // losing precision. `costPrice` is always UZS; for USD products we
+      // recompute UZS-total from `supplierOriginalPrice * rate * stock` as a
+      // sanity floor so rounding never makes us short by 1 so'm.
+      const debts = baseFiltered
+        .map((p: any) => {
+          const stock = p.stock || 0;
+          const cur: "uzs" | "usd" = (p.supplierCurrency || "uzs") === "usd" ? "usd" : "uzs";
+          const rate = p.supplierCurrencyRate || 0;
+          const uzsTotal = (p.costPrice || 0) * stock;
+          const uzsPaid = p.supplierPaidAmount || 0;
+          const usdTotal = cur === "usd" ? (p.supplierOriginalPrice || 0) * stock : 0;
+          const usdPaid = cur === "usd" && rate > 0 ? uzsPaid / rate : 0;
+          return {
+            id: p.id,
+            name: p.name,
+            currency: cur,
+            rate,
+            uzsTotal,
+            uzsPaid,
+            usdTotal,
+            usdPaid,
+          };
+        })
+        // Only keep debt slots that match the payment currency AND still owe.
+        // For USD payments we additionally require a positive
+        // supplierCurrencyRate — without it we cannot convert any USD amount
+        // into a UZS expense / supplierPaidAmount, so the product is not
+        // eligible for USD payment at all (it can still be paid in UZS via
+        // the supplier's per-product debt screen). This keeps the backend's
+        // payment math consistent with what the frontend's `nasiyaUsdRemaining`
+        // exposes to the user.
+        .filter(d => {
+          if (payCurrency === "usd") return d.currency === "usd" && d.rate > 0 && d.usdTotal - d.usdPaid > 0.0001;
+          return d.uzsTotal - d.uzsPaid > 0;
+        });
+
+      const totalDebt = payCurrency === "usd"
+        ? debts.reduce((s, p) => s + (p.usdTotal - p.usdPaid), 0)
+        : debts.reduce((s, p) => s + (p.uzsTotal - p.uzsPaid), 0);
+
       if (totalDebt <= 0) {
-        return res.status(400).json({ error: "Bu yetkazib beruvchida qarz yo'q" });
-      }
-      if (payAmount > totalDebt) {
         return res.status(400).json({
-          error: `To'lov miqdori qarzdan oshib ketdi. Maksimal: ${totalDebt.toLocaleString()} so'm`,
+          error: payCurrency === "usd"
+            ? "Bu yetkazib beruvchida dollar qarzi yo'q"
+            : "Bu yetkazib beruvchida qarz yo'q",
+        });
+      }
+      // For USD, allow tiny floating-point overshoot (≤ 0.01 USD).
+      const overshoot = payCurrency === "usd" ? 0.01 : 0;
+      if (payAmount > totalDebt + overshoot) {
+        return res.status(400).json({
+          error: `To'lov miqdori qarzdan oshib ketdi. Maksimal: ${totalDebt.toLocaleString()} ${currencyLabel}`,
         });
       }
 
       let remaining = payAmount;
-      const used = payAmount;
-      const updates: { id: string; status: "paid" | "partial"; paidAmount: number }[] = [];
+      const updates: { id: string; status: "paid" | "partial"; paidAmount: number; uzsDelta: number }[] = [];
 
       for (const p of debts) {
-        if (remaining <= 0) break;
-        const owed = p.amount - p.paidAmount;
-        if (remaining >= owed) {
-          updates.push({ id: p.id, status: "paid", paidAmount: p.amount });
-          remaining -= owed;
+        if (remaining <= 0.0001) break;
+        if (payCurrency === "usd") {
+          const owedUsd = p.usdTotal - p.usdPaid;
+          if (remaining >= owedUsd - 0.0001) {
+            // Fully pay this product in USD → snap UZS paidAmount to the
+            // exact stored UZS total so we never leave a 1 so'm dust debt.
+            const uzsDelta = Math.max(0, p.uzsTotal - p.uzsPaid);
+            updates.push({ id: p.id, status: "paid", paidAmount: p.uzsTotal, uzsDelta });
+            remaining -= owedUsd;
+          } else {
+            // Partial USD payment → convert to UZS using product's own rate.
+            // The filter above already excludes rate<=0 products from USD
+            // payments, so we can safely multiply here without checking.
+            const usdPortion = remaining;
+            const uzsDelta = Math.round(usdPortion * p.rate);
+            const newPaid = Math.min(p.uzsTotal, (p.uzsPaid || 0) + uzsDelta);
+            updates.push({ id: p.id, status: "partial", paidAmount: newPaid, uzsDelta: newPaid - p.uzsPaid });
+            remaining = 0;
+          }
         } else {
-          updates.push({ id: p.id, status: "partial", paidAmount: p.paidAmount + remaining });
-          remaining = 0;
+          const owed = p.uzsTotal - p.uzsPaid;
+          if (remaining >= owed) {
+            updates.push({ id: p.id, status: "paid", paidAmount: p.uzsTotal, uzsDelta: owed });
+            remaining -= owed;
+          } else {
+            updates.push({ id: p.id, status: "partial", paidAmount: p.uzsPaid + remaining, uzsDelta: remaining });
+            remaining = 0;
+          }
         }
       }
 
@@ -2172,16 +2237,28 @@ export async function registerRoutes(
         } as any, req.tenantId)
       ));
 
+      // Total UZS that actually left the cash register. For USD payments this
+      // is the sum of per-product UZS deltas (each computed from that
+      // product's own historical exchange rate), NOT today's rate × payAmount.
+      const usedUzs = updates.reduce((s, u) => s + u.uzsDelta, 0);
+      // What we tell the user we "used" of their input — same currency they
+      // typed in.
+      const used = payCurrency === "usd" ? payAmount - remaining : usedUzs;
+
       // Optionally create an expense so the cash register reflects the outflow
       let expenseId: string | undefined;
       if (recordExpense !== false && expenseCategoryId) {
         try {
+          const methodLabel = method === "karta" ? "Karta" : "Naqd";
+          const currencyText = payCurrency === "usd"
+            ? `$${used.toLocaleString()} ≈ ${usedUzs.toLocaleString()} so'm`
+            : `${methodLabel}`;
           const description = note?.trim()
-            ? `${supplierName}: ${note.trim()} (${method === "karta" ? "Karta" : "Naqd"})`
-            : `${supplierName} - tovar qarzi to'lovi (${method === "karta" ? "Karta" : "Naqd"})`;
+            ? `${supplierName}: ${note.trim()} (${currencyText})`
+            : `${supplierName} - tovar qarzi to'lovi (${currencyText})`;
           const expense = await storage.createExpense({
             tenantId: req.tenantId,
-            amount: used,
+            amount: usedUzs,
             categoryId: expenseCategoryId,
             description,
             date: new Date(),
@@ -2195,7 +2272,9 @@ export async function registerRoutes(
 
       res.json({
         success: true,
+        currency: payCurrency,
         used,
+        usedUzs,
         leftover: payAmount - used,
         productsUpdated: updates.length,
         expenseId,

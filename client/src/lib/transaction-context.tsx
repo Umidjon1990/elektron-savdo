@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, type ReactNode } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { type CartItem } from "@/pages/dashboard";
 import { db, type CachedTransaction } from "./db";
 import { getOnlineStatus, saveTransactionLocally, getTransactionsFromCache, syncPendingTransactions } from "./db/sync";
@@ -42,6 +43,7 @@ const TransactionContext = createContext<TransactionContextType | undefined>(und
 
 export function TransactionProvider({ children }: { children: ReactNode }) {
   const { token } = useAuth();
+  const queryClient = useQueryClient();
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [pendingCount, setPendingCount] = useState(0);
   const [isOffline, setIsOffline] = useState(!getOnlineStatus());
@@ -174,31 +176,61 @@ export function TransactionProvider({ children }: { children: ReactNode }) {
     if (transaction.status === "voided") {
       throw new Error("Transaction already voided");
     }
-    
-    for (const item of (transaction.items || [])) {
-      if (!item || !item.product) continue;
-      const product = await db.products.get(item.product.id);
-      if (product) {
-        await db.products.update(item.product.id, { 
-          stock: product.stock + item.quantity 
-        });
+
+    const online = getOnlineStatus();
+
+    // When online, the server is the source of truth: the /void call
+    // restores stock on the backend, and the products query invalidation
+    // below triggers a refetch that overwrites IndexedDB. Doing a local
+    // +qty here would briefly compound stocks until the refetch lands.
+    // When offline, the server can't be reached, so we MUST restore stock
+    // locally; the pending sync queue will reconcile with the server later.
+    if (!online) {
+      for (const item of (transaction.items || [])) {
+        if (!item || !item.product) continue;
+        const product = await db.products.get(item.product.id);
+        if (product) {
+          await db.products.update(item.product.id, {
+            stock: product.stock + item.quantity
+          });
+        }
       }
     }
-    
+
     await db.transactions.update(id, { 
       status: "voided",
       synced: false
     });
     
-    if (getOnlineStatus()) {
+    if (online) {
       try {
         const { getAuthHeaders } = await import("./auth-context");
         await fetch(`/api/transactions/${id}/void`, { method: "POST", headers: getAuthHeaders() });
       } catch (error) {
         console.error("Failed to sync voided transaction:", error);
+        // Backend call failed even though we thought we were online. Fall
+        // back to local restore so the user still sees stock returned.
+        for (const item of (transaction.items || [])) {
+          if (!item || !item.product) continue;
+          const product = await db.products.get(item.product.id);
+          if (product) {
+            await db.products.update(item.product.id, {
+              stock: product.stock + item.quantity
+            });
+          }
+        }
       }
     }
-    
+
+    // The product query in product-context has staleTime=5min and
+    // refetchOnMount=false, so without invalidation the inventory /
+    // cashier screens keep showing the OLD (decreased) stock until manual
+    // refresh — exactly what users perceive as "stock didn't come back
+    // after cancel". Invalidate both products and transactions caches so
+    // any screen reading them refetches fresh values.
+    await queryClient.invalidateQueries({ queryKey: ["products"] });
+    await queryClient.invalidateQueries({ queryKey: ["/api/transactions"] });
+
     await loadTransactions();
   };
 

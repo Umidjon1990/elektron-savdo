@@ -1,9 +1,67 @@
-import { useState, memo } from "react";
+import { useState, memo, useEffect, useRef } from "react";
+import JsBarcode from "jsbarcode";
 import { type Product } from "@/data/mock-products";
 import { Card } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import { Package, Plus, ShoppingCart, Play } from "lucide-react";
 import { VideoPopup } from "@/components/ui/video-popup";
+
+// Renders a compact barcode SVG using JsBarcode. Picks an encoding that
+// matches the value length (EAN-13 / EAN-8 / UPC-A / fallback CODE128) so
+// short numeric codes don't get rejected. We render *once* per barcode
+// change inside an effect; React.memo on ProductCard prevents re-renders
+// when the underlying product reference doesn't change.
+function MiniBarcode({ value, compact }: { value: string; compact: boolean }) {
+  const svgRef = useRef<SVGSVGElement | null>(null);
+
+  useEffect(() => {
+    if (!svgRef.current || !value) return;
+    const trimmed = String(value).trim();
+    let format: "EAN13" | "EAN8" | "UPC" | "CODE128" = "CODE128";
+    if (/^\d{13}$/.test(trimmed)) format = "EAN13";
+    else if (/^\d{12}$/.test(trimmed)) format = "UPC";
+    else if (/^\d{8}$/.test(trimmed)) format = "EAN8";
+    try {
+      JsBarcode(svgRef.current, trimmed, {
+        format,
+        displayValue: true,
+        fontSize: compact ? 9 : 10,
+        height: compact ? 28 : 32,
+        width: compact ? 1.1 : 1.3,
+        margin: 0,
+        background: "#ffffff",
+        lineColor: "#1f2937",
+      });
+    } catch {
+      // If the format check above is wrong (e.g. invalid checksum) fall
+      // back to CODE128 which accepts any string. This keeps the card
+      // resilient to imported-from-Excel or hand-typed barcodes.
+      try {
+        JsBarcode(svgRef.current, trimmed, {
+          format: "CODE128",
+          displayValue: true,
+          fontSize: compact ? 9 : 10,
+          height: compact ? 28 : 32,
+          width: compact ? 1.1 : 1.3,
+          margin: 0,
+          background: "#ffffff",
+          lineColor: "#1f2937",
+        });
+      } catch {
+        // Give up silently — text fallback below already shows the number.
+      }
+    }
+  }, [value, compact]);
+
+  return (
+    <svg
+      ref={svgRef}
+      className="w-full max-h-9 block"
+      preserveAspectRatio="xMidYMid meet"
+      data-testid={`barcode-svg-${value}`}
+    />
+  );
+}
 
 interface ProductCardProps {
   product: Product;
@@ -102,18 +160,16 @@ function ProductCardImpl({ product, onClick, size = "default" }: ProductCardProp
         )}>
           {product.author}
         </p>
-        {product.barcode && (
-          <p
-            className={cn(
-              "text-slate-400 font-mono truncate mb-2",
-              isLarge ? "text-xs" : "text-[10px]"
-            )}
-            data-testid={`text-product-barcode-${product.id}`}
+        {product.barcode ? (
+          <div
+            className="mb-2 -mx-1 px-1"
+            data-testid={`barcode-product-${product.id}`}
           >
-            {product.barcode}
-          </p>
+            <MiniBarcode value={product.barcode} compact={!isLarge} />
+          </div>
+        ) : (
+          <div className="mb-2" />
         )}
-        {!product.barcode && <div className="mb-2" />}
         <div className="flex items-center justify-between">
           <span className={cn(
             "text-blue-600 font-bold font-mono",

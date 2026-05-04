@@ -835,12 +835,20 @@ export default function FinancePage() {
                             <p className="text-sm font-bold text-green-600">+{entry.amount.toLocaleString()}</p>
                             <p className="text-[10px] text-gray-400">{formatDateTime(entry.date)}</p>
                           </div>
-                          <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                            <button onClick={() => { setEditingIncome(entry); setIncomeDialogOpen(true); }} data-testid={`button-edit-income-${entry.id}`}>
-                              <Pencil className="h-3.5 w-3.5 text-gray-400 hover:text-blue-500" />
+                          <div className="flex gap-1 shrink-0">
+                            <button
+                              onClick={() => { setEditingIncome(entry); setIncomeDialogOpen(true); }}
+                              className="p-1.5 rounded-md hover:bg-blue-50 active:bg-blue-100 transition-colors"
+                              data-testid={`button-edit-income-${entry.id}`}
+                            >
+                              <Pencil className="h-4 w-4 text-blue-500" />
                             </button>
-                            <button onClick={() => { if (confirm("O'chirishni tasdiqlaysizmi?")) deleteEntry.mutate(entry.id); }} data-testid={`button-delete-income-${entry.id}`}>
-                              <Trash2 className="h-3.5 w-3.5 text-gray-400 hover:text-red-500" />
+                            <button
+                              onClick={() => { if (confirm("O'chirishni tasdiqlaysizmi?")) deleteEntry.mutate(entry.id); }}
+                              className="p-1.5 rounded-md hover:bg-red-50 active:bg-red-100 transition-colors"
+                              data-testid={`button-delete-income-${entry.id}`}
+                            >
+                              <Trash2 className="h-4 w-4 text-red-500" />
                             </button>
                           </div>
                         </div>
@@ -965,12 +973,20 @@ export default function FinancePage() {
                               <p className="text-sm font-bold text-red-600">-{exp.amount.toLocaleString()}</p>
                               <p className="text-[10px] text-gray-400">{formatDate(exp.date)}</p>
                             </div>
-                            <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                              <button onClick={() => { setEditingExpense(exp); setExpenseDialogOpen(true); }} data-testid={`button-edit-expense-${exp.id}`}>
-                                <Pencil className="h-3.5 w-3.5 text-gray-400 hover:text-blue-500" />
+                            <div className="flex gap-1 shrink-0">
+                              <button
+                                onClick={() => { setEditingExpense(exp); setExpenseDialogOpen(true); }}
+                                className="p-1.5 rounded-md hover:bg-blue-50 active:bg-blue-100 transition-colors"
+                                data-testid={`button-edit-expense-${exp.id}`}
+                              >
+                                <Pencil className="h-4 w-4 text-blue-500" />
                               </button>
-                              <button onClick={() => { if (confirm("O'chirishni tasdiqlaysizmi?")) deleteExpense.mutate(exp.id); }} data-testid={`button-delete-expense-${exp.id}`}>
-                                <Trash2 className="h-3.5 w-3.5 text-gray-400 hover:text-red-500" />
+                              <button
+                                onClick={() => { if (confirm("O'chirishni tasdiqlaysizmi?")) deleteExpense.mutate(exp.id); }}
+                                className="p-1.5 rounded-md hover:bg-red-50 active:bg-red-100 transition-colors"
+                                data-testid={`button-delete-expense-${exp.id}`}
+                              >
+                                <Trash2 className="h-4 w-4 text-red-500" />
                               </button>
                             </div>
                           </div>

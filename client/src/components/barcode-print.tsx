@@ -40,6 +40,9 @@ function BarcodeLabel({ product, dims, showPrice, fontScale }: { product: Produc
 
   useEffect(() => {
     if (!svgRef.current) return;
+    const code = (product.barcode || "").trim();
+    while (svgRef.current.firstChild) svgRef.current.removeChild(svgRef.current.firstChild);
+    if (!code) return;
     const baseFontSize = Math.max(7, Math.min(12, dims.width / 5));
     const barcodeOpts = {
       format: "CODE128" as string,
@@ -51,14 +54,18 @@ function BarcodeLabel({ product, dims, showPrice, fontScale }: { product: Produc
       textMargin: 1,
       font: "monospace",
     };
-    if (product.barcode.match(/^\d{13}$/)) barcodeOpts.format = "EAN13";
-    else if (product.barcode.match(/^\d{12}$/)) barcodeOpts.format = "UPC";
+    if (code.match(/^\d{13}$/)) barcodeOpts.format = "EAN13";
+    else if (code.match(/^\d{12}$/)) barcodeOpts.format = "UPC";
 
     try {
-      JsBarcode(svgRef.current, product.barcode, barcodeOpts);
+      JsBarcode(svgRef.current, code, barcodeOpts);
     } catch {
-      barcodeOpts.format = "CODE128";
-      JsBarcode(svgRef.current, product.barcode, barcodeOpts);
+      try {
+        barcodeOpts.format = "CODE128";
+        JsBarcode(svgRef.current, code, barcodeOpts);
+      } catch {
+        // Invalid barcode — render nothing (graceful)
+      }
     }
   }, [product.barcode, dims, fontScale]);
 
@@ -110,11 +117,14 @@ export default function BarcodePrintDialog({ products, open, onClose }: BarcodeP
   const [searchQuery, setSearchQuery] = useState("");
   const printRef = useRef<HTMLDivElement>(null);
 
+  const validProducts = products.filter(p => (p.barcode || "").trim().length > 0);
+  const skippedCount = products.length - validProducts.length;
+
   useEffect(() => {
-    if (open && products.length > 0) {
+    if (open && validProducts.length > 0) {
       const initial: Record<string, number> = {};
       const initialSelected: Record<string, boolean> = {};
-      products.forEach(p => { initial[p.id] = 1; initialSelected[p.id] = products.length === 1; });
+      validProducts.forEach(p => { initial[p.id] = 1; initialSelected[p.id] = validProducts.length === 1; });
       setCopies(initial);
       setSelected(initialSelected);
       setSearchQuery("");
@@ -125,7 +135,7 @@ export default function BarcodePrintDialog({ products, open, onClose }: BarcodeP
     setSelected(prev => ({ ...prev, [id]: !prev[id] }));
   };
 
-  const filteredProducts = products.filter(p => {
+  const filteredProducts = validProducts.filter(p => {
     if (!searchQuery.trim()) return true;
     const q = searchQuery.toLowerCase();
     return p.name.toLowerCase().includes(q) || p.barcode.toLowerCase().includes(q);
@@ -334,6 +344,11 @@ export default function BarcodePrintDialog({ products, open, onClose }: BarcodeP
                 </Button>
               </div>
             </div>
+            {skippedCount > 0 && (
+              <div className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded-md px-2 py-1.5">
+                {skippedCount} ta tovar barkodsiz bo'lgani uchun ro'yxatdan chetlatildi.
+              </div>
+            )}
             <div className="relative">
               <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
               <Input

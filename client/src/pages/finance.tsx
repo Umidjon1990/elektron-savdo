@@ -1784,6 +1784,7 @@ function SupplierCard({ supplier, token, categories, debtsInUsdOnly, onUpdate }:
   const { toast } = useToast();
   const [payDialogProduct, setPayDialogProduct] = useState<any>(null);
   const [payAmount, setPayAmount] = useState("");
+  const [payMode, setPayMode] = useState<"add" | "edit">("add");
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
 
   // Bulk debt-payment dialog state
@@ -2091,7 +2092,7 @@ function SupplierCard({ supplier, token, categories, debtsInUsdOnly, onUpdate }:
                               <UserCheck className="h-3.5 w-3.5" />
                             </button>
                             <button
-                              onClick={(e) => { e.stopPropagation(); setPayDialogProduct(p); setPayAmount(""); }}
+                              onClick={(e) => { e.stopPropagation(); setPayDialogProduct(p); setPayAmount(""); setPayMode("add"); }}
                               className="p-1 hover:bg-orange-100 rounded text-orange-600" title="Qisman to'lov"
                               data-testid={`btn-partial-${p.id}`}
                             >
@@ -2140,35 +2141,62 @@ function SupplierCard({ supplier, token, categories, debtsInUsdOnly, onUpdate }:
 
       <Dialog open={!!payDialogProduct} onOpenChange={(open) => { if (!open) setPayDialogProduct(null); }}>
         <DialogContent className="max-w-sm">
-          <DialogHeader><DialogTitle>Qisman to'lov</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle>{payMode === "edit" ? "To'lov summasini to'g'rilash" : "Qisman to'lov"}</DialogTitle></DialogHeader>
           {payDialogProduct && (
             <div className="space-y-3">
+              <div className="grid grid-cols-2 gap-1 p-1 bg-gray-100 rounded-lg">
+                <button
+                  type="button"
+                  onClick={() => { setPayMode("add"); setPayAmount(""); }}
+                  className={`py-1.5 text-xs font-medium rounded-md transition ${payMode === "add" ? "bg-white text-gray-900 shadow-sm" : "text-gray-500"}`}
+                  data-testid="btn-pay-mode-add"
+                >
+                  Qo'shish
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setPayMode("edit"); setPayAmount(String(payDialogProduct.paidAmount || 0)); }}
+                  className={`py-1.5 text-xs font-medium rounded-md transition ${payMode === "edit" ? "bg-white text-gray-900 shadow-sm" : "text-gray-500"}`}
+                  data-testid="btn-pay-mode-edit"
+                >
+                  To'g'rilash
+                </button>
+              </div>
               <p className="text-sm text-gray-600">{payDialogProduct.name}</p>
               <p className="text-sm">Jami: <b>{payDialogProduct.amount.toLocaleString()}</b> so'm</p>
               <p className="text-sm">Oldin to'langan: <b>{(payDialogProduct.paidAmount || 0).toLocaleString()}</b> so'm</p>
               <p className="text-sm">Qoldiq: <b>{(payDialogProduct.amount - (payDialogProduct.paidAmount || 0)).toLocaleString()}</b> so'm</p>
               <Input
                 type="number"
-                placeholder="To'lov miqdori (so'm)"
+                placeholder={payMode === "edit" ? "Yangi jami to'langan summa (so'm)" : "To'lov miqdori (so'm)"}
                 value={payAmount}
                 onChange={(e) => setPayAmount(e.target.value)}
                 data-testid="input-supplier-pay-amount"
               />
+              {payMode === "edit" && (
+                <p className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded p-2">
+                  Diqqat: kiritilgan summa avvalgi to'lovni to'liq <b>almashtiradi</b>. Xato kiritilgan summani to'g'rilash uchun ishlating.
+                </p>
+              )}
             </div>
           )}
           <DialogFooter>
             <Button
               onClick={() => {
-                if (!payDialogProduct || !payAmount) return;
-                const newPaid = (payDialogProduct.paidAmount || 0) + Number(payAmount);
-                const newStatus = newPaid >= payDialogProduct.amount ? "paid" : "partial";
-                updateDebtStatus(payDialogProduct.id, newStatus, Math.min(newPaid, payDialogProduct.amount));
+                if (!payDialogProduct || payAmount === "") return;
+                const entered = Number(payAmount);
+                if (isNaN(entered) || entered < 0) return;
+                const newPaid = payMode === "edit"
+                  ? Math.min(entered, payDialogProduct.amount)
+                  : Math.min((payDialogProduct.paidAmount || 0) + entered, payDialogProduct.amount);
+                const newStatus = newPaid <= 0 ? "pending" : newPaid >= payDialogProduct.amount ? "paid" : "partial";
+                updateDebtStatus(payDialogProduct.id, newStatus, newPaid);
                 setPayDialogProduct(null);
               }}
-              disabled={!payAmount || Number(payAmount) <= 0}
+              disabled={payAmount === "" || Number(payAmount) < 0 || isNaN(Number(payAmount))}
               data-testid="btn-confirm-partial-pay"
             >
-              To'lash
+              {payMode === "edit" ? "Saqlash" : "To'lash"}
             </Button>
           </DialogFooter>
         </DialogContent>

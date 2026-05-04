@@ -241,7 +241,7 @@ export function CartSidebar({ items, onUpdateQuantity, onUpdateDiscount, onRemov
         )}
       </ScrollArea>
 
-      <div className="p-5 bg-gradient-to-b from-gray-50 to-white border-t shadow-[0_-4px_20px_rgba(0,0,0,0.08)] space-y-4">
+      <div className="p-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] bg-gradient-to-b from-gray-50 to-white border-t shadow-[0_-4px_20px_rgba(0,0,0,0.08)] space-y-4">
         <div className="space-y-3">
           <div className="flex justify-between text-sm">
             <span className="text-muted-foreground">Jami mahsulot:</span>

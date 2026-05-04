@@ -532,12 +532,21 @@ export default function Dashboard() {
     const isAllCategory = selectedCategory === "Barchasi";
     if (!searchLower && isAllCategory) return products;
 
+    // Multi-word search: every term must match somewhere (name/author/barcode/category/description)
+    const terms = searchLower.split(/\s+/).filter(Boolean);
+
     return products.filter(product => {
       if (!isAllCategory && product.category !== selectedCategory) return false;
       if (!searchLower) return true;
-      return product.name.toLowerCase().includes(searchLower)
-          || product.author.toLowerCase().includes(searchLower)
-          || product.barcode.includes(searchQuery);
+      const haystack = [
+        product.name,
+        product.author,
+        product.barcode,
+        product.category,
+        (product as any).description,
+        (product as any).supplier,
+      ].filter(Boolean).join(" ").toLowerCase();
+      return terms.every(t => haystack.includes(t));
     });
   }, [products, searchQuery, selectedCategory]);
 

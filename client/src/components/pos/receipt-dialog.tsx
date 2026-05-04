@@ -271,14 +271,14 @@ export function ReceiptDialog({ transaction, isOpen, onClose, autoPrint, consume
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-[380px] p-0 bg-white gap-0 max-h-[90vh] flex flex-col overflow-hidden">
+      <DialogContent className="sm:max-w-[380px] p-0 bg-white gap-0 max-h-[calc(100dvh-6rem)] md:max-h-[90vh] flex flex-col overflow-hidden top-[44%] md:top-1/2 z-[60]">
         <div className="flex-1 overflow-y-auto p-6 flex flex-col items-center text-center bg-white" id="receipt-area">
           <ReceiptErrorBoundary onError={onClose}>
             <ReceiptContent transaction={transaction} settings={settings} receiptLogo={receiptLogo} paymentMethods={tenantSettings?.paymentMethods} />
           </ReceiptErrorBoundary>
         </div>
 
-        <div className="shrink-0 p-4 bg-gray-50 border-t flex gap-2 sticky bottom-0">
+        <div className="shrink-0 p-4 pb-[max(1rem,env(safe-area-inset-bottom))] bg-gray-50 border-t flex gap-2 sticky bottom-0">
           <Button variant="outline" className="flex-1" onClick={onClose} data-testid="button-close-receipt">
             Yopish
           </Button>

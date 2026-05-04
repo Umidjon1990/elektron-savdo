@@ -485,13 +485,20 @@ export default function Inventory() {
   // product list on every keystroke / unrelated re-render. With thousands of
   // products this was a major cause of UI freezes during navigation.
   const searchFiltered = useMemo(() => {
-    const q = searchQuery.toLowerCase();
-    if (!q) return products;
-    return products.filter(product =>
-      product.name.toLowerCase().includes(q) ||
-      product.author.toLowerCase().includes(q) ||
-      product.barcode.includes(searchQuery)
-    );
+    const q = searchQuery.toLowerCase().trim();
+    const terms = q.split(/\s+/).filter(Boolean);
+    if (terms.length === 0) return products;
+    return products.filter(product => {
+      const haystack = [
+        product.name,
+        product.author,
+        product.barcode,
+        product.category,
+        (product as any).description,
+        (product as any).supplier,
+      ].filter(Boolean).join(" ").toLowerCase();
+      return terms.every(t => haystack.includes(t));
+    });
   }, [products, searchQuery]);
 
   const filteredProducts = useMemo(() => {

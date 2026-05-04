@@ -166,6 +166,17 @@ export default function FinancePage() {
     enabled: !!token && (activeMenu === "tovarberuvchi" || activeMenu === "hisobot"),
   });
 
+  const { data: tenantSettings } = useQuery<any>({
+    queryKey: ["tenant-settings"],
+    queryFn: async () => {
+      const res = await fetch("/api/tenant-settings", { headers });
+      if (!res.ok) throw new Error("Failed");
+      return res.json();
+    },
+    enabled: !!token,
+  });
+  const debtsInUsdOnly = !!tenantSettings?.debtsInUsdOnly;
+
   const summary = useMemo(() => {
     const { dateFrom } = getDateRange();
     const now = new Date();
@@ -1271,11 +1282,17 @@ export default function FinancePage() {
                   <CardContent className="p-4">
                     <div className="flex items-center gap-2 mb-1">
                       <HandCoins className="h-4 w-4 text-amber-600" />
-                      <span className="text-xs text-amber-700 font-medium">Nasiya</span>
+                      <span className="text-xs text-amber-700 font-medium">Qarz</span>
                     </div>
-                    <p className="text-xl font-bold text-amber-800" data-testid="text-supplier-nasiya">{(supplierSummary?.totals?.totalNasiya || 0).toLocaleString()} so'm</p>
-                    {(supplierSummary?.totals?.totalNasiyaUsd || 0) > 0 && (
-                      <p className="text-sm font-semibold text-amber-600">${(supplierSummary?.totals?.totalNasiyaUsd || 0).toLocaleString()}</p>
+                    {debtsInUsdOnly ? (
+                      <p className="text-xl font-bold text-amber-800" data-testid="text-supplier-nasiya">${(supplierSummary?.totals?.totalNasiyaUsd || 0).toLocaleString()}</p>
+                    ) : (
+                      <>
+                        <p className="text-xl font-bold text-amber-800" data-testid="text-supplier-nasiya">{(supplierSummary?.totals?.totalNasiya || 0).toLocaleString()} so'm</p>
+                        {(supplierSummary?.totals?.totalNasiyaUsd || 0) > 0 && (
+                          <p className="text-sm font-semibold text-amber-600">${(supplierSummary?.totals?.totalNasiyaUsd || 0).toLocaleString()}</p>
+                        )}
+                      </>
                     )}
                   </CardContent>
                 </Card>
@@ -1298,6 +1315,7 @@ export default function FinancePage() {
                         supplier={s}
                         token={token}
                         categories={categories}
+                        debtsInUsdOnly={debtsInUsdOnly}
                         onUpdate={() => {
                           queryClient.invalidateQueries({ queryKey: ["supplier-summary"] });
                           queryClient.invalidateQueries({ queryKey: ["expenses"] });
@@ -1745,7 +1763,7 @@ function CategoryDialog({ isOpen, onClose, category, onSave, isLoading }: any) {
   );
 }
 
-function SupplierCard({ supplier, token, categories, onUpdate }: { supplier: any; token: string | null; categories?: any[]; onUpdate: () => void }) {
+function SupplierCard({ supplier, token, categories, debtsInUsdOnly, onUpdate }: { supplier: any; token: string | null; categories?: any[]; debtsInUsdOnly?: boolean; onUpdate: () => void }) {
   const [expanded, setExpanded] = useState(false);
   const { toast } = useToast();
   const [payDialogProduct, setPayDialogProduct] = useState<any>(null);
@@ -1938,17 +1956,35 @@ function SupplierCard({ supplier, token, categories, onUpdate }: { supplier: any
           </button>
           <div className="flex items-center gap-3 shrink-0">
             <div className="text-right">
-              <p className="font-bold text-sm">{supplier.totalAmount.toLocaleString()} so'm</p>
-              {supplier.totalAmountUsd > 0 && (
-                <p className="font-semibold text-xs text-blue-600">${supplier.totalAmountUsd.toLocaleString()}</p>
+              {debtsInUsdOnly ? (
+                supplier.totalAmountUsd > 0 ? (
+                  <p className="font-bold text-sm text-blue-600">${supplier.totalAmountUsd.toLocaleString()}</p>
+                ) : (
+                  <p className="font-bold text-sm">{supplier.totalAmount.toLocaleString()} so'm</p>
+                )
+              ) : (
+                <>
+                  <p className="font-bold text-sm">{supplier.totalAmount.toLocaleString()} so'm</p>
+                  {supplier.totalAmountUsd > 0 && (
+                    <p className="font-semibold text-xs text-blue-600">${supplier.totalAmountUsd.toLocaleString()}</p>
+                  )}
+                  <div className="flex gap-2 text-[10px]">
+                    {supplier.naqd > 0 && <span className="text-green-600">Naqd: {supplier.naqd.toLocaleString()}</span>}
+                    {supplier.karta > 0 && <span className="text-blue-600">Karta: {supplier.karta.toLocaleString()}</span>}
+                    {supplier.nasiya > 0 && <span className="text-amber-600">Nasiya: {supplier.nasiya.toLocaleString()}</span>}
+                  </div>
+                </>
               )}
-              <div className="flex gap-2 text-[10px]">
-                {supplier.naqd > 0 && <span className="text-green-600">Naqd: {supplier.naqd.toLocaleString()}</span>}
-                {supplier.karta > 0 && <span className="text-blue-600">Karta: {supplier.karta.toLocaleString()}</span>}
-                {supplier.nasiya > 0 && <span className="text-amber-600">Nasiya: {supplier.nasiya.toLocaleString()}</span>}
-              </div>
               {nasiyaRemaining > 0 && (
-                <p className="text-[10px] text-red-500 font-medium mt-0.5">Qarz: {nasiyaRemaining.toLocaleString()} so'm</p>
+                debtsInUsdOnly ? (
+                  nasiyaUsdRemaining > 0.01 ? (
+                    <p className="text-[10px] text-red-500 font-medium mt-0.5">Qarz: ${nasiyaUsdRemaining.toLocaleString()}</p>
+                  ) : (
+                    <p className="text-[10px] text-red-500 font-medium mt-0.5">Qarz: {nasiyaRemaining.toLocaleString()} so'm</p>
+                  )
+                ) : (
+                  <p className="text-[10px] text-red-500 font-medium mt-0.5">Qarz: {nasiyaRemaining.toLocaleString()} so'm</p>
+                )
               )}
             </div>
             {nasiyaRemaining > 0 && (

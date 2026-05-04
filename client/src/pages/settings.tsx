@@ -124,6 +124,7 @@ export default function SettingsPage() {
   };
   const [productFormVisibility, setProductFormVisibility] = useState<Record<string, boolean>>(defaultFormVisibility);
   const [deliveryEnabled, setDeliveryEnabled] = useState(false);
+  const [debtsInUsdOnly, setDebtsInUsdOnly] = useState(false);
 
   const FORM_VISIBILITY_OPTIONS = [
     { key: "costPrice", label: "Tan narxi (kelish narxi)" },
@@ -170,6 +171,7 @@ export default function SettingsPage() {
       if (data.orderFormFields) setOrderFormFields(data.orderFormFields);
       if (data.defaultDollarRate !== undefined && data.defaultDollarRate !== null) setDefaultDollarRate(data.defaultDollarRate.toString());
       if (data.deliveryEnabled !== undefined) setDeliveryEnabled(data.deliveryEnabled);
+      if (data.debtsInUsdOnly !== undefined) setDebtsInUsdOnly(data.debtsInUsdOnly);
       return data;
     },
     enabled: !!token,
@@ -609,6 +611,26 @@ export default function SettingsPage() {
                     Misol: $100 tovar = {(100 * Number(defaultDollarRate)).toLocaleString()} so'm
                   </p>
                 )}
+
+                <div className="mt-4 pt-4 border-t flex items-start justify-between gap-3">
+                  <div className="space-y-0.5 flex-1">
+                    <Label htmlFor="debts-in-usd-only" className="cursor-pointer">
+                      Qarzlarni faqat dollarda ko'rsatish
+                    </Label>
+                    <p className="text-xs text-muted-foreground">
+                      Yoqilganda Moliya → Tovar beruvchi sahifasida qarz so'mlarda emas, faqat dollarda ($) ko'rinadi.
+                    </p>
+                  </div>
+                  <Switch
+                    id="debts-in-usd-only"
+                    checked={debtsInUsdOnly}
+                    onCheckedChange={(checked: boolean) => {
+                      setDebtsInUsdOnly(checked);
+                      saveConfigMutation.mutate({ debtsInUsdOnly: checked });
+                    }}
+                    data-testid="switch-debts-in-usd-only"
+                  />
+                </div>
               </CardContent>
             </Card>
 

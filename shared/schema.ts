@@ -27,6 +27,7 @@ export const tenants = pgTable("tenants", {
   orderFormFields: json("order_form_fields").$type<Array<{key: string, label: string, enabled: boolean, required: boolean, options?: Array<{id: string, label: string, type?: string}>}>>(),
   defaultDollarRate: integer("default_dollar_rate").notNull().default(0),
   deliveryEnabled: boolean("delivery_enabled").notNull().default(false),
+  debtsInUsdOnly: boolean("debts_in_usd_only").notNull().default(false),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 

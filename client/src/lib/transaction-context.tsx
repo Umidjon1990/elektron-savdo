@@ -179,21 +179,20 @@ export function TransactionProvider({ children }: { children: ReactNode }) {
 
     const online = getOnlineStatus();
 
-    // When online, the server is the source of truth: the /void call
-    // restores stock on the backend, and the products query invalidation
-    // below triggers a refetch that overwrites IndexedDB. Doing a local
-    // +qty here would briefly compound stocks until the refetch lands.
-    // When offline, the server can't be reached, so we MUST restore stock
-    // locally; the pending sync queue will reconcile with the server later.
-    if (!online) {
-      for (const item of (transaction.items || [])) {
-        if (!item || !item.product) continue;
-        const product = await db.products.get(item.product.id);
-        if (product) {
-          await db.products.update(item.product.id, {
-            stock: product.stock + item.quantity
-          });
-        }
+    // ALWAYS restore stock locally first for INSTANT UI feedback. The user
+    // clicks "X" in Finance and expects to see the stock in Ombor go up
+    // immediately — not after a network round-trip + 5-min stale query
+    // refetch. The subsequent refetchQueries below replaces this with the
+    // server-truth value, overwriting any drift. Previously this was
+    // skipped when online, which is exactly why users reported "X bossam
+    // omborga qaytmayapti" — the inventory cache was stale.
+    for (const item of (transaction.items || [])) {
+      if (!item || !item.product || !item.product.id) continue;
+      const product = await db.products.get(item.product.id);
+      if (product) {
+        await db.products.update(item.product.id, {
+          stock: product.stock + item.quantity
+        });
       }
     }
 
@@ -202,33 +201,27 @@ export function TransactionProvider({ children }: { children: ReactNode }) {
       synced: false
     });
     
+    let serverOk = false;
     if (online) {
       try {
         const { getAuthHeaders } = await import("./auth-context");
-        await fetch(`/api/transactions/${id}/void`, { method: "POST", headers: getAuthHeaders() });
+        const res = await fetch(`/api/transactions/${id}/void`, { method: "POST", headers: getAuthHeaders() });
+        // 409 = already voided on server; treat as success so we still refetch.
+        serverOk = res.ok || res.status === 409;
       } catch (error) {
         console.error("Failed to sync voided transaction:", error);
-        // Backend call failed even though we thought we were online. Fall
-        // back to local restore so the user still sees stock returned.
-        for (const item of (transaction.items || [])) {
-          if (!item || !item.product) continue;
-          const product = await db.products.get(item.product.id);
-          if (product) {
-            await db.products.update(item.product.id, {
-              stock: product.stock + item.quantity
-            });
-          }
-        }
       }
     }
 
-    // The product query in product-context has staleTime=5min and
-    // refetchOnMount=false, so without invalidation the inventory /
-    // cashier screens keep showing the OLD (decreased) stock until manual
-    // refresh — exactly what users perceive as "stock didn't come back
-    // after cancel". Invalidate both products and transactions caches so
-    // any screen reading them refetches fresh values.
-    await queryClient.invalidateQueries({ queryKey: ["products"] });
+    // refetchQueries (NOT invalidateQueries) FORCES an immediate refetch
+    // even with staleTime: 5min and refetchOnMount: false set in
+    // product-context. invalidateQueries only marks stale and waits for
+    // an active observer — but the user might be on Finance page where
+    // the products query observer doesn't exist, so the inventory page
+    // would still show old stock when they navigate back.
+    if (serverOk) {
+      await queryClient.refetchQueries({ queryKey: ["products"] });
+    }
     await queryClient.invalidateQueries({ queryKey: ["/api/transactions"] });
 
     await loadTransactions();

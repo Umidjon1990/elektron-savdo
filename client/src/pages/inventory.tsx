@@ -522,6 +522,44 @@ export default function Inventory() {
     return { all: searchFiltered.length, available, low, out };
   }, [searchFiltered]);
 
+  // Tovar qiymati statistikasi — tenant uchun eng muhim ma'lumot:
+  // umumiy ombordagi qiymat (tan narxi × qoldiq), sotuv qiymati,
+  // va nasiyaga olingan tovarlardan qancha qarz qolganligi.
+  // Hisoblash butun products bo'yicha (qidiruv/tab filterdan qat'iy nazar),
+  // chunki bu — umumiy ombor balansi.
+  const inventoryStats = useMemo(() => {
+    let totalCost = 0;       // jami tan narx × qoldiq (so'm)
+    let totalSale = 0;       // jami sotuv narx × qoldiq (so'm)
+    let nasiyaCost = 0;      // nasiya tovarlarning tan narxi × qoldiq
+    let nasiyaDebt = 0;      // nasiya tovarlar bo'yicha qolgan qarz (so'm)
+    let totalUnits = 0;
+    for (const p of products as any[]) {
+      const stock = Number(p.stock) || 0;
+      const cost = Number(p.costPrice) || 0;
+      const price = Number(p.price) || 0;
+      totalCost += cost * stock;
+      totalSale += price * stock;
+      totalUnits += stock;
+      if (p.supplierPaymentMethod === "nasiya") {
+        const origPrice = Number(p.supplierOriginalPrice) || 0;
+        const rate = Number(p.supplierCurrencyRate) || 1;
+        const isUsd = p.supplierCurrency === "usd";
+        // Tovar beruvchi qarzi har doim so'mda hisoblanadi
+        // (USD bo'lsa — original narx × kurs).
+        const totalDebtUzs = isUsd
+          ? origPrice * rate * stock
+          : cost * stock;
+        const paid = Number(p.supplierPaidAmount) || 0;
+        const remaining = Math.max(0, totalDebtUzs - paid);
+        nasiyaCost += cost * stock;
+        nasiyaDebt += remaining;
+      }
+    }
+    return { totalCost, totalSale, nasiyaCost, nasiyaDebt, totalUnits };
+  }, [products]);
+
+  const fmt = (n: number) => Math.round(n).toLocaleString('uz-UZ');
+
   const moveProduct = async (index: number, direction: "up" | "down") => {
     const newIndex = direction === "up" ? index - 1 : index + 1;
     if (newIndex < 0 || newIndex >= products.length) return;
@@ -571,6 +609,46 @@ export default function Inventory() {
         </header>
 
         <div className="p-4 md:p-6 flex-1 overflow-hidden flex flex-col">
+          {/* Ombor balansi: tan narx, sotuv narx, nasiya qarz */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-2 md:gap-3 mb-4">
+            <div className="bg-white rounded-lg border p-3 md:p-4" data-testid="stat-total-cost">
+              <div className="text-[10px] md:text-xs text-muted-foreground">Jami tan narx</div>
+              <div className="text-sm md:text-lg font-semibold mt-1 text-blue-600 truncate">
+                {fmt(inventoryStats.totalCost)} <span className="text-[10px] md:text-xs font-normal text-muted-foreground">so'm</span>
+              </div>
+              <div className="text-[10px] text-muted-foreground mt-0.5">
+                {inventoryStats.totalUnits.toLocaleString('uz-UZ')} dona
+              </div>
+            </div>
+            <div className="bg-white rounded-lg border p-3 md:p-4" data-testid="stat-total-sale">
+              <div className="text-[10px] md:text-xs text-muted-foreground">Sotuv qiymati</div>
+              <div className="text-sm md:text-lg font-semibold mt-1 text-emerald-600 truncate">
+                {fmt(inventoryStats.totalSale)} <span className="text-[10px] md:text-xs font-normal text-muted-foreground">so'm</span>
+              </div>
+              <div className="text-[10px] text-muted-foreground mt-0.5">
+                Foyda: {fmt(inventoryStats.totalSale - inventoryStats.totalCost)}
+              </div>
+            </div>
+            <div className="bg-white rounded-lg border p-3 md:p-4" data-testid="stat-nasiya-cost">
+              <div className="text-[10px] md:text-xs text-muted-foreground">Nasiya tovar</div>
+              <div className="text-sm md:text-lg font-semibold mt-1 text-orange-600 truncate">
+                {fmt(inventoryStats.nasiyaCost)} <span className="text-[10px] md:text-xs font-normal text-muted-foreground">so'm</span>
+              </div>
+              <div className="text-[10px] text-muted-foreground mt-0.5">
+                Tan narx bo'yicha
+              </div>
+            </div>
+            <div className="bg-white rounded-lg border p-3 md:p-4" data-testid="stat-nasiya-debt">
+              <div className="text-[10px] md:text-xs text-muted-foreground">Qolgan qarz</div>
+              <div className="text-sm md:text-lg font-semibold mt-1 text-red-600 truncate">
+                {fmt(inventoryStats.nasiyaDebt)} <span className="text-[10px] md:text-xs font-normal text-muted-foreground">so'm</span>
+              </div>
+              <div className="text-[10px] text-muted-foreground mt-0.5">
+                Tovar beruvchiga
+              </div>
+            </div>
+          </div>
+
           <div className="flex gap-1 mb-4 bg-white rounded-lg p-1 border overflow-x-auto">
             {[
               { key: "all" as const, label: "Barchasi", count: tabCounts.all },

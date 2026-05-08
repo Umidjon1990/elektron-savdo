@@ -149,20 +149,7 @@ export function TransactionProvider({ children }: { children: ReactNode }) {
       paymentSplits: isMixed ? paymentSplits : undefined,
     };
     
-    await saveTransactionLocally(newTransaction);
-    
-    for (const item of items) {
-      const newStock = item.product.stock - item.quantity;
-      await db.products.update(item.product.id, { stock: Math.max(0, newStock) });
-    }
-    
-    if (getOnlineStatus()) {
-      syncPendingTransactions().catch(console.error);
-    }
-    
-    await loadTransactions();
-    
-    return {
+    const returnedTransaction: Transaction = {
       id: newTransaction.id,
       date: newTransaction.date,
       items: items,
@@ -179,6 +166,45 @@ export function TransactionProvider({ children }: { children: ReactNode }) {
       debtStatus: initialDebtStatus,
       paymentSplits: isMixed ? paymentSplits : undefined,
     };
+
+    // INSTANT-CHECKOUT FAST PATH:
+    // 1) Update React state synchronously (no IndexedDB read, no /api/transactions
+    //    fetch). The user can see the receipt the moment we return.
+    // 2) Push the IndexedDB write, the per-item stock decrement, and the
+    //    server sync into the background — none of them block the receipt.
+    // Previously this function awaited:
+    //   - saveTransactionLocally (1 IDB put)
+    //   - N sequential db.products.update (N IDB puts, one per cart item)
+    //   - loadTransactions() → getTransactionsFromCache() → when online,
+    //     a full GET /api/transactions (~1 MB for big tenants) + per-row
+    //     IDB upserts. THIS was the biggest blocker for "to'lov qilish qotib qoldi".
+    setTransactions(prev => [returnedTransaction, ...prev]);
+    setPendingCount(prev => prev + 1);
+
+    // Fire-and-forget local persistence + stock update + server sync.
+    (async () => {
+      try {
+        await saveTransactionLocally(newTransaction);
+        // Bulk-update stock in one IndexedDB write instead of N sequential awaits.
+        const stockUpdates = items
+          .filter(it => it && it.product && it.product.id)
+          .map(it => ({ id: it.product.id, stock: Math.max(0, (it.product.stock || 0) - it.quantity) }));
+        if (stockUpdates.length > 0) {
+          const fresh = await db.products.bulkGet(stockUpdates.map(u => u.id));
+          const merged = stockUpdates
+            .map((u, i) => fresh[i] ? { ...fresh[i]!, stock: u.stock } : null)
+            .filter(Boolean) as any[];
+          if (merged.length > 0) await db.products.bulkPut(merged);
+        }
+        if (getOnlineStatus()) {
+          syncPendingTransactions().catch(console.error);
+        }
+      } catch (err) {
+        console.error("Background checkout persistence failed:", err);
+      }
+    })();
+
+    return returnedTransaction;
   };
 
   const voidTransaction = async (id: string): Promise<void> => {

@@ -434,12 +434,21 @@ export default function Dashboard() {
       // closes itself — so the user just clicks "Sotildi" and the printer
       // dialog appears immediately with no extra clicks.
       let autoPrintSucceeded = false;
-      if (settings.autoPrint && preOpenedPrintWindowRef.current) {
-        const printWin = preOpenedPrintWindowRef.current;
-        const previewWin = preOpenedPreviewWindowRef.current;
+      if (settings.autoPrint && (preOpenedPrintWindowRef.current || preOpenedPreviewWindowRef.current)) {
+        let printWin = preOpenedPrintWindowRef.current;
+        let previewWin = preOpenedPreviewWindowRef.current;
         preOpenedPrintWindowRef.current = null;
         preOpenedPreviewWindowRef.current = null;
-        if (!printWin.closed) {
+
+        // Popup blocker fallback: if only ONE of the two pre-opened popups
+        // survived, use it for auto-printing (printing is more important than
+        // the side preview).
+        if (!printWin && previewWin) {
+          printWin = previewWin;
+          previewWin = null;
+        }
+
+        if (printWin && !printWin.closed) {
           try {
             const printHtml = buildReceiptHtml({ transaction, settings, tenantSettings });
             printWin.document.open();
@@ -450,10 +459,14 @@ export default function Dashboard() {
             console.error("Auto-print write failed:", err);
             try { printWin.close(); } catch {}
           }
-        } else {
+        } else if (printWin) {
           console.warn("Auto-print popup was closed before we could write to it");
         }
-        if (previewWin && !previewWin.closed) {
+
+        // Always write the side-preview HTML (with manual buttons) into the
+        // preview popup IF it survived AND is different from the print window —
+        // otherwise the placeholder "Chek tayyorlanmoqda…" stays stuck on screen.
+        if (previewWin && !previewWin.closed && previewWin !== printWin) {
           try {
             const previewHtml = buildReceiptHtml({ transaction, settings, tenantSettings, noAutoPrint: true });
             previewWin.document.open();

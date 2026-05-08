@@ -1,9 +1,10 @@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { useTransactions, type Transaction } from "@/lib/transaction-context";
 import { ReceiptDialog } from "./receipt-dialog";
-import { useState } from "react";
-import { Receipt, XCircle, Eye, AlertTriangle } from "lucide-react";
+import { useState, useMemo } from "react";
+import { Receipt, XCircle, Eye, AlertTriangle, Calendar } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   AlertDialog,
@@ -22,17 +23,54 @@ interface ReceiptsListDialogProps {
   onClose: () => void;
 }
 
+type FilterMode = "today" | "yesterday" | "custom" | "all";
+
+function toIsoDate(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
 export function ReceiptsListDialog({ isOpen, onClose }: ReceiptsListDialogProps) {
   const { transactions, voidTransaction } = useTransactions();
   const [selectedTransaction, setSelectedTransaction] = useState<Transaction | null>(null);
   const [voidConfirmId, setVoidConfirmId] = useState<string | null>(null);
+  const [filterMode, setFilterMode] = useState<FilterMode>("today");
+  const [customDate, setCustomDate] = useState<string>(toIsoDate(new Date()));
   const { toast } = useToast();
 
-  const todayTransactions = transactions.filter(t => {
-    const today = new Date();
-    const transDate = new Date(t.date);
-    return transDate.toDateString() === today.toDateString();
-  }).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  const filteredTransactions = useMemo(() => {
+    const now = new Date();
+    const today = toIsoDate(now);
+    const y = new Date(now);
+    y.setDate(y.getDate() - 1);
+    const yesterday = toIsoDate(y);
+
+    let targetDate: string | null = null;
+    if (filterMode === "today") targetDate = today;
+    else if (filterMode === "yesterday") targetDate = yesterday;
+    else if (filterMode === "custom") targetDate = customDate;
+
+    const filtered = transactions.filter(t => {
+      if (filterMode === "all") return true;
+      if (!targetDate) return true;
+      const transDate = toIsoDate(new Date(t.date));
+      return transDate === targetDate;
+    });
+
+    return filtered.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  }, [transactions, filterMode, customDate]);
+
+  const titleText = filterMode === "today" ? "Bugungi cheklar"
+    : filterMode === "yesterday" ? "Kechagi cheklar"
+    : filterMode === "custom" ? `Cheklar (${customDate})`
+    : "Barcha cheklar";
+
+  const emptyText = filterMode === "today" ? "Bugun cheklar yo'q"
+    : filterMode === "yesterday" ? "Kecha cheklar yo'q"
+    : filterMode === "custom" ? "Tanlangan kunda cheklar yo'q"
+    : "Cheklar yo'q";
 
   const handleVoid = async (id: string) => {
     try {
@@ -59,18 +97,71 @@ export function ReceiptsListDialog({ isOpen, onClose }: ReceiptsListDialogProps)
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Receipt className="h-5 w-5" />
-              Bugungi cheklar
+              {titleText}
+              <span className="ml-auto text-xs font-normal text-muted-foreground" data-testid="text-receipts-count">
+                {filteredTransactions.length} ta
+              </span>
             </DialogTitle>
           </DialogHeader>
 
-          <div className="flex-1 overflow-y-auto space-y-2 pr-2">
-            {todayTransactions.length === 0 ? (
+          <div className="flex flex-wrap items-center gap-1.5 pb-2 border-b">
+            <Button
+              size="sm"
+              variant={filterMode === "today" ? "default" : "outline"}
+              className="h-8 px-3 text-xs"
+              onClick={() => setFilterMode("today")}
+              data-testid="button-filter-today"
+            >
+              Bugun
+            </Button>
+            <Button
+              size="sm"
+              variant={filterMode === "yesterday" ? "default" : "outline"}
+              className="h-8 px-3 text-xs"
+              onClick={() => setFilterMode("yesterday")}
+              data-testid="button-filter-yesterday"
+            >
+              Kecha
+            </Button>
+            <Button
+              size="sm"
+              variant={filterMode === "custom" ? "default" : "outline"}
+              className="h-8 px-3 text-xs gap-1"
+              onClick={() => setFilterMode("custom")}
+              data-testid="button-filter-custom"
+            >
+              <Calendar className="h-3.5 w-3.5" />
+              Sana
+            </Button>
+            <Button
+              size="sm"
+              variant={filterMode === "all" ? "default" : "outline"}
+              className="h-8 px-3 text-xs"
+              onClick={() => setFilterMode("all")}
+              data-testid="button-filter-all"
+            >
+              Barchasi
+            </Button>
+            {filterMode === "custom" && (
+              <Input
+                type="date"
+                value={customDate}
+                onChange={(e) => setCustomDate(e.target.value)}
+                max={toIsoDate(new Date())}
+                className="h-8 text-xs w-auto ml-1"
+                data-testid="input-filter-date"
+              />
+            )}
+          </div>
+
+          <div className="flex-1 overflow-y-auto space-y-2 pr-2 pt-2">
+            {filteredTransactions.length === 0 ? (
               <div className="text-center py-8 text-muted-foreground">
                 <Receipt className="h-12 w-12 mx-auto mb-2 opacity-20" />
-                <p>Bugun cheklar yo'q</p>
+                <p>{emptyText}</p>
               </div>
             ) : (
-              todayTransactions.map(transaction => (
+              filteredTransactions.map(transaction => (
                 <div
                   key={transaction.id}
                   className={cn(
@@ -92,7 +183,9 @@ export function ReceiptsListDialog({ isOpen, onClose }: ReceiptsListDialogProps)
                       )}
                     </div>
                     <p className="text-xs text-muted-foreground">
-                      {new Date(transaction.date).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                      {filterMode === "today"
+                        ? new Date(transaction.date).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})
+                        : new Date(transaction.date).toLocaleString([], {day:'2-digit', month:'2-digit', year:'2-digit', hour: '2-digit', minute:'2-digit'})}
                       {' • '}
                       {(transaction.items || []).length} ta mahsulot
                     </p>

@@ -31,6 +31,7 @@ export interface BuildReceiptHtmlParams {
   transaction: Transaction;
   settings: ReceiptSettingsLike;
   tenantSettings?: any;
+  noAutoPrint?: boolean;
 }
 
 export function getPaymentLabel(method: string, tenantSettings?: any): string {
@@ -41,7 +42,7 @@ export function getPaymentLabel(method: string, tenantSettings?: any): string {
   return PAYMENT_LABELS[method] || method;
 }
 
-export function buildReceiptHtml({ transaction, settings, tenantSettings }: BuildReceiptHtmlParams): string {
+export function buildReceiptHtml({ transaction, settings, tenantSettings, noAutoPrint }: BuildReceiptHtmlParams): string {
   if (!transaction) return '';
 
   const receiptLogo = tenantSettings?.receiptLogo || tenantSettings?.logo;
@@ -141,8 +142,10 @@ export function buildReceiptHtml({ transaction, settings, tenantSettings }: Buil
       ${settings.telegramUsername ? `<p style="font-size:9px;color:#000;margin:2px 0 0;font-weight:600;">Telegram: @${escapeHtml(settings.telegramUsername)}</p>` : ''}
     </div>
   </div>
+  ${noAutoPrint ? `<div style="text-align:center;margin:8px 0 0;"><button onclick="try{window.print()}catch(e){}" style="background:#4f46e5;color:#fff;border:0;border-radius:6px;padding:8px 14px;font-size:12px;font-weight:700;cursor:pointer;">Chop etish</button>&nbsp;<button onclick="try{window.close()}catch(e){}" style="background:#e5e7eb;color:#111;border:0;border-radius:6px;padding:8px 14px;font-size:12px;font-weight:700;cursor:pointer;">Yopish</button></div>` : ''}
   <script>
     (function() {
+      ${noAutoPrint ? 'return;' : ''}
       var printed = false;
       function doPrint() {
         if (printed) return;

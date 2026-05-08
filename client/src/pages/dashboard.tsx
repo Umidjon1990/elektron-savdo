@@ -100,6 +100,9 @@ export default function Dashboard() {
   // user click handler so popup blockers allow it; ReceiptDialog later writes
   // the receipt HTML into this window.
   const preOpenedPrintWindowRef = useRef<Window | null>(null);
+  // Side preview popup (visible alongside the print dialog) so the cashier
+  // can read the receipt while the OS print dialog is on screen.
+  const preOpenedPreviewWindowRef = useRef<Window | null>(null);
   const [isMobileCartOpen, setIsMobileCartOpen] = useState(false);
   const [isReceiptsListOpen, setIsReceiptsListOpen] = useState(false);
   const [isSoldItemsOpen, setIsSoldItemsOpen] = useState(false);
@@ -335,12 +338,35 @@ export default function Dashboard() {
     // ReceiptDialog will later write the receipt HTML into this same window.
     if (settings.autoPrint && !preOpenedPrintWindowRef.current) {
       try {
-        const win = window.open("", "_blank", "width=400,height=600");
-        if (win) {
-          win.document.write(
-            '<!DOCTYPE html><html><head><meta charset="utf-8"><title>Chek tayyorlanmoqda…</title></head><body style="font-family:Arial,sans-serif;padding:30px;text-align:center;color:#666;font-size:14px;">Chek tayyorlanmoqda…</body></html>'
+        // Layout: open BOTH popups during the user gesture (popup blockers allow
+        // multiple opens within one click).
+        //   • previewWin (LEFT)  — shows the receipt as a viewable page so the
+        //     cashier can double-check what was sold.
+        //   • printWin   (RIGHT) — auto-triggers window.print(); the OS print
+        //     dialog appears over THIS window, leaving the preview visible.
+        const sw = (typeof window !== 'undefined' && window.screen && window.screen.availWidth) ? window.screen.availWidth : 1200;
+        const sh = (typeof window !== 'undefined' && window.screen && window.screen.availHeight) ? window.screen.availHeight : 800;
+        const previewW = 380;
+        const previewH = Math.min(720, sh - 80);
+        const printW = Math.min(620, Math.max(520, sw - previewW - 40));
+        const printH = Math.min(720, sh - 80);
+        const totalW = previewW + printW + 8;
+        const startLeft = Math.max(20, Math.floor((sw - totalW) / 2));
+        const top = Math.max(20, Math.floor((sh - previewH) / 2));
+
+        const previewWin = window.open("", "_blank", `width=${previewW},height=${previewH},left=${startLeft},top=${top}`);
+        if (previewWin) {
+          previewWin.document.write(
+            '<!DOCTYPE html><html><head><meta charset="utf-8"><title>Chek</title></head><body style="font-family:Arial,sans-serif;padding:24px;text-align:center;color:#666;font-size:13px;">Chek tayyorlanmoqda…</body></html>'
           );
-          preOpenedPrintWindowRef.current = win;
+          preOpenedPreviewWindowRef.current = previewWin;
+        }
+        const printWin = window.open("", "_blank", `width=${printW},height=${printH},left=${startLeft + previewW + 8},top=${top}`);
+        if (printWin) {
+          printWin.document.write(
+            '<!DOCTYPE html><html><head><meta charset="utf-8"><title>Chop etish</title></head><body style="font-family:Arial,sans-serif;padding:30px;text-align:center;color:#666;font-size:14px;">Chop etish dialogi tayyorlanmoqda…</body></html>'
+          );
+          preOpenedPrintWindowRef.current = printWin;
         }
       } catch (e) {
         // popup blocked — fall back to in-effect window.open inside ReceiptDialog
@@ -410,12 +436,14 @@ export default function Dashboard() {
       let autoPrintSucceeded = false;
       if (settings.autoPrint && preOpenedPrintWindowRef.current) {
         const printWin = preOpenedPrintWindowRef.current;
+        const previewWin = preOpenedPreviewWindowRef.current;
         preOpenedPrintWindowRef.current = null;
+        preOpenedPreviewWindowRef.current = null;
         if (!printWin.closed) {
           try {
-            const html = buildReceiptHtml({ transaction, settings, tenantSettings });
+            const printHtml = buildReceiptHtml({ transaction, settings, tenantSettings });
             printWin.document.open();
-            printWin.document.write(html);
+            printWin.document.write(printHtml);
             printWin.document.close();
             autoPrintSucceeded = true;
           } catch (err) {
@@ -424,6 +452,17 @@ export default function Dashboard() {
           }
         } else {
           console.warn("Auto-print popup was closed before we could write to it");
+        }
+        if (previewWin && !previewWin.closed) {
+          try {
+            const previewHtml = buildReceiptHtml({ transaction, settings, tenantSettings, noAutoPrint: true });
+            previewWin.document.open();
+            previewWin.document.write(previewHtml);
+            previewWin.document.close();
+          } catch (err) {
+            console.error("Preview write failed:", err);
+            try { previewWin.close(); } catch {}
+          }
         }
       }
 
@@ -447,6 +486,10 @@ export default function Dashboard() {
       if (preOpenedPrintWindowRef.current) {
         try { preOpenedPrintWindowRef.current.close(); } catch {}
         preOpenedPrintWindowRef.current = null;
+      }
+      if (preOpenedPreviewWindowRef.current) {
+        try { preOpenedPreviewWindowRef.current.close(); } catch {}
+        preOpenedPreviewWindowRef.current = null;
       }
       toast({
         title: "Xatolik!",
@@ -882,6 +925,12 @@ export default function Dashboard() {
               if (!preOpenedPrintWindowRef.current.closed) preOpenedPrintWindowRef.current.close();
             } catch {}
             preOpenedPrintWindowRef.current = null;
+          }
+          if (preOpenedPreviewWindowRef.current) {
+            try {
+              if (!preOpenedPreviewWindowRef.current.closed) preOpenedPreviewWindowRef.current.close();
+            } catch {}
+            preOpenedPreviewWindowRef.current = null;
           }
         }}
       />

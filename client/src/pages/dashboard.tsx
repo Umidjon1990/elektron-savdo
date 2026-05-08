@@ -82,6 +82,15 @@ export default function Dashboard() {
   });
   const [cart, setCart] = useState<CartItem[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
+  // Debounced version of searchQuery — only updates 200ms after the user
+  // stops typing. Without this, every keystroke re-filters all 700+
+  // products AND re-renders the entire grid on the main thread.
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+  // PERF: pagination cap. Rendering all 700+ ProductCards at once was the
+  // main reason "tovar qidirganda qotmoqda" — even though each card is
+  // memoized, the initial mount still costs 700 image elements + layout
+  // work. Show 60 by default and add "Yana ko'rsatish" to load more.
+  const [visibleCount, setVisibleCount] = useState(60);
   const [selectedCategory, setSelectedCategory] = useState("Barchasi");
   const [isScannerOpen, setIsScannerOpen] = useState(false);
   const [scannedProduct, setScannedProduct] = useState<Product | null>(null);
@@ -380,9 +389,15 @@ export default function Dashboard() {
         }
       }
       
-      cart.forEach(item => {
-        updateStock(item.product.id, -item.quantity);
-      });
+      // Stock decrement happens atomically server-side inside POST
+      // /api/transactions (one round trip for any cart size). Locally,
+      // transaction-context.addTransaction has already updated IndexedDB
+      // for instant UI. The sequential cart.forEach(updateStock) loop that
+      // used to live here triggered N extra PATCH /api/products/:id
+      // requests AND N extra invalidateQueries(["products"]) — each of
+      // which refetched the full 769-product list. For a 5-item cart that
+      // was 5 sequential refetches of ~1 MB of product JSON. THE single
+      // biggest contributor to "to'lov qilishda qattiq qotmoqda".
 
       setLastTransaction(transaction);
       setIsMobileCartOpen(false);
@@ -524,11 +539,23 @@ export default function Dashboard() {
     }
   }, [searchQuery, products]);
 
-  // Memoized — only re-filters when products list, query, or category change.
-  // Without this, every keystroke on cart, every state update, etc. would
-  // re-scan thousands of products. Lowercase the query ONCE outside the loop.
+  // Debounce the search input — wait 200ms after typing stops before
+  // re-filtering. Cuts work by ~10× when user is actively typing.
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedSearch(searchQuery), 200);
+    return () => clearTimeout(t);
+  }, [searchQuery]);
+
+  // Reset visible window whenever filter inputs change (so a new search
+  // doesn't carry over an old "load more" expansion).
+  useEffect(() => {
+    setVisibleCount(60);
+  }, [debouncedSearch, selectedCategory]);
+
+  // Memoized — only re-filters when products list, debounced query, or
+  // category change. Lowercase the query ONCE outside the loop.
   const filteredProducts = useMemo(() => {
-    const searchLower = searchQuery.toLowerCase().trim();
+    const searchLower = debouncedSearch.toLowerCase().trim();
     const isAllCategory = selectedCategory === "Barchasi";
     if (!searchLower && isAllCategory) return products;
 
@@ -548,7 +575,15 @@ export default function Dashboard() {
       ].filter(Boolean).join(" ").toLowerCase();
       return terms.every(t => haystack.includes(t));
     });
-  }, [products, searchQuery, selectedCategory]);
+  }, [products, debouncedSearch, selectedCategory]);
+
+  // Show only the first `visibleCount` products to keep the grid render
+  // fast on tenants with hundreds of products. The "Load more" button
+  // below the grid expands this window incrementally.
+  const visibleProducts = useMemo(
+    () => filteredProducts.slice(0, visibleCount),
+    [filteredProducts, visibleCount]
+  );
 
   const cartItemCount = cart.reduce((acc, item) => acc + item.quantity, 0);
 
@@ -774,7 +809,7 @@ export default function Dashboard() {
             {/* Product Grid */}
             <div className="flex-1 overflow-y-scroll pb-20 md:pb-0">
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-3 md:gap-4">
-                {filteredProducts.map(product => (
+                {visibleProducts.map(product => (
                   <ProductCard 
                     key={product.id} 
                     product={product} 
@@ -787,6 +822,17 @@ export default function Dashboard() {
                 <div className="h-64 flex flex-col items-center justify-center text-muted-foreground">
                   <PackageIcon className="h-12 w-12 mb-4 opacity-20" />
                   <p>Tovarlar topilmadi</p>
+                </div>
+              )}
+              {visibleProducts.length < filteredProducts.length && (
+                <div className="flex justify-center mt-6 mb-4">
+                  <Button
+                    variant="outline"
+                    onClick={() => setVisibleCount(c => c + 60)}
+                    data-testid="button-load-more-products"
+                  >
+                    Yana ko'rsatish ({filteredProducts.length - visibleProducts.length} ta qoldi)
+                  </Button>
                 </div>
               )}
             </div>

@@ -449,7 +449,45 @@ export class DatabaseStorage implements IStorage {
     if (existing) {
       return existing;
     }
-    const [newTxn] = await db.insert(transactions).values(transaction).returning();
+    // PERF: insert the transaction AND decrement product stock in a single
+    // DB round-trip (atomic db.transaction). Previously the client sent N
+    // separate PATCH /api/products/:id calls AFTER POST /api/transactions
+    // for an N-item cart — meaning 5 items = 1 + 5 = 6 sequential network
+    // round trips per sale. That was the #1 cause of the "to'lov qotmoqda"
+    // freeze. Now: 1 round trip total for any cart size.
+    const items = (transaction.items as any) as Array<{product?: {id: string}, quantity: number}>;
+    const itemsToDecrement = (items || [])
+      .filter(it => it && it.product && it.product.id && it.quantity > 0)
+      .map(it => ({ id: it.product!.id, qty: it.quantity }));
+
+    // Aggregate quantities by product id (handles cart with duplicate lines).
+    const qtyById = new Map<string, number>();
+    for (const it of itemsToDecrement) {
+      qtyById.set(it.id, (qtyById.get(it.id) || 0) + it.qty);
+    }
+
+    const newTxn = await db.transaction(async (tx) => {
+      const [inserted] = await tx.insert(transactions).values(transaction).returning();
+      if (qtyById.size > 0 && transaction.status !== "voided" && transaction.tenantId) {
+        // SECURITY: scope every product update to this transaction's tenant
+        // so a crafted client payload cannot decrement another tenant's
+        // stock. CONCURRENCY: do the decrement as a single SQL-side
+        // arithmetic update per product (stock = GREATEST(0, stock - X))
+        // — no read-then-write window, so two simultaneous checkouts of
+        // the same item cannot lose an update.
+        await Promise.all(Array.from(qtyById.entries()).map(([id, dec]) => {
+          if (dec <= 0) return Promise.resolve();
+          return tx
+            .update(products)
+            .set({ stock: sql`GREATEST(0, ${products.stock} - ${dec})` })
+            .where(and(
+              eq(products.id, id),
+              eq(products.tenantId, transaction.tenantId!)
+            ));
+        }));
+      }
+      return inserted;
+    });
     return newTxn;
   }
 

@@ -177,14 +177,10 @@ export async function syncPendingTransactions(): Promise<void> {
       
       if (res.ok) {
         await markTransactionSynced(txn.id);
-        
-        for (const item of txn.items) {
-          await fetch(`/api/products/${item.product.id}`, {
-            method: 'PATCH',
-            headers,
-            body: JSON.stringify({ stock: item.product.stock - item.quantity })
-          });
-        }
+        // Stock decrement is now done atomically server-side inside
+        // POST /api/transactions (storage.createTransaction). The previous
+        // per-item sequential PATCH loop here was 1 extra round trip PER
+        // ITEM after every sale — the main reason "to'lov qilishda qotmoqda".
       }
     } catch (error) {
       console.error('Failed to sync transaction:', txn.id, error);

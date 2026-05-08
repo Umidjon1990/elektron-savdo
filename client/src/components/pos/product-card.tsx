@@ -67,9 +67,11 @@ interface ProductCardProps {
   product: Product;
   onClick: (product: Product) => void;
   size?: "default" | "large";
+  showBarcode?: boolean;  // PERF: opt-in. Rendering JsBarcode SVG for 700+ kassa cards
+                          // takes 5-15s on the main thread. Default OFF for the kassa.
 }
 
-function ProductCardImpl({ product, onClick, size = "default" }: ProductCardProps) {
+function ProductCardImpl({ product, onClick, size = "default", showBarcode = false }: ProductCardProps) {
   const [imgLoaded, setImgLoaded] = useState(false);
   const [imgError, setImgError] = useState(false);
 
@@ -160,16 +162,14 @@ function ProductCardImpl({ product, onClick, size = "default" }: ProductCardProp
         )}>
           {product.author}
         </p>
-        {product.barcode ? (
+        {showBarcode && product.barcode ? (
           <div
             className="mb-2 -mx-1 px-1"
             data-testid={`barcode-product-${product.id}`}
           >
             <MiniBarcode value={product.barcode} compact={!isLarge} />
           </div>
-        ) : (
-          <div className="mb-2" />
-        )}
+        ) : null}
         <div className="flex items-center justify-between">
           <span className={cn(
             "text-blue-600 font-bold font-mono",
@@ -212,5 +212,6 @@ function ProductCardImpl({ product, onClick, size = "default" }: ProductCardProp
 export const ProductCard = memo(ProductCardImpl, (prev, next) => {
   return prev.product === next.product
       && prev.onClick === next.onClick
-      && prev.size === next.size;
+      && prev.size === next.size
+      && prev.showBarcode === next.showBarcode;
 });

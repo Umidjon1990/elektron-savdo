@@ -201,7 +201,7 @@ export async function registerRoutes(
       if (req.user!.role !== "owner") {
         return res.status(403).json({ error: "Faqat do'kon egasi uchun" });
       }
-      const allowedFields = ["name", "brandColor", "logo", "telegramBotToken", "telegramChatId", "paymentMethods", "productFields", "customerFields", "receiptLogo", "productFormVisibility", "orderFormFields", "defaultDollarRate", "deliveryEnabled", "debtsInUsdOnly"];
+      const allowedFields = ["name", "brandColor", "logo", "telegramBotToken", "telegramChatId", "paymentMethods", "productFields", "customerFields", "receiptLogo", "productFormVisibility", "orderFormFields", "defaultDollarRate", "deliveryEnabled", "debtsInUsdOnly", "splitPaymentsEnabled"];
       const data: Record<string, any> = {};
       for (const key of allowedFields) {
         if (req.body[key] !== undefined) data[key] = req.body[key];
@@ -735,22 +735,63 @@ export async function registerRoutes(
     try {
       const tenantId = req.tenantId;
       if (!tenantId) return res.status(400).json({ error: "Tenant aniqlanmadi" });
-      const isNasiya = (req.body.paymentMethod || "cash") === "nasiya";
+      const totalAmount = Number(req.body.totalAmount) || 0;
+      const rawSplits = Array.isArray(req.body.paymentSplits) ? req.body.paymentSplits : null;
+      let paymentSplits: Array<{ method: string; amount: number }> | null = null;
+      if (rawSplits && rawSplits.length > 0) {
+        const cleaned = rawSplits
+          .map((s: any) => ({ method: String(s?.method || "cash"), amount: Number(s?.amount) || 0 }))
+          .filter((s: any) => s.amount > 0);
+        if (cleaned.length > 0) {
+          const sum = cleaned.reduce((a: number, b: any) => a + b.amount, 0);
+          if (Math.abs(sum - totalAmount) > 1) {
+            return res.status(400).json({ error: "Aralash to'lov summasi jamiga teng emas" });
+          }
+          paymentSplits = cleaned;
+        }
+      }
+      const nasiyaSplit = paymentSplits ? paymentSplits.find(s => s.method === "nasiya") : null;
+      const isMixed = !!paymentSplits;
+      if (isMixed) {
+        if (paymentSplits!.length < 2) {
+          return res.status(400).json({ error: "Aralash to'lov uchun kamida 2 ta usul kerak" });
+        }
+        if (nasiyaSplit && nasiyaSplit.amount > 0) {
+          if (!req.body.customerName || !String(req.body.customerName).trim()) {
+            return res.status(400).json({ error: "Nasiya qism uchun mijoz ismi kerak" });
+          }
+          if (!req.body.customerPhone || !String(req.body.customerPhone).trim()) {
+            return res.status(400).json({ error: "Nasiya qism uchun telefon raqam kerak" });
+          }
+          if (!req.body.dueDate) {
+            return res.status(400).json({ error: "Nasiya qism uchun to'lov muddati kerak" });
+          }
+        }
+      }
+      const isNasiya = !isMixed && (req.body.paymentMethod || "cash") === "nasiya";
+      const finalMethod = isMixed ? "mixed" : (req.body.paymentMethod || "cash");
+      const finalDebtStatus = isMixed
+        ? (nasiyaSplit && nasiyaSplit.amount > 0 ? "pending" : "none")
+        : (isNasiya ? "pending" : "none");
+      const finalPaidAmount = isMixed
+        ? (nasiyaSplit && nasiyaSplit.amount > 0 ? Math.max(0, totalAmount - nasiyaSplit.amount) : totalAmount)
+        : (Number(req.body.paidAmount) || 0);
       const data = {
         id: req.body.id || crypto.randomUUID(),
         tenantId,
         date: new Date(req.body.date),
         items: req.body.items || [],
-        totalAmount: Number(req.body.totalAmount) || 0,
+        totalAmount,
         totalProfit: Number(req.body.totalProfit) || 0,
-        paymentMethod: req.body.paymentMethod || "cash",
+        paymentMethod: finalMethod,
         status: req.body.status || "completed",
         customerName: req.body.customerName || null,
         customerPhone: req.body.customerPhone || null,
         customerInfo: req.body.customerInfo || null,
         dueDate: req.body.dueDate ? new Date(req.body.dueDate) : null,
-        paidAmount: Number(req.body.paidAmount) || 0,
-        debtStatus: isNasiya ? "pending" : "none",
+        paidAmount: finalPaidAmount,
+        debtStatus: finalDebtStatus,
+        paymentSplits: paymentSplits || null,
       };
       const transaction = await storage.createTransaction(data);
       res.status(201).json(transaction);
@@ -1943,8 +1984,16 @@ export async function registerRoutes(
         if (days[key]) {
           days[key].revenue += t.totalAmount;
           days[key].totalProfit += t.totalProfit || 0;
-          const method = t.paymentMethod || "Naqd";
-          days[key].payments[method] = (days[key].payments[method] || 0) + t.totalAmount;
+          const splits = (t as any).paymentSplits as Array<{ method: string; amount: number }> | null;
+          if (splits && splits.length > 0) {
+            for (const s of splits) {
+              const m = s.method || "Naqd";
+              days[key].payments[m] = (days[key].payments[m] || 0) + (Number(s.amount) || 0);
+            }
+          } else {
+            const method = t.paymentMethod || "Naqd";
+            days[key].payments[method] = (days[key].payments[method] || 0) + t.totalAmount;
+          }
         }
       }
 

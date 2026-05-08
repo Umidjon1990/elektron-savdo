@@ -28,6 +28,7 @@ export const tenants = pgTable("tenants", {
   defaultDollarRate: integer("default_dollar_rate").notNull().default(0),
   deliveryEnabled: boolean("delivery_enabled").notNull().default(false),
   debtsInUsdOnly: boolean("debts_in_usd_only").notNull().default(false),
+  splitPaymentsEnabled: boolean("split_payments_enabled").notNull().default(false),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
@@ -128,6 +129,7 @@ export const transactions = pgTable("transactions", {
   dueDate: timestamp("due_date"),
   paidAmount: integer("paid_amount").notNull().default(0),
   debtStatus: text("debt_status").default("none"),
+  paymentSplits: json("payment_splits").$type<Array<{ method: string; amount: number }>>(),
 });
 
 export const debtPayments = pgTable("debt_payments", {

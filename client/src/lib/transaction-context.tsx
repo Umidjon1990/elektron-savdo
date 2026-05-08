@@ -20,13 +20,14 @@ export interface Transaction {
   dueDate?: string;
   paidAmount?: number;
   debtStatus?: string;
+  paymentSplits?: Array<{ method: string; amount: number }>;
 }
 
 interface TransactionContextType {
   transactions: Transaction[];
   pendingCount: number;
   isOffline: boolean;
-  addTransaction: (items: CartItem[], total: number, method: string, customerData?: { customerName?: string; customerPhone?: string; customerInfo?: Record<string, string> }, nasiyaData?: { dueDate: string }) => Promise<Transaction>;
+  addTransaction: (items: CartItem[], total: number, method: string, customerData?: { customerName?: string; customerPhone?: string; customerInfo?: Record<string, string> }, nasiyaData?: { dueDate: string }, paymentSplits?: Array<{ method: string; amount: number }>) => Promise<Transaction>;
   voidTransaction: (id: string) => Promise<void>;
   getStats: () => {
     todayTotal: number;
@@ -76,6 +77,7 @@ export function TransactionProvider({ children }: { children: ReactNode }) {
         dueDate: t.dueDate,
         paidAmount: t.paidAmount || 0,
         debtStatus: t.debtStatus || "none",
+        paymentSplits: t.paymentSplits,
       }));
       setTransactions(mapped);
       setPendingCount(cached.filter(t => !t.synced).length);
@@ -106,7 +108,7 @@ export function TransactionProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
-  const addTransaction = async (items: CartItem[], total: number, method: string, customerData?: { customerName?: string; customerPhone?: string; customerInfo?: Record<string, string> }, nasiyaData?: { dueDate: string }): Promise<Transaction> => {
+  const addTransaction = async (items: CartItem[], total: number, method: string, customerData?: { customerName?: string; customerPhone?: string; customerInfo?: Record<string, string> }, nasiyaData?: { dueDate: string }, paymentSplits?: Array<{ method: string; amount: number }>): Promise<Transaction> => {
     const profit = items.reduce((acc, item) => {
       const costPrice = item.product.costPrice || 0;
       const discount = item.discount || 0;
@@ -115,6 +117,16 @@ export function TransactionProvider({ children }: { children: ReactNode }) {
       return acc + itemProfit;
     }, 0);
     
+    const nasiyaSplit = (paymentSplits || []).find(s => s.method === "nasiya");
+    const hasNasiyaInSplit = !!(nasiyaSplit && nasiyaSplit.amount > 0);
+    const isMixed = !!(paymentSplits && paymentSplits.length > 0);
+    const initialPaid = isMixed
+      ? (hasNasiyaInSplit ? Math.max(0, total - (nasiyaSplit?.amount || 0)) : total)
+      : (method === "nasiya" ? 0 : 0);
+    const initialDebtStatus = isMixed
+      ? (hasNasiyaInSplit ? "pending" : "none")
+      : (method === "nasiya" ? "pending" : "none");
+
     const newTransaction: CachedTransaction = {
       id: crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).substr(2, 9),
       date: new Date().toISOString(),
@@ -132,8 +144,9 @@ export function TransactionProvider({ children }: { children: ReactNode }) {
       customerPhone: customerData?.customerPhone,
       customerInfo: customerData?.customerInfo,
       dueDate: nasiyaData?.dueDate,
-      paidAmount: 0,
-      debtStatus: method === "nasiya" ? "pending" : "none",
+      paidAmount: initialPaid,
+      debtStatus: initialDebtStatus,
+      paymentSplits: isMixed ? paymentSplits : undefined,
     };
     
     await saveTransactionLocally(newTransaction);
@@ -162,8 +175,9 @@ export function TransactionProvider({ children }: { children: ReactNode }) {
       customerPhone: customerData?.customerPhone,
       customerInfo: customerData?.customerInfo,
       dueDate: nasiyaData?.dueDate,
-      paidAmount: 0,
-      debtStatus: method === "nasiya" ? "pending" : "none",
+      paidAmount: initialPaid,
+      debtStatus: initialDebtStatus,
+      paymentSplits: isMixed ? paymentSplits : undefined,
     };
   };
 

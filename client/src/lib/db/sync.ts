@@ -110,6 +110,7 @@ export async function syncTransactionsFromServer(): Promise<CachedTransaction[]>
           dueDate: txn.dueDate,
           paidAmount: txn.paidAmount || 0,
           debtStatus: txn.debtStatus || "none",
+          paymentSplits: txn.paymentSplits || undefined,
         });
       }
     }
@@ -172,6 +173,7 @@ export async function syncPendingTransactions(): Promise<void> {
           dueDate: txn.dueDate,
           paidAmount: txn.paidAmount || 0,
           debtStatus: txn.debtStatus || "none",
+          paymentSplits: txn.paymentSplits,
         })
       });
       

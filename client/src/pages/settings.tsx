@@ -125,6 +125,7 @@ export default function SettingsPage() {
   const [productFormVisibility, setProductFormVisibility] = useState<Record<string, boolean>>(defaultFormVisibility);
   const [deliveryEnabled, setDeliveryEnabled] = useState(false);
   const [debtsInUsdOnly, setDebtsInUsdOnly] = useState(false);
+  const [splitPaymentsEnabled, setSplitPaymentsEnabled] = useState(false);
 
   const FORM_VISIBILITY_OPTIONS = [
     { key: "costPrice", label: "Tan narxi (kelish narxi)" },
@@ -172,6 +173,7 @@ export default function SettingsPage() {
       if (data.defaultDollarRate !== undefined && data.defaultDollarRate !== null) setDefaultDollarRate(data.defaultDollarRate.toString());
       if (data.deliveryEnabled !== undefined) setDeliveryEnabled(data.deliveryEnabled);
       if (data.debtsInUsdOnly !== undefined) setDebtsInUsdOnly(data.debtsInUsdOnly);
+      if (data.splitPaymentsEnabled !== undefined) setSplitPaymentsEnabled(data.splitPaymentsEnabled);
       return data;
     },
     enabled: !!token,
@@ -629,6 +631,26 @@ export default function SettingsPage() {
                       saveConfigMutation.mutate({ debtsInUsdOnly: checked });
                     }}
                     data-testid="switch-debts-in-usd-only"
+                  />
+                </div>
+
+                <div className="mt-4 pt-4 border-t flex items-start justify-between gap-3">
+                  <div className="space-y-0.5 flex-1">
+                    <Label htmlFor="split-payments-enabled" className="cursor-pointer">
+                      Aralash to'lov (Naqd + Karta + Nasiya)
+                    </Label>
+                    <p className="text-xs text-muted-foreground">
+                      Yoqilganda kassa savatchasida "Aralash to'lov" tugmasi paydo bo'ladi: bir savdoni bir nechta to'lov turiga bo'lib to'lash mumkin.
+                    </p>
+                  </div>
+                  <Switch
+                    id="split-payments-enabled"
+                    checked={splitPaymentsEnabled}
+                    onCheckedChange={(checked: boolean) => {
+                      setSplitPaymentsEnabled(checked);
+                      saveConfigMutation.mutate({ splitPaymentsEnabled: checked });
+                    }}
+                    data-testid="switch-split-payments-enabled"
                   />
                 </div>
               </CardContent>

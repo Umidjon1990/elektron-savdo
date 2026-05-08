@@ -136,9 +136,19 @@ function ReceiptContent({ transaction, settings, receiptLogo, paymentMethods }: 
           <span>TO'LANDI:</span>
           <span className="font-mono">{Number(transaction.totalAmount || 0).toLocaleString()} so'm</span>
         </div>
-        <div className="text-xs text-right text-black font-semibold uppercase">
-          To'lov: {getPaymentLabel(transaction.paymentMethod || 'cash')}
-        </div>
+        {transaction.paymentSplits && transaction.paymentSplits.length > 0 ? (
+          <div className="text-xs text-right text-black font-semibold space-y-0.5">
+            {transaction.paymentSplits.map((s, i) => (
+              <div key={i}>
+                {getPaymentLabel(s.method)}: {Number(s.amount || 0).toLocaleString()} so'm
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="text-xs text-right text-black font-semibold uppercase">
+            To'lov: {getPaymentLabel(transaction.paymentMethod || 'cash')}
+          </div>
+        )}
       </div>
 
       {settings.telegramUsername && (

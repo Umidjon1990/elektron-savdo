@@ -322,7 +322,7 @@ export default function Dashboard() {
 
   const clearCart = () => setCart([]);
 
-  const handleCheckout = async (method: string = "cash", customerData?: { customerName?: string; customerPhone?: string; customerInfo?: Record<string, string> }, nasiyaData?: { dueDate: string }, deliveryData?: { courierId: string; courierName: string; address: string; customerName: string; customerPhone: string }) => {
+  const handleCheckout = async (method: string = "cash", customerData?: { customerName?: string; customerPhone?: string; customerInfo?: Record<string, string> }, nasiyaData?: { dueDate: string }, deliveryData?: { courierId: string; courierName: string; address: string; customerName: string; customerPhone: string }, paymentSplits?: Array<{ method: string; amount: number }>) => {
     const total = cart.reduce((acc, item) => {
       const effectivePrice = item.product.price > 0 ? item.product.price : ((item.product as any).barcodePrice || (item.product as any).wholesalePrice || 0);
       const itemTotal = effectivePrice * item.quantity;
@@ -348,7 +348,7 @@ export default function Dashboard() {
     }
 
     try {
-      const transaction = await addTransaction(cart, total, method, customerData, nasiyaData);
+      const transaction = await addTransaction(cart, total, method, customerData, nasiyaData, paymentSplits);
 
       if (deliveryData && token) {
         try {
@@ -654,6 +654,7 @@ export default function Dashboard() {
                   paymentMethods={tenantSettings?.paymentMethods}
                   customerFields={tenantSettings?.customerFields}
                   deliveryEnabled={tenantSettings?.deliveryEnabled}
+                  splitPaymentsEnabled={tenantSettings?.splitPaymentsEnabled}
                   couriers={couriersList}
                 />
               </SheetContent>
@@ -850,6 +851,7 @@ export default function Dashboard() {
               paymentMethods={tenantSettings?.paymentMethods}
               customerFields={tenantSettings?.customerFields}
               deliveryEnabled={tenantSettings?.deliveryEnabled}
+              splitPaymentsEnabled={tenantSettings?.splitPaymentsEnabled}
               couriers={couriersList}
             />
           </div>

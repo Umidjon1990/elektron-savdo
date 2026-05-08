@@ -5,7 +5,7 @@ import { Label } from "@/components/ui/label";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { CreditCard, Banknote, QrCode, Trash2, ShoppingBag, HandCoins, ChevronDown, ChevronUp, User, Phone, MapPin, FileText, Plus, CalendarIcon, AlertCircle, Truck } from "lucide-react";
+import { CreditCard, Banknote, QrCode, Trash2, ShoppingBag, HandCoins, ChevronDown, ChevronUp, User, Phone, MapPin, FileText, Plus, CalendarIcon, AlertCircle, Truck, Layers } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { CartItem } from "./cart-item";
 import type { CartItem as CartItemType } from "@/pages/dashboard";
@@ -32,10 +32,11 @@ interface CartSidebarProps {
   onUpdateDiscount: (id: string, discount: number, adjustmentType?: "skidka" | "ustama", adjustmentInputType?: "summa" | "percent", adjustmentValue?: number) => void;
   onRemove: (id: string) => void;
   onClear: () => void;
-  onCheckout: (method: string, customerData?: { customerName?: string; customerPhone?: string; customerInfo?: Record<string, string> }, nasiyaData?: { dueDate: string }, deliveryData?: { courierId: string; courierName: string; address: string; customerName: string; customerPhone: string }) => void;
+  onCheckout: (method: string, customerData?: { customerName?: string; customerPhone?: string; customerInfo?: Record<string, string> }, nasiyaData?: { dueDate: string }, deliveryData?: { courierId: string; courierName: string; address: string; customerName: string; customerPhone: string }, paymentSplits?: Array<{ method: string; amount: number }>) => void;
   paymentMethods?: PaymentMethod[];
   customerFields?: CustomerField[];
   deliveryEnabled?: boolean;
+  splitPaymentsEnabled?: boolean;
   couriers?: CourierItem[];
 }
 
@@ -71,7 +72,7 @@ const FIELD_ICONS: Record<string, React.ReactNode> = {
   note: <FileText className="h-4 w-4 text-muted-foreground" />,
 };
 
-export function CartSidebar({ items, onUpdateQuantity, onUpdateDiscount, onRemove, onClear, onCheckout, paymentMethods, customerFields, deliveryEnabled, couriers }: CartSidebarProps) {
+export function CartSidebar({ items, onUpdateQuantity, onUpdateDiscount, onRemove, onClear, onCheckout, paymentMethods, customerFields, deliveryEnabled, splitPaymentsEnabled, couriers }: CartSidebarProps) {
   const getEffectivePrice = (product: any) => product.price > 0 ? product.price : (product.barcodePrice || product.wholesalePrice || 0);
   const subtotal = items.reduce((acc, item) => acc + (getEffectivePrice(item.product) * item.quantity), 0);
   // discount > 0 = skidka (ayiriladi), discount < 0 = ustama (qo'shiladi)
@@ -99,6 +100,13 @@ export function CartSidebar({ items, onUpdateQuantity, onUpdateDiscount, onRemov
   const [nasiyaNote, setNasiyaNote] = useState("");
   const [nasiyaDueDate, setNasiyaDueDate] = useState("");
   const [nasiyaError, setNasiyaError] = useState("");
+
+  const [mixedDialogOpen, setMixedDialogOpen] = useState(false);
+  const [mixedAmounts, setMixedAmounts] = useState<Record<string, string>>({});
+  const [mixedNasiyaName, setMixedNasiyaName] = useState("");
+  const [mixedNasiyaPhone, setMixedNasiyaPhone] = useState("");
+  const [mixedNasiyaDueDate, setMixedNasiyaDueDate] = useState("");
+  const [mixedError, setMixedError] = useState("");
 
   const methods = paymentMethods && paymentMethods.length > 0 ? paymentMethods : DEFAULT_PAYMENT_METHODS;
   const custFields = customerFields && customerFields.length > 0 ? customerFields : DEFAULT_CUSTOMER_FIELDS;
@@ -185,6 +193,75 @@ export function CartSidebar({ items, onUpdateQuantity, onUpdateDiscount, onRemov
     setNasiyaAddress("");
     setNasiyaNote("");
     setNasiyaDueDate("");
+    setCustomerData({});
+    setShowCustomer(false);
+    setSelectedMethod(null);
+  };
+
+  const openMixedDialog = () => {
+    if (items.length === 0) return;
+    setMixedAmounts({});
+    setMixedNasiyaName(customerData["name"] || "");
+    setMixedNasiyaPhone(customerData["phone"] || "");
+    const defaultDue = new Date();
+    defaultDue.setDate(defaultDue.getDate() + 30);
+    setMixedNasiyaDueDate(defaultDue.toISOString().split("T")[0]);
+    setMixedError("");
+    setMixedDialogOpen(true);
+  };
+
+  const mixedSplits = methods
+    .map(m => ({ method: m.id, amount: Number((mixedAmounts[m.id] || "").replace(/\s/g, "")) || 0 }))
+    .filter(s => s.amount > 0);
+  const mixedSum = mixedSplits.reduce((a, b) => a + b.amount, 0);
+  const mixedRemaining = total - mixedSum;
+  const hasNasiyaInMixed = mixedSplits.some(s => s.method === "nasiya" && s.amount > 0);
+
+  const handleMixedConfirm = () => {
+    if (mixedSplits.length < 2) {
+      setMixedError("Kamida ikkita to'lov turini kiriting");
+      return;
+    }
+    if (Math.abs(mixedRemaining) > 1) {
+      setMixedError(`Yig'indi jamiga teng emas (farq: ${Math.abs(mixedRemaining).toLocaleString()} so'm)`);
+      return;
+    }
+    if (hasNasiyaInMixed) {
+      if (!mixedNasiyaName.trim()) { setMixedError("Mijoz ismi kiritilishi shart"); return; }
+      if (!mixedNasiyaPhone.trim()) { setMixedError("Telefon raqam kiritilishi shart"); return; }
+      if (!mixedNasiyaDueDate) { setMixedError("To'lov muddati tanlanishi shart"); return; }
+    }
+
+    const customer = hasNasiyaInMixed
+      ? { customerName: mixedNasiyaName.trim(), customerPhone: mixedNasiyaPhone.trim(), customerInfo: undefined }
+      : (() => {
+          const custInfo: Record<string, string> = {};
+          let custName: string | undefined;
+          let custPhone: string | undefined;
+          Object.entries(customerData).forEach(([k, v]) => {
+            if (v.trim()) {
+              if (k === "name") custName = v.trim();
+              else if (k === "phone") custPhone = v.trim();
+              else custInfo[k] = v.trim();
+            }
+          });
+          return (custName || custPhone || Object.keys(custInfo).length > 0)
+            ? { customerName: custName, customerPhone: custPhone, customerInfo: Object.keys(custInfo).length > 0 ? custInfo : undefined }
+            : undefined;
+        })();
+
+    onCheckout(
+      "mixed",
+      customer,
+      hasNasiyaInMixed ? { dueDate: mixedNasiyaDueDate } : undefined,
+      undefined,
+      mixedSplits
+    );
+    setMixedDialogOpen(false);
+    setMixedAmounts({});
+    setMixedNasiyaName("");
+    setMixedNasiyaPhone("");
+    setMixedNasiyaDueDate("");
     setCustomerData({});
     setShowCustomer(false);
     setSelectedMethod(null);
@@ -340,10 +417,156 @@ export function CartSidebar({ items, onUpdateQuantity, onUpdateDiscount, onRemov
           })}
         </div>
         
+        {splitPaymentsEnabled && (
+          <Button
+            variant="outline"
+            className="w-full h-12 border-2 border-indigo-300 hover:border-indigo-500 hover:bg-indigo-50 text-indigo-700 font-semibold"
+            onClick={openMixedDialog}
+            disabled={items.length === 0}
+            data-testid="button-pay-mixed"
+          >
+            <Layers className="h-5 w-5 mr-2" />
+            Aralash to'lov
+          </Button>
+        )}
+
         <Button size="lg" className="w-full text-xl h-16 bg-primary hover:bg-primary/90 shadow-lg shadow-primary/25 font-bold" onClick={() => handleCheckout(methods[0]?.id || "cash")} disabled={items.length === 0}>
           To'lov qilish
         </Button>
       </div>
+
+      <Dialog open={mixedDialogOpen} onOpenChange={setMixedDialogOpen}>
+        <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Layers className="h-5 w-5 text-indigo-500" />
+              Aralash to'lov
+            </DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-3">
+            <div className="bg-indigo-50 border border-indigo-200 rounded-lg p-3">
+              <div className="flex justify-between items-center">
+                <span className="text-sm text-indigo-700 font-medium">Jami summa:</span>
+                <span className="text-lg font-bold text-indigo-800">{total.toLocaleString()} so'm</span>
+              </div>
+              <div className="flex justify-between items-center mt-1">
+                <span className="text-xs text-indigo-600">Kiritildi:</span>
+                <span className="text-xs font-semibold text-indigo-700">{mixedSum.toLocaleString()} so'm</span>
+              </div>
+              <div className={`flex justify-between items-center mt-1 ${Math.abs(mixedRemaining) > 1 ? "text-red-600" : "text-green-600"}`}>
+                <span className="text-xs font-medium">{mixedRemaining >= 0 ? "Qoldi:" : "Ortiqcha:"}</span>
+                <span className="text-xs font-bold">{Math.abs(mixedRemaining).toLocaleString()} so'm</span>
+              </div>
+            </div>
+
+            {mixedError && (
+              <div className="flex items-center gap-2 text-sm text-red-600 bg-red-50 p-2 rounded">
+                <AlertCircle className="h-4 w-4 shrink-0" />
+                {mixedError}
+              </div>
+            )}
+
+            <div className="space-y-2">
+              {methods.map(m => {
+                const icon = PAYMENT_ICONS[m.id] || <QrCode className="h-4 w-4 text-purple-600" />;
+                return (
+                  <div key={m.id} className="flex items-center gap-2">
+                    <div className="w-8 h-8 flex items-center justify-center rounded bg-gray-50 shrink-0">{icon}</div>
+                    <Label className="text-sm font-medium flex-1">{m.name}</Label>
+                    <div className="flex items-center gap-1">
+                      <Input
+                        type="text"
+                        inputMode="numeric"
+                        placeholder="0"
+                        value={mixedAmounts[m.id] || ""}
+                        onChange={(e) => {
+                          const v = e.target.value.replace(/[^\d]/g, "");
+                          setMixedAmounts(prev => ({ ...prev, [m.id]: v }));
+                          setMixedError("");
+                        }}
+                        className="h-9 w-32 text-right font-mono"
+                        data-testid={`input-mixed-${m.id}`}
+                      />
+                      {mixedRemaining > 0 && (
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="ghost"
+                          className="h-9 px-2 text-xs text-indigo-600"
+                          onClick={() => {
+                            const cur = Number((mixedAmounts[m.id] || "").replace(/\s/g, "")) || 0;
+                            setMixedAmounts(prev => ({ ...prev, [m.id]: String(cur + mixedRemaining) }));
+                            setMixedError("");
+                          }}
+                          data-testid={`button-mixed-fill-${m.id}`}
+                        >
+                          To'ldirish
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {hasNasiyaInMixed && (
+              <div className="space-y-3 pt-3 border-t border-orange-200">
+                <p className="text-xs font-semibold text-orange-700 flex items-center gap-1">
+                  <HandCoins className="h-3.5 w-3.5" />
+                  Nasiya qismi uchun mijoz ma'lumotlari
+                </p>
+                <div>
+                  <Label className="text-xs font-medium text-gray-600">Mijoz ismi *</Label>
+                  <Input
+                    placeholder="Ism familiya"
+                    value={mixedNasiyaName}
+                    onChange={(e) => { setMixedNasiyaName(e.target.value); setMixedError(""); }}
+                    className="h-9 mt-1"
+                    data-testid="input-mixed-nasiya-name"
+                  />
+                </div>
+                <div>
+                  <Label className="text-xs font-medium text-gray-600">Telefon *</Label>
+                  <Input
+                    placeholder="+998 90 123 45 67"
+                    value={mixedNasiyaPhone}
+                    onChange={(e) => { setMixedNasiyaPhone(e.target.value); setMixedError(""); }}
+                    className="h-9 mt-1"
+                    data-testid="input-mixed-nasiya-phone"
+                  />
+                </div>
+                <div>
+                  <Label className="text-xs font-medium text-gray-600">To'lov muddati *</Label>
+                  <Input
+                    type="date"
+                    min={today}
+                    value={mixedNasiyaDueDate}
+                    onChange={(e) => { setMixedNasiyaDueDate(e.target.value); setMixedError(""); }}
+                    className="h-9 mt-1"
+                    data-testid="input-mixed-nasiya-duedate"
+                  />
+                </div>
+              </div>
+            )}
+          </div>
+
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button variant="outline" onClick={() => setMixedDialogOpen(false)} data-testid="button-cancel-mixed">
+              Bekor qilish
+            </Button>
+            <Button
+              className="bg-indigo-500 hover:bg-indigo-600"
+              onClick={handleMixedConfirm}
+              disabled={items.length === 0}
+              data-testid="button-confirm-mixed"
+            >
+              <Layers className="h-4 w-4 mr-2" />
+              Tasdiqlash
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={nasiyaDialogOpen} onOpenChange={setNasiyaDialogOpen}>
         <DialogContent className="sm:max-w-md">

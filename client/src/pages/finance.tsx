@@ -189,8 +189,16 @@ export default function FinancePage() {
     for (const t of currentTxns) {
       clientRevenue += t.totalAmount;
       clientProfit += t.totalProfit || 0;
-      const method = t.paymentMethod || "Naqd";
-      clientPaymentBreakdown[method] = (clientPaymentBreakdown[method] || 0) + t.totalAmount;
+      const splits = (t as any).paymentSplits as Array<{ method: string; amount: number }> | undefined;
+      if (splits && splits.length > 0) {
+        for (const s of splits) {
+          const m = s.method || "Naqd";
+          clientPaymentBreakdown[m] = (clientPaymentBreakdown[m] || 0) + (Number(s.amount) || 0);
+        }
+      } else {
+        const method = t.paymentMethod || "Naqd";
+        clientPaymentBreakdown[method] = (clientPaymentBreakdown[method] || 0) + t.totalAmount;
+      }
     }
 
     const srvRevenue = serverSummary?.revenue || 0;
@@ -691,10 +699,11 @@ export default function FinancePage() {
                               </p>
                               <div className="flex items-center gap-1 justify-end">
                                 <span className={`text-[9px] px-1.5 py-0.5 rounded font-medium ${
+                                  (item.paymentMethod || "").toLowerCase() === "mixed" ? "bg-indigo-50 text-indigo-600" :
                                   (item.paymentMethod || "").toLowerCase().includes("karta") || (item.paymentMethod || "").toLowerCase().includes("card") ? "bg-blue-50 text-blue-600" :
                                   (item.paymentMethod || "").toLowerCase().includes("nasiya") ? "bg-amber-50 text-amber-600" :
                                   "bg-green-50 text-green-600"
-                                }`}>{item.paymentMethod}</span>
+                                }`}>{(item.paymentMethod || "").toLowerCase() === "mixed" ? "Aralash" : item.paymentMethod}</span>
                                 <span className="text-[10px] text-gray-400">{formatDateTime(item.date)}</span>
                               </div>
                             </div>
@@ -1470,8 +1479,18 @@ export default function FinancePage() {
                 </div>
                 <div className="flex justify-between text-sm">
                   <span className="text-gray-500">To'lov usuli:</span>
-                  <span className="font-medium">{saleDetailTx.paymentMethod || "Naqd"}</span>
+                  <span className="font-medium">{(saleDetailTx.paymentMethod || "").toLowerCase() === "mixed" ? "Aralash" : (saleDetailTx.paymentMethod || "Naqd")}</span>
                 </div>
+                {(saleDetailTx as any).paymentSplits && (saleDetailTx as any).paymentSplits.length > 0 && (
+                  <div className="bg-indigo-50 border border-indigo-200 rounded-md p-2 space-y-1">
+                    {((saleDetailTx as any).paymentSplits as Array<{method:string;amount:number}>).map((s, i) => (
+                      <div key={i} className="flex justify-between text-xs">
+                        <span className="text-indigo-700 font-medium capitalize">{s.method}</span>
+                        <span className="text-indigo-800 font-bold font-mono">{Number(s.amount || 0).toLocaleString()} so'm</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
                 {saleDetailTx.customerName && (
                   <div className="flex justify-between text-sm">
                     <span className="text-gray-500">Mijoz:</span>

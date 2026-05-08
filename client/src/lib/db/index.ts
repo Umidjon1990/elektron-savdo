@@ -42,6 +42,7 @@ export interface CachedTransaction {
   dueDate?: string;
   paidAmount?: number;
   debtStatus?: string;
+  paymentSplits?: Array<{ method: string; amount: number }>;
 }
 
 export interface SyncMeta {

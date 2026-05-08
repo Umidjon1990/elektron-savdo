@@ -130,9 +130,10 @@ export function buildReceiptHtml({ transaction, settings, tenantSettings }: Buil
         <td style="font-size:13px;font-weight:900;">TO'LANDI:</td>
         <td style="text-align:right;font-family:monospace;font-size:13px;font-weight:900;">${Number(transaction.totalAmount || 0).toLocaleString()} so'm</td>
       </tr>
-      <tr>
-        <td colspan="2" style="text-align:right;font-size:9px;font-weight:600;">To'lov: ${escapeHtml(getPaymentLabel(transaction.paymentMethod || 'cash', tenantSettings))}</td>
-      </tr>
+      ${(transaction.paymentSplits && transaction.paymentSplits.length > 0)
+        ? transaction.paymentSplits.map(s => `<tr><td colspan="2" style="text-align:right;font-size:9px;font-weight:600;">${escapeHtml(getPaymentLabel(s.method, tenantSettings))}: ${Number(s.amount || 0).toLocaleString()} so'm</td></tr>`).join('')
+        : `<tr><td colspan="2" style="text-align:right;font-size:9px;font-weight:600;">To'lov: ${escapeHtml(getPaymentLabel(transaction.paymentMethod || 'cash', tenantSettings))}</td></tr>`
+      }
     </table>
     ${qrHtml}
     <div style="text-align:center;">

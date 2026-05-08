@@ -627,7 +627,7 @@ export class DatabaseStorage implements IStorage {
     return db.select().from(transactions).where(
       and(
         eq(transactions.tenantId, tenantId),
-        sql`${transactions.paymentMethod} = 'nasiya'`,
+        sql`(${transactions.paymentMethod} = 'nasiya' OR (${transactions.paymentMethod} = 'mixed' AND ${transactions.debtStatus} IN ('pending','partial')))`,
         sql`${transactions.status} != 'voided'`
       )
     ).orderBy(desc(transactions.date));
@@ -699,6 +699,7 @@ export class DatabaseStorage implements IStorage {
       paymentMethod: transactions.paymentMethod,
       paidAmount: transactions.paidAmount,
       debtStatus: transactions.debtStatus,
+      paymentSplits: transactions.paymentSplits,
     }).from(transactions).where(and(...txnConditions));
 
     let cash = 0;
@@ -706,6 +707,17 @@ export class DatabaseStorage implements IStorage {
     let nasiya = 0;
 
     for (const t of txns) {
+      const splits = (t as any).paymentSplits as Array<{ method: string; amount: number }> | null;
+      if (splits && splits.length > 0) {
+        for (const s of splits) {
+          const m = (s.method || "cash").toLowerCase();
+          const amt = Number(s.amount) || 0;
+          if (m === "nasiya") nasiya += amt;
+          else if (m === "karta" || m === "card") card += amt;
+          else cash += amt;
+        }
+        continue;
+      }
       const method = (t.paymentMethod || "cash").toLowerCase();
       if (method === "nasiya") {
         const remaining = t.totalAmount - (t.paidAmount || 0);
@@ -763,6 +775,7 @@ export class DatabaseStorage implements IStorage {
       totalAmount: transactions.totalAmount,
       totalProfit: transactions.totalProfit,
       paymentMethod: transactions.paymentMethod,
+      paymentSplits: transactions.paymentSplits,
     }).from(transactions).where(
       and(
         eq(transactions.tenantId, tenantId),
@@ -778,8 +791,16 @@ export class DatabaseStorage implements IStorage {
     for (const t of txns) {
       revenue += t.totalAmount;
       totalProfit += t.totalProfit || 0;
-      const method = t.paymentMethod || "Naqd";
-      paymentBreakdown[method] = (paymentBreakdown[method] || 0) + t.totalAmount;
+      const splits = (t as any).paymentSplits as Array<{ method: string; amount: number }> | null;
+      if (splits && splits.length > 0) {
+        for (const s of splits) {
+          const m = s.method || "Naqd";
+          paymentBreakdown[m] = (paymentBreakdown[m] || 0) + (Number(s.amount) || 0);
+        }
+      } else {
+        const method = t.paymentMethod || "Naqd";
+        paymentBreakdown[method] = (paymentBreakdown[method] || 0) + t.totalAmount;
+      }
     }
 
     const [expResult] = await db.select({

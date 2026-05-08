@@ -794,6 +794,35 @@ export async function registerRoutes(
         paymentSplits: paymentSplits || null,
       };
       const transaction = await storage.createTransaction(data);
+
+      // Auto-save customer to the customers table whenever the cashier
+      // entered both name and phone. This way every sale grows the
+      // customer database — next time the cashier can search and pick
+      // them instead of re-typing. Best-effort & non-blocking.
+      const cName = (req.body.customerName || "").toString().trim();
+      const cPhone = (req.body.customerPhone || "").toString().trim();
+      if (cName && cPhone) {
+        (async () => {
+          try {
+            const existing = await storage.getCustomerByPhone(cPhone, tenantId);
+            if (!existing) {
+              const cInfo = (req.body.customerInfo && typeof req.body.customerInfo === 'object') ? req.body.customerInfo : {};
+              const addr = (cInfo.address || "").toString().trim();
+              const note = (cInfo.note || "").toString().trim();
+              await storage.createCustomer({
+                tenantId,
+                name: cName,
+                phone: cPhone,
+                addresses: addr ? [{ label: "MFY", address: addr }] : [],
+                notes: note || "",
+              } as any);
+            }
+          } catch (e) {
+            console.error("auto-save customer failed:", e);
+          }
+        })();
+      }
+
       res.status(201).json(transaction);
     } catch (error) {
       console.error("Error creating transaction:", error);

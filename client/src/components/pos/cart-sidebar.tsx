@@ -8,6 +8,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { CreditCard, Banknote, QrCode, Trash2, ShoppingBag, HandCoins, ChevronDown, ChevronUp, User, Phone, MapPin, FileText, Plus, CalendarIcon, AlertCircle, Truck, Layers } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { CartItem } from "./cart-item";
+import { CustomerSearch } from "./customer-search";
 import type { CartItem as CartItemType } from "@/pages/dashboard";
 
 interface PaymentMethod {
@@ -359,6 +360,18 @@ export function CartSidebar({ items, onUpdateQuantity, onUpdateDiscount, onRemov
 
         {showCustomer && (
           <div className="space-y-2 p-3 bg-blue-50/50 rounded-lg border border-blue-100">
+            <CustomerSearch
+              testId="cart-customer-search"
+              onSelect={(c) => {
+                setCustomerData(prev => ({
+                  ...prev,
+                  name: c.name || prev.name || "",
+                  phone: c.phone || prev.phone || "",
+                  address: (c.addresses && c.addresses[0]?.address) || prev.address || "",
+                  note: c.notes || prev.note || "",
+                }));
+              }}
+            />
             {custFields.map(field => (
               <div key={field.key} className="flex items-center gap-2">
                 {FIELD_ICONS[field.key] || <FileText className="h-4 w-4 text-muted-foreground" />}
@@ -516,6 +529,15 @@ export function CartSidebar({ items, onUpdateQuantity, onUpdateDiscount, onRemov
                   <HandCoins className="h-3.5 w-3.5" />
                   Nasiya qismi uchun mijoz ma'lumotlari
                 </p>
+                <CustomerSearch
+                  testId="mixed-customer-search"
+                  placeholder="Avval kiritilgan mijozni tanlash..."
+                  onSelect={(c) => {
+                    setMixedNasiyaName(c.name || "");
+                    setMixedNasiyaPhone(c.phone || "");
+                    setMixedError("");
+                  }}
+                />
                 <div>
                   <Label className="text-xs font-medium text-gray-600">Mijoz ismi *</Label>
                   <Input
@@ -597,6 +619,17 @@ export function CartSidebar({ items, onUpdateQuantity, onUpdateDiscount, onRemov
             )}
 
             <div className="space-y-3">
+              <CustomerSearch
+                testId="nasiya-customer-search"
+                placeholder="Avval kiritilgan mijozni tanlash..."
+                onSelect={(c) => {
+                  setNasiyaName(c.name || "");
+                  setNasiyaPhone(c.phone || "");
+                  setNasiyaAddress((c.addresses && c.addresses[0]?.address) || nasiyaAddress);
+                  setNasiyaNote(c.notes || nasiyaNote);
+                  setNasiyaError("");
+                }}
+              />
               <div>
                 <Label className="text-xs font-medium text-gray-600">Mijoz ismi *</Label>
                 <div className="flex items-center gap-2 mt-1">

@@ -162,6 +162,17 @@ function ProductCardImpl({ product, onClick, size = "default", showBarcode = fal
         )}>
           {product.author}
         </p>
+        {product.barcode ? (
+          <p
+            className={cn(
+              "text-slate-400 font-mono truncate",
+              isLarge ? "text-xs" : "text-[10px]"
+            )}
+            data-testid={`text-barcode-${product.id}`}
+          >
+            {product.barcode}
+          </p>
+        ) : null}
         {showBarcode && product.barcode ? (
           <div
             className="mb-2 -mx-1 px-1"

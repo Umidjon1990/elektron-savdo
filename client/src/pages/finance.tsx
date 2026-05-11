@@ -149,7 +149,11 @@ export default function FinancePage() {
   const { data: serverSummary } = useQuery<any>({
     queryKey: ["finance-summary", period],
     queryFn: async () => {
-      const res = await fetch(`/api/finance/summary?period=${period}`, { headers });
+      // Send the user's local-day boundaries so server returns the same window
+      // the client expects (avoids mobile vs desktop mismatch when server TZ ≠ user TZ).
+      const { dateFrom, dateTo } = getDateRange();
+      const tz = new Date().getTimezoneOffset();
+      const res = await fetch(`/api/finance/summary?period=${period}&from=${dateFrom.toISOString()}&to=${dateTo.toISOString()}&tzOffsetMinutes=${tz}`, { headers });
       if (!res.ok) throw new Error("Failed");
       return res.json();
     },
@@ -178,52 +182,85 @@ export default function FinancePage() {
   const debtsInUsdOnly = !!tenantSettings?.debtsInUsdOnly;
 
   const summary = useMemo(() => {
-    const { dateFrom } = getDateRange();
-    const now = new Date();
-    const active = (allTransactions || []).filter(t => t.status !== "voided");
-    const currentTxns = active.filter(t => new Date(t.date) >= dateFrom && new Date(t.date) <= now);
-
-    let clientRevenue = 0;
-    let clientProfit = 0;
-    const clientPaymentBreakdown: Record<string, number> = {};
-    for (const t of currentTxns) {
-      clientRevenue += t.totalAmount;
-      clientProfit += t.totalProfit || 0;
-      const splits = (t as any).paymentSplits as Array<{ method: string; amount: number }> | undefined;
+    // Server is the source of truth (keeps phone and desktop identical).
+    // We add unsynced local txns on top, and subtract any locally-voided
+    // (but already-synced) txns so offline cashier actions are reflected.
+    // If the server query failed (true offline), we fall back to the local
+    // cache so the user still sees historical totals.
+    const { dateFrom, dateTo } = getDateRange();
+    const inRange = (t: any) => {
+      const d = new Date(t.date);
+      return d >= dateFrom && d <= dateTo;
+    };
+    const addToBreakdown = (bd: Record<string, number>, t: any, sign: 1 | -1) => {
+      const splits = t.paymentSplits as Array<{ method: string; amount: number }> | undefined;
       if (splits && splits.length > 0) {
         for (const s of splits) {
           const m = s.method || "Naqd";
-          clientPaymentBreakdown[m] = (clientPaymentBreakdown[m] || 0) + (Number(s.amount) || 0);
+          bd[m] = (bd[m] || 0) + sign * (Number(s.amount) || 0);
         }
       } else {
         const method = t.paymentMethod || "Naqd";
-        clientPaymentBreakdown[method] = (clientPaymentBreakdown[method] || 0) + t.totalAmount;
+        bd[method] = (bd[method] || 0) + sign * t.totalAmount;
+      }
+    };
+
+    if (!serverSummary) {
+      // Offline / failed query: use local cache as best-effort fallback.
+      let revenue = 0, totalProfit = 0, count = 0;
+      const paymentBreakdown: Record<string, number> = {};
+      for (const t of (allTransactions || [])) {
+        if (t.status === "voided") continue;
+        if (!inRange(t)) continue;
+        revenue += t.totalAmount;
+        totalProfit += t.totalProfit || 0;
+        count += 1;
+        addToBreakdown(paymentBreakdown, t, 1);
+      }
+      return { revenue, expensesTotal: 0, profit: totalProfit, totalProfit, paymentBreakdown, transactionCount: count, prevRevenue: 0, prevExpenses: 0 };
+    }
+
+    let revenue = serverSummary.revenue || 0;
+    let totalProfit = serverSummary.totalProfit || 0;
+    const expensesTotal = serverSummary.expensesTotal || 0;
+    const paymentBreakdown: Record<string, number> = { ...(serverSummary.paymentBreakdown || {}) };
+    let transactionCount = serverSummary.transactionCount || 0;
+
+    for (const t of (allTransactions || [])) {
+      if (!inRange(t)) continue;
+      const synced = (t as any).synced !== false;
+      if (!synced && t.status !== "voided") {
+        revenue += t.totalAmount;
+        totalProfit += t.totalProfit || 0;
+        transactionCount += 1;
+        addToBreakdown(paymentBreakdown, t, 1);
+      } else if (synced && t.status === "voided") {
+        // Server may not yet reflect this void — subtract it.
+        revenue -= t.totalAmount;
+        totalProfit -= t.totalProfit || 0;
+        transactionCount = Math.max(0, transactionCount - 1);
+        addToBreakdown(paymentBreakdown, t, -1);
       }
     }
 
-    const srvRevenue = serverSummary?.revenue || 0;
-    const srvProfit = serverSummary?.totalProfit || 0;
-    const srvExpenses = serverSummary?.expensesTotal || 0;
-
-    const revenue = Math.max(clientRevenue, srvRevenue);
-    const totalProfit = Math.max(clientProfit, srvProfit);
-    const expensesTotal = srvExpenses;
-    const paymentBreakdown = { ...clientPaymentBreakdown };
-    if (serverSummary?.paymentBreakdown) {
-      for (const [k, v] of Object.entries(serverSummary.paymentBreakdown as Record<string, number>)) {
-        if (!paymentBreakdown[k] || (v as number) > paymentBreakdown[k]) paymentBreakdown[k] = v as number;
-      }
-    }
-    const transactionCount = Math.max(currentTxns.length, serverSummary?.transactionCount || 0);
-
-    return { revenue, expensesTotal, profit: totalProfit - expensesTotal, totalProfit, paymentBreakdown, transactionCount, prevRevenue: serverSummary?.prevRevenue || 0, prevExpenses: serverSummary?.prevExpenses || 0 };
+    return {
+      revenue,
+      expensesTotal,
+      profit: totalProfit - expensesTotal,
+      totalProfit,
+      paymentBreakdown,
+      transactionCount,
+      prevRevenue: serverSummary.prevRevenue || 0,
+      prevExpenses: serverSummary.prevExpenses || 0,
+    };
   }, [allTransactions, serverSummary, period]);
 
   const { data: serverDailyData = [] } = useQuery<any[]>({
     queryKey: ["finance-daily", period],
     queryFn: async () => {
       const { dateFrom, dateTo } = getDateRange();
-      const res = await fetch(`/api/finance/daily-breakdown?from=${dateFrom.toISOString()}&to=${dateTo.toISOString()}`, { headers });
+      const tz = new Date().getTimezoneOffset();
+      const res = await fetch(`/api/finance/daily-breakdown?from=${dateFrom.toISOString()}&to=${dateTo.toISOString()}&tzOffsetMinutes=${tz}`, { headers });
       if (!res.ok) throw new Error("Failed");
       return res.json();
     },
@@ -231,35 +268,15 @@ export default function FinancePage() {
   });
 
   const dailyData = useMemo(() => {
-    const { dateFrom } = getDateRange();
-    const now = new Date();
-    const active = (allTransactions || []).filter(t => t.status !== "voided");
-    const dayMap: Record<string, { revenue: number; profit: number }> = {};
-    for (const t of active) {
-      const tDate = new Date(t.date);
-      if (tDate >= dateFrom && tDate <= now) {
-        const dayKey = tDate.toISOString().split("T")[0];
-        if (!dayMap[dayKey]) dayMap[dayKey] = { revenue: 0, profit: 0 };
-        dayMap[dayKey].revenue += t.totalAmount;
-        dayMap[dayKey].profit += t.totalProfit || 0;
-      }
-    }
-    const srvMap: Record<string, any> = {};
-    for (const d of serverDailyData) srvMap[d.date] = d;
-    const allDates = new Set([...Object.keys(dayMap), ...Object.keys(srvMap)]);
-    return Array.from(allDates).sort().map(date => {
-      const client = dayMap[date] || { revenue: 0, profit: 0 };
-      const srv = srvMap[date] || { revenue: 0, expenses: 0, profit: 0, totalProfit: 0 };
-      const grossProfit = Math.max(client.profit, srv.totalProfit || 0);
-      return {
-        date,
-        revenue: Math.max(client.revenue, srv.revenue || 0),
-        expenses: srv.expenses || 0,
-        profit: grossProfit - (srv.expenses || 0),
-        payments: srv.payments || {},
-      };
-    });
-  }, [allTransactions, serverDailyData, period]);
+    // Server is the single source of truth — keeps mobile/desktop charts identical.
+    return (serverDailyData || []).map((srv: any) => ({
+      date: srv.date,
+      revenue: srv.revenue || 0,
+      expenses: srv.expenses || 0,
+      profit: (srv.totalProfit || 0) - (srv.expenses || 0),
+      payments: srv.payments || {},
+    }));
+  }, [serverDailyData]);
 
   const { data: expensesList = [] } = useQuery<any[]>({
     queryKey: ["expenses"],

@@ -1587,12 +1587,23 @@ export async function registerRoutes(
   app.get("/api/finance/summary", authMiddleware, async (req, res) => {
     try {
       const period = (req.query.period as string) || "day";
+      const fromParam = req.query.from as string | undefined;
+      const toParam = req.query.to as string | undefined;
       const now = new Date();
       let dateFrom: Date;
+      let dateTo: Date;
       let prevFrom: Date;
       let prevTo: Date;
 
-      if (period === "week") {
+      if (fromParam && toParam) {
+        // Client-supplied range (uses the user's local-day boundaries — keeps
+        // mobile and desktop in sync regardless of server timezone).
+        dateFrom = new Date(fromParam);
+        dateTo = new Date(toParam);
+        const span = dateTo.getTime() - dateFrom.getTime();
+        prevTo = new Date(dateFrom.getTime() - 1);
+        prevFrom = new Date(prevTo.getTime() - span);
+      } else if (period === "week") {
         const dayOfWeek = now.getDay() || 7;
         dateFrom = new Date(now);
         dateFrom.setDate(now.getDate() - dayOfWeek + 1);
@@ -1602,11 +1613,13 @@ export async function registerRoutes(
         prevFrom = new Date(prevTo);
         prevFrom.setDate(prevTo.getDate() - 6);
         prevFrom.setHours(0, 0, 0, 0);
+        dateTo = new Date(now); dateTo.setHours(23, 59, 59, 999);
       } else if (period === "month") {
         dateFrom = new Date(now.getFullYear(), now.getMonth(), 1);
         prevTo = new Date(dateFrom);
         prevTo.setMilliseconds(-1);
         prevFrom = new Date(prevTo.getFullYear(), prevTo.getMonth(), 1);
+        dateTo = new Date(now); dateTo.setHours(23, 59, 59, 999);
       } else {
         dateFrom = new Date(now);
         dateFrom.setHours(0, 0, 0, 0);
@@ -1614,10 +1627,8 @@ export async function registerRoutes(
         prevTo.setMilliseconds(-1);
         prevFrom = new Date(prevTo);
         prevFrom.setHours(0, 0, 0, 0);
+        dateTo = new Date(now); dateTo.setHours(23, 59, 59, 999);
       }
-
-      const dateTo = new Date(now);
-      dateTo.setHours(23, 59, 59, 999);
 
       const current = await storage.getFinancialSummary(req.tenantId!, dateFrom, dateTo);
       const previous = await storage.getFinancialSummary(req.tenantId!, prevFrom, prevTo);
@@ -1995,6 +2006,13 @@ export async function registerRoutes(
     try {
       const from = req.query.from ? new Date(req.query.from as string) : (() => { const d = new Date(); d.setDate(d.getDate() - 30); d.setHours(0,0,0,0); return d; })();
       const to = req.query.to ? new Date(req.query.to as string) : new Date();
+      // tzOffsetMinutes = JS Date.getTimezoneOffset() from the client (minutes WEST of UTC).
+      // Tashkent (UTC+5) sends -300 — we subtract this offset so the day key matches the
+      // user's local calendar day instead of the server's UTC day.
+      const tzOffsetMinutes = req.query.tzOffsetMinutes !== undefined
+        ? Number(req.query.tzOffsetMinutes) || 0
+        : 0;
+      const dayKey = (d: Date) => new Date(d.getTime() - tzOffsetMinutes * 60000).toISOString().split("T")[0];
 
       const allTransactions = await storage.getAllTransactions(req.tenantId!);
       const allExpenses = await storage.getExpenses(req.tenantId!, from, to);
@@ -2002,14 +2020,14 @@ export async function registerRoutes(
       const days: Record<string, { date: string; revenue: number; expenses: number; profit: number; totalProfit: number; payments: Record<string, number> }> = {};
       const current = new Date(from);
       while (current <= to) {
-        const key = current.toISOString().split("T")[0];
+        const key = dayKey(current);
         days[key] = { date: key, revenue: 0, expenses: 0, profit: 0, totalProfit: 0, payments: {} };
         current.setDate(current.getDate() + 1);
       }
 
       for (const t of allTransactions) {
         if (t.status === "voided") continue;
-        const key = new Date(t.date).toISOString().split("T")[0];
+        const key = dayKey(new Date(t.date));
         if (days[key]) {
           days[key].revenue += t.totalAmount;
           days[key].totalProfit += t.totalProfit || 0;
@@ -2027,7 +2045,7 @@ export async function registerRoutes(
       }
 
       for (const e of allExpenses) {
-        const key = new Date(e.date).toISOString().split("T")[0];
+        const key = dayKey(new Date(e.date));
         if (days[key]) {
           days[key].expenses += e.amount;
         }

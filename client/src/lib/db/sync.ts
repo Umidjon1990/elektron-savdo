@@ -92,7 +92,16 @@ export async function syncTransactionsFromServer(): Promise<CachedTransaction[]>
     if (!res.ok) throw new Error('Failed to fetch transactions');
     const serverTransactions = await res.json();
     
+    // Authoritative reconciliation: every transaction the server returns must
+    // be marked synced=true locally — including ones already present. Without
+    // this, a local txn that was POST'ed successfully but whose
+    // `markTransactionSynced` step failed (network drop, tab close, 4xx race)
+    // stays `synced=false` forever, causing the Moliya page to double-count it
+    // on top of the server total. This was the root cause of mobile showing
+    // higher Tushum than desktop.
+    const serverIds = new Set<string>();
     for (const txn of serverTransactions) {
+      serverIds.add(txn.id);
       const existing = await db.transactions.get(txn.id);
       if (!existing) {
         await db.transactions.put({
@@ -112,6 +121,31 @@ export async function syncTransactionsFromServer(): Promise<CachedTransaction[]>
           debtStatus: txn.debtStatus || "none",
           paymentSplits: txn.paymentSplits || undefined,
         });
+      } else if (existing.synced === false || existing.status !== (txn.status || 'completed')) {
+        // Already in IDB — reconcile flag and status with server truth.
+        await db.transactions.update(txn.id, {
+          synced: true,
+          status: txn.status || 'completed',
+          totalAmount: txn.totalAmount,
+          totalProfit: txn.totalProfit || 0,
+          paidAmount: txn.paidAmount || 0,
+          debtStatus: txn.debtStatus || "none",
+        });
+      }
+    }
+
+    // Also clean up "ghost" pending transactions: anything older than 24h that
+    // is still synced=false but the server doesn't know about. These are
+    // unrecoverable POST failures from old sessions; leaving them inflates
+    // the Moliya total on every page load.
+    const staleCutoff = Date.now() - 24 * 60 * 60 * 1000;
+    const allLocal = await db.transactions.toArray();
+    for (const local of allLocal) {
+      if (local.synced === false && !serverIds.has(local.id)) {
+        const ts = new Date(local.date).getTime();
+        if (ts < staleCutoff) {
+          await db.transactions.delete(local.id);
+        }
       }
     }
     

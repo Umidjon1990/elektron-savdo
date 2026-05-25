@@ -490,6 +490,11 @@ export default function FinancePage() {
   const revenue = summary?.revenue || 0;
   const expTotal = summary?.expensesTotal || 0;
   const profit = summary?.profit || 0;
+  const totalProfit = summary?.totalProfit || 0;
+  // Cost of goods sold for the period: revenue minus gross profit per txn.
+  // This is the REAL "tovar uchun ketgan pul" for the period — not the
+  // all-time inventory snapshot from supplier-summary.
+  const cogs = Math.max(0, revenue - totalProfit);
   const paymentBreakdown = summary?.paymentBreakdown || {};
   const periodLabel = period === "day" ? "Bugun" : period === "week" ? "Hafta" : "Oy";
   const getCatById = (id: string) => categories.find((c: any) => c.id === id);
@@ -1140,8 +1145,9 @@ export default function FinancePage() {
                 </Card>
                 <Card className="border-0 shadow-sm bg-gradient-to-br from-orange-500 to-amber-600 text-white">
                   <CardContent className="p-3">
-                    <p className="text-[10px] opacity-80 font-medium">Tovar xarid</p>
-                    <p className="text-lg font-bold">{(supplierSummary?.totals?.totalAmount || 0).toLocaleString()}</p>
+                    <p className="text-[10px] opacity-80 font-medium">Sotilgan tovar tannarxi</p>
+                    <p className="text-lg font-bold" data-testid="text-cogs">{cogs.toLocaleString()}</p>
+                    <p className="text-[9px] opacity-70 mt-0.5">{periodLabel.toLowerCase()} sotilganlar</p>
                   </CardContent>
                 </Card>
                 <Card className={`border-0 shadow-sm text-white ${profit >= 0 ? "bg-gradient-to-br from-blue-500 to-indigo-600" : "bg-gradient-to-br from-orange-500 to-red-600"}`}>
@@ -1151,6 +1157,22 @@ export default function FinancePage() {
                   </CardContent>
                 </Card>
               </div>
+
+              {/* Sof foyda hisobi — tenant qayerdan kelganini ko'rib turishi uchun */}
+              <Card className="border-0 shadow-sm bg-slate-50">
+                <CardContent className="p-3">
+                  <p className="text-xs font-semibold text-slate-600 mb-2">Sof foyda hisobi ({periodLabel.toLowerCase()})</p>
+                  <div className="space-y-1 text-xs font-mono">
+                    <div className="flex justify-between"><span className="text-slate-600">Tushum</span><span className="text-green-600 font-bold">+{revenue.toLocaleString()}</span></div>
+                    <div className="flex justify-between"><span className="text-slate-600">Sotilgan tovar tannarxi</span><span className="text-orange-600 font-bold">−{cogs.toLocaleString()}</span></div>
+                    <div className="flex justify-between"><span className="text-slate-600">Xarajat</span><span className="text-red-600 font-bold">−{expTotal.toLocaleString()}</span></div>
+                    <div className="flex justify-between pt-1 border-t border-slate-300"><span className="font-semibold text-slate-700">Sof foyda</span><span className={`font-bold ${profit >= 0 ? "text-blue-600" : "text-red-600"}`}>{profit.toLocaleString()}</span></div>
+                  </div>
+                  <p className="text-[10px] text-slate-500 mt-2">
+                    Eslatma: <b>Ombor qiymati</b> (hozir omborda turgan tovar narxi: <b>{(supplierSummary?.totals?.totalAmount || 0).toLocaleString()} so'm</b>) bu oylik xarid emas — bu hozirgi qoldiq qiymati. U "Sof foyda" hisobiga kirmaydi.
+                  </p>
+                </CardContent>
+              </Card>
 
               {Object.keys(paymentBreakdown).length > 0 && (
                 <Card className="border-0 shadow-sm">

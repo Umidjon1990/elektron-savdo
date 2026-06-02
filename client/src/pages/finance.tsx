@@ -146,7 +146,7 @@ export default function FinancePage() {
     enabled: !!token,
   });
 
-  const { data: serverSummary } = useQuery<any>({
+  const { data: serverSummary, isError: summaryError } = useQuery<any>({
     queryKey: ["finance-summary", period],
     queryFn: async () => {
       // Send the user's local-day boundaries so server returns the same window
@@ -182,78 +182,64 @@ export default function FinancePage() {
   const debtsInUsdOnly = !!tenantSettings?.debtsInUsdOnly;
 
   const summary = useMemo(() => {
-    // Server is the source of truth (keeps phone and desktop identical).
-    // We add unsynced local txns on top, and subtract any locally-voided
-    // (but already-synced) txns so offline cashier actions are reflected.
-    // If the server query failed (true offline), we fall back to the local
-    // cache so the user still sees historical totals.
+    // SERVER IS THE SINGLE SOURCE OF TRUTH. We do NOT mix in local IndexedDB
+    // transactions here. Mixing caused phone vs desktop mismatches: each device
+    // has a different local cache (ghost/unreconciled entries), so adding them
+    // on top of the server total produced different numbers per device.
+    // Both devices send the same from/to window, so the server returns an
+    // identical result — guaranteeing consistency. Offline sales appear once
+    // they sync (which happens within seconds of reconnecting).
+    if (serverSummary) {
+      const totalProfit = serverSummary.totalProfit || 0;
+      const expensesTotal = serverSummary.expensesTotal || 0;
+      return {
+        revenue: serverSummary.revenue || 0,
+        expensesTotal,
+        profit: totalProfit - expensesTotal,
+        totalProfit,
+        paymentBreakdown: { ...(serverSummary.paymentBreakdown || {}) },
+        transactionCount: serverSummary.transactionCount || 0,
+        prevRevenue: serverSummary.prevRevenue || 0,
+        prevExpenses: serverSummary.prevExpenses || 0,
+      };
+    }
+
+    // While the server query is still loading (no data, no error yet), return
+    // zeros instead of local data — this avoids a brief flicker where local
+    // cache values flash before the authoritative server total arrives.
+    if (!summaryError) {
+      return { revenue: 0, expensesTotal: 0, profit: 0, totalProfit: 0, paymentBreakdown: {}, transactionCount: 0, prevRevenue: 0, prevExpenses: 0 };
+    }
+
+    // True offline / failed query: best-effort fallback to the local cache so
+    // the user still sees historical totals. Only reached when the network
+    // request itself errors out.
     const { dateFrom, dateTo } = getDateRange();
     const inRange = (t: any) => {
       const d = new Date(t.date);
       return d >= dateFrom && d <= dateTo;
     };
-    const addToBreakdown = (bd: Record<string, number>, t: any, sign: 1 | -1) => {
+    let revenue = 0, totalProfit = 0, count = 0;
+    const paymentBreakdown: Record<string, number> = {};
+    for (const t of (allTransactions || [])) {
+      if (t.status === "voided") continue;
+      if (!inRange(t)) continue;
+      revenue += t.totalAmount;
+      totalProfit += t.totalProfit || 0;
+      count += 1;
       const splits = t.paymentSplits as Array<{ method: string; amount: number }> | undefined;
       if (splits && splits.length > 0) {
         for (const s of splits) {
           const m = s.method || "Naqd";
-          bd[m] = (bd[m] || 0) + sign * (Number(s.amount) || 0);
+          paymentBreakdown[m] = (paymentBreakdown[m] || 0) + (Number(s.amount) || 0);
         }
       } else {
         const method = t.paymentMethod || "Naqd";
-        bd[method] = (bd[method] || 0) + sign * t.totalAmount;
-      }
-    };
-
-    if (!serverSummary) {
-      // Offline / failed query: use local cache as best-effort fallback.
-      let revenue = 0, totalProfit = 0, count = 0;
-      const paymentBreakdown: Record<string, number> = {};
-      for (const t of (allTransactions || [])) {
-        if (t.status === "voided") continue;
-        if (!inRange(t)) continue;
-        revenue += t.totalAmount;
-        totalProfit += t.totalProfit || 0;
-        count += 1;
-        addToBreakdown(paymentBreakdown, t, 1);
-      }
-      return { revenue, expensesTotal: 0, profit: totalProfit, totalProfit, paymentBreakdown, transactionCount: count, prevRevenue: 0, prevExpenses: 0 };
-    }
-
-    let revenue = serverSummary.revenue || 0;
-    let totalProfit = serverSummary.totalProfit || 0;
-    const expensesTotal = serverSummary.expensesTotal || 0;
-    const paymentBreakdown: Record<string, number> = { ...(serverSummary.paymentBreakdown || {}) };
-    let transactionCount = serverSummary.transactionCount || 0;
-
-    for (const t of (allTransactions || [])) {
-      if (!inRange(t)) continue;
-      const synced = (t as any).synced !== false;
-      if (!synced && t.status !== "voided") {
-        revenue += t.totalAmount;
-        totalProfit += t.totalProfit || 0;
-        transactionCount += 1;
-        addToBreakdown(paymentBreakdown, t, 1);
-      } else if (synced && t.status === "voided") {
-        // Server may not yet reflect this void — subtract it.
-        revenue -= t.totalAmount;
-        totalProfit -= t.totalProfit || 0;
-        transactionCount = Math.max(0, transactionCount - 1);
-        addToBreakdown(paymentBreakdown, t, -1);
+        paymentBreakdown[method] = (paymentBreakdown[method] || 0) + t.totalAmount;
       }
     }
-
-    return {
-      revenue,
-      expensesTotal,
-      profit: totalProfit - expensesTotal,
-      totalProfit,
-      paymentBreakdown,
-      transactionCount,
-      prevRevenue: serverSummary.prevRevenue || 0,
-      prevExpenses: serverSummary.prevExpenses || 0,
-    };
-  }, [allTransactions, serverSummary, period]);
+    return { revenue, expensesTotal: 0, profit: totalProfit, totalProfit, paymentBreakdown, transactionCount: count, prevRevenue: 0, prevExpenses: 0 };
+  }, [allTransactions, serverSummary, summaryError, period]);
 
   const { data: serverDailyData = [] } = useQuery<any[]>({
     queryKey: ["finance-daily", period],

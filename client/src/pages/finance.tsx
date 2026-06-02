@@ -84,7 +84,7 @@ export default function FinancePage() {
   const queryClient = useQueryClient();
   const { transactions: allTransactions, syncTransactions, voidTransaction } = useTransactions();
   const [activeMenu, setActiveMenu] = useState<SubMenu>("kassa");
-  const [period, setPeriod] = useState<"day" | "week" | "month">("month");
+  const [period, setPeriod] = useState<"day" | "week" | "month" | "lastmonth">("month");
 
   const [expenseDialogOpen, setExpenseDialogOpen] = useState(false);
   const [editingExpense, setEditingExpense] = useState<any>(null);
@@ -108,19 +108,25 @@ export default function FinancePage() {
   const getDateRange = () => {
     const now = new Date();
     let dateFrom: Date;
+    let dateTo: Date;
     if (period === "week") {
       const d = now.getDay() || 7;
       dateFrom = new Date(now);
       dateFrom.setDate(now.getDate() - d + 1);
       dateFrom.setHours(0, 0, 0, 0);
+      dateTo = new Date(now); dateTo.setHours(23, 59, 59, 999);
     } else if (period === "month") {
       dateFrom = new Date(now.getFullYear(), now.getMonth(), 1);
+      dateTo = new Date(now); dateTo.setHours(23, 59, 59, 999);
+    } else if (period === "lastmonth") {
+      // O'tgan oy: oldingi oyning 1-kunidan oxirgi kunigacha.
+      dateFrom = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+      dateTo = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59, 999);
     } else {
       dateFrom = new Date(now);
       dateFrom.setHours(0, 0, 0, 0);
+      dateTo = new Date(now); dateTo.setHours(23, 59, 59, 999);
     }
-    const dateTo = new Date(now);
-    dateTo.setHours(23, 59, 59, 999);
     return { dateFrom, dateTo };
   };
 
@@ -482,7 +488,7 @@ export default function FinancePage() {
   // all-time inventory snapshot from supplier-summary.
   const cogs = Math.max(0, revenue - totalProfit);
   const paymentBreakdown = summary?.paymentBreakdown || {};
-  const periodLabel = period === "day" ? "Bugun" : period === "week" ? "Hafta" : "Oy";
+  const periodLabel = period === "day" ? "Bugun" : period === "week" ? "Hafta" : period === "lastmonth" ? "O'tgan oy" : "Oy";
   const getCatById = (id: string) => categories.find((c: any) => c.id === id);
 
   const kassaJournal = useMemo(() => {
@@ -565,11 +571,11 @@ export default function FinancePage() {
           </div>
           <div className="flex items-center gap-2">
             <div className="flex bg-gray-100 rounded-lg p-0.5">
-              {(["day", "week", "month"] as const).map(p => (
+              {(["day", "week", "month", "lastmonth"] as const).map(p => (
                 <button key={p} onClick={() => setPeriod(p)}
-                  className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${period === p ? "bg-white shadow text-primary" : "text-gray-500 hover:text-gray-700"}`}
+                  className={`px-2.5 py-1.5 text-xs font-medium rounded-md transition-all whitespace-nowrap ${period === p ? "bg-white shadow text-primary" : "text-gray-500 hover:text-gray-700"}`}
                   data-testid={`button-period-${p}`}>
-                  {p === "day" ? "Bugun" : p === "week" ? "Hafta" : "Oy"}
+                  {p === "day" ? "Bugun" : p === "week" ? "Hafta" : p === "month" ? "Oy" : "O'tgan oy"}
                 </button>
               ))}
             </div>
@@ -2475,19 +2481,25 @@ function ShiftHandoverTab({ token, period, balance, headers }: { token: string |
   const getDateRange = () => {
     const now = new Date();
     let dateFrom: Date;
+    let dateTo: Date;
     if (period === "week") {
       const d = now.getDay() || 7;
       dateFrom = new Date(now);
       dateFrom.setDate(now.getDate() - d + 1);
       dateFrom.setHours(0, 0, 0, 0);
+      dateTo = new Date(now); dateTo.setHours(23, 59, 59, 999);
     } else if (period === "month") {
       dateFrom = new Date(now.getFullYear(), now.getMonth(), 1);
+      dateTo = new Date(now); dateTo.setHours(23, 59, 59, 999);
+    } else if (period === "lastmonth") {
+      // O'tgan oy: oldingi oyning 1-kunidan oxirgi kunigacha.
+      dateFrom = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+      dateTo = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59, 999);
     } else {
       dateFrom = new Date(now);
       dateFrom.setHours(0, 0, 0, 0);
+      dateTo = new Date(now); dateTo.setHours(23, 59, 59, 999);
     }
-    const dateTo = new Date(now);
-    dateTo.setHours(23, 59, 59, 999);
     return { dateFrom, dateTo };
   };
 
@@ -2547,7 +2559,7 @@ function ShiftHandoverTab({ token, period, balance, headers }: { token: string |
     onError: () => toast({ title: "Xatolik", variant: "destructive" }),
   });
 
-  const periodLabel = period === "day" ? "Bugun" : period === "week" ? "Hafta" : "Oy";
+  const periodLabel = period === "day" ? "Bugun" : period === "week" ? "Hafta" : period === "lastmonth" ? "O'tgan oy" : "Oy";
   const cashAmount = balance?.cash || 0;
   const cardAmount = balance?.card || 0;
   const nasiyaAmount = balance?.nasiya || 0;

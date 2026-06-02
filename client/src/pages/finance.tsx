@@ -78,13 +78,35 @@ function daysUntil(d: string | Date): number {
   return Math.ceil((target.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
 }
 
+const UZ_MONTHS = ["Yanvar", "Fevral", "Mart", "Aprel", "May", "Iyun", "Iyul", "Avgust", "Sentyabr", "Oktyabr", "Noyabr", "Dekabr"];
+
+// Label for a "YYYY-MM" string, e.g. "2026-05" -> "May 2026".
+function monthLabel(ym: string): string {
+  if (!ym) return "Oy tanlash";
+  const [y, m] = ym.split("-").map(Number);
+  return `${UZ_MONTHS[m - 1]} ${y}`;
+}
+
+// Build a list of the last `count` months (most recent first) as "YYYY-MM".
+function buildMonthOptions(count: number): string[] {
+  const out: string[] = [];
+  const now = new Date();
+  for (let i = 0; i < count; i++) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    out.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`);
+  }
+  return out;
+}
+
 export default function FinancePage() {
   const { token } = useAuth();
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { transactions: allTransactions, syncTransactions, voidTransaction } = useTransactions();
   const [activeMenu, setActiveMenu] = useState<SubMenu>("kassa");
-  const [period, setPeriod] = useState<"day" | "week" | "month" | "lastmonth">("month");
+  const [period, setPeriod] = useState<"day" | "week" | "month" | "lastmonth" | "custom">("month");
+  // When period === "custom", this holds the chosen month as "YYYY-MM".
+  const [selectedMonth, setSelectedMonth] = useState<string>("");
 
   const [expenseDialogOpen, setExpenseDialogOpen] = useState(false);
   const [editingExpense, setEditingExpense] = useState<any>(null);
@@ -122,6 +144,11 @@ export default function FinancePage() {
       // O'tgan oy: oldingi oyning 1-kunidan oxirgi kunigacha.
       dateFrom = new Date(now.getFullYear(), now.getMonth() - 1, 1);
       dateTo = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59, 999);
+    } else if (period === "custom" && selectedMonth) {
+      // Tanlangan oy: "YYYY-MM" — o'sha oyning 1-kunidan oxirgi kunigacha.
+      const [y, m] = selectedMonth.split("-").map(Number);
+      dateFrom = new Date(y, m - 1, 1);
+      dateTo = new Date(y, m, 0, 23, 59, 59, 999);
     } else {
       dateFrom = new Date(now);
       dateFrom.setHours(0, 0, 0, 0);
@@ -131,7 +158,7 @@ export default function FinancePage() {
   };
 
   const { data: balance } = useQuery<any>({
-    queryKey: ["cash-balance", period],
+    queryKey: ["cash-balance", period, selectedMonth],
     queryFn: async () => {
       const { dateFrom, dateTo } = getDateRange();
       const res = await fetch(`/api/cash-register/balance?from=${dateFrom.toISOString()}&to=${dateTo.toISOString()}`, { headers });
@@ -142,7 +169,7 @@ export default function FinancePage() {
   });
 
   const { data: cashEntries = [] } = useQuery<any[]>({
-    queryKey: ["cash-entries", period],
+    queryKey: ["cash-entries", period, selectedMonth],
     queryFn: async () => {
       const { dateFrom, dateTo } = getDateRange();
       const res = await fetch(`/api/cash-register/entries?from=${dateFrom.toISOString()}&to=${dateTo.toISOString()}`, { headers });
@@ -153,7 +180,7 @@ export default function FinancePage() {
   });
 
   const { data: serverSummary, isError: summaryError } = useQuery<any>({
-    queryKey: ["finance-summary", period],
+    queryKey: ["finance-summary", period, selectedMonth],
     queryFn: async () => {
       // Send the user's local-day boundaries so server returns the same window
       // the client expects (avoids mobile vs desktop mismatch when server TZ ≠ user TZ).
@@ -245,10 +272,10 @@ export default function FinancePage() {
       }
     }
     return { revenue, expensesTotal: 0, profit: totalProfit, totalProfit, paymentBreakdown, transactionCount: count, prevRevenue: 0, prevExpenses: 0 };
-  }, [allTransactions, serverSummary, summaryError, period]);
+  }, [allTransactions, serverSummary, summaryError, period, selectedMonth]);
 
   const { data: serverDailyData = [] } = useQuery<any[]>({
-    queryKey: ["finance-daily", period],
+    queryKey: ["finance-daily", period, selectedMonth],
     queryFn: async () => {
       const { dateFrom, dateTo } = getDateRange();
       const tz = new Date().getTimezoneOffset();
@@ -488,7 +515,7 @@ export default function FinancePage() {
   // all-time inventory snapshot from supplier-summary.
   const cogs = Math.max(0, revenue - totalProfit);
   const paymentBreakdown = summary?.paymentBreakdown || {};
-  const periodLabel = period === "day" ? "Bugun" : period === "week" ? "Hafta" : period === "lastmonth" ? "O'tgan oy" : "Oy";
+  const periodLabel = period === "day" ? "Bugun" : period === "week" ? "Hafta" : period === "lastmonth" ? "O'tgan oy" : period === "custom" ? monthLabel(selectedMonth) : "Oy";
   const getCatById = (id: string) => categories.find((c: any) => c.id === id);
 
   const kassaJournal = useMemo(() => {
@@ -533,7 +560,7 @@ export default function FinancePage() {
     });
 
     return [...txns, ...entries, ...expItems].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-  }, [allTransactions, cashEntries, expensesList, categories, period]);
+  }, [allTransactions, cashEntries, expensesList, categories, period, selectedMonth]);
 
   const debtStats = useMemo(() => {
     const debts = debtTransactions || [];
@@ -572,13 +599,32 @@ export default function FinancePage() {
           <div className="flex items-center gap-2">
             <div className="flex bg-gray-100 rounded-lg p-0.5">
               {(["day", "week", "month", "lastmonth"] as const).map(p => (
-                <button key={p} onClick={() => setPeriod(p)}
+                <button key={p} onClick={() => { setPeriod(p); setSelectedMonth(""); }}
                   className={`px-2.5 py-1.5 text-xs font-medium rounded-md transition-all whitespace-nowrap ${period === p ? "bg-white shadow text-primary" : "text-gray-500 hover:text-gray-700"}`}
                   data-testid={`button-period-${p}`}>
                   {p === "day" ? "Bugun" : p === "week" ? "Hafta" : p === "month" ? "Oy" : "O'tgan oy"}
                 </button>
               ))}
             </div>
+            <Select
+              value={period === "custom" ? selectedMonth : ""}
+              onValueChange={(v) => { setSelectedMonth(v); setPeriod("custom"); }}
+            >
+              <SelectTrigger
+                className={`h-8 w-auto gap-1.5 text-xs font-medium ${period === "custom" ? "border-primary text-primary" : "text-gray-500"}`}
+                data-testid="select-period-month"
+              >
+                <Calendar className="h-3.5 w-3.5" />
+                <SelectValue placeholder="Oy tanlash" />
+              </SelectTrigger>
+              <SelectContent>
+                {buildMonthOptions(24).map(ym => (
+                  <SelectItem key={ym} value={ym} data-testid={`option-month-${ym}`}>
+                    {monthLabel(ym)}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
         </header>
 
@@ -1293,7 +1339,7 @@ export default function FinancePage() {
             </>
           )}
 
-          {activeMenu === "topshirish" && <ShiftHandoverTab token={token} period={period} balance={balance} headers={headers} />}
+          {activeMenu === "topshirish" && <ShiftHandoverTab token={token} period={period} selectedMonth={selectedMonth} balance={balance} headers={headers} />}
 
           {activeMenu === "tovarberuvchi" && (
             <>
@@ -2470,7 +2516,7 @@ function SupplierCard({ supplier, token, categories, debtsInUsdOnly, onUpdate }:
   );
 }
 
-function ShiftHandoverTab({ token, period, balance, headers }: { token: string | null; period: string; balance: any; headers: Record<string, string> }) {
+function ShiftHandoverTab({ token, period, selectedMonth = "", balance, headers }: { token: string | null; period: string; selectedMonth?: string; balance: any; headers: Record<string, string> }) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [handedBy, setHandedBy] = useState(() => localStorage.getItem("shift_handed_by") || "");
@@ -2495,6 +2541,10 @@ function ShiftHandoverTab({ token, period, balance, headers }: { token: string |
       // O'tgan oy: oldingi oyning 1-kunidan oxirgi kunigacha.
       dateFrom = new Date(now.getFullYear(), now.getMonth() - 1, 1);
       dateTo = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59, 999);
+    } else if (period === "custom" && selectedMonth) {
+      const [y, m] = selectedMonth.split("-").map(Number);
+      dateFrom = new Date(y, m - 1, 1);
+      dateTo = new Date(y, m, 0, 23, 59, 59, 999);
     } else {
       dateFrom = new Date(now);
       dateFrom.setHours(0, 0, 0, 0);
@@ -2559,7 +2609,7 @@ function ShiftHandoverTab({ token, period, balance, headers }: { token: string |
     onError: () => toast({ title: "Xatolik", variant: "destructive" }),
   });
 
-  const periodLabel = period === "day" ? "Bugun" : period === "week" ? "Hafta" : period === "lastmonth" ? "O'tgan oy" : "Oy";
+  const periodLabel = period === "day" ? "Bugun" : period === "week" ? "Hafta" : period === "lastmonth" ? "O'tgan oy" : period === "custom" ? monthLabel(selectedMonth) : "Oy";
   const cashAmount = balance?.cash || 0;
   const cardAmount = balance?.card || 0;
   const nasiyaAmount = balance?.nasiya || 0;

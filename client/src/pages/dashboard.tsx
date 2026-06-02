@@ -92,6 +92,9 @@ export default function Dashboard() {
   // work. Show 60 by default and add "Yana ko'rsatish" to load more.
   const [visibleCount, setVisibleCount] = useState(60);
   const [selectedCategory, setSelectedCategory] = useState("Barchasi");
+  // Stock-status filter. Default "available" so the cashier only sees sellable
+  // items; out-of-stock products are hidden until explicitly viewed.
+  const [stockFilter, setStockFilter] = useState<"available" | "low" | "out" | "all">("available");
   const [isScannerOpen, setIsScannerOpen] = useState(false);
   const [scannedProduct, setScannedProduct] = useState<Product | null>(null);
   const [lastTransaction, setLastTransaction] = useState<any>(null);
@@ -606,19 +609,27 @@ export default function Dashboard() {
   // doesn't carry over an old "load more" expansion).
   useEffect(() => {
     setVisibleCount(60);
-  }, [debouncedSearch, selectedCategory]);
+  }, [debouncedSearch, selectedCategory, stockFilter]);
 
   // Memoized — only re-filters when products list, debounced query, or
   // category change. Lowercase the query ONCE outside the loop.
   const filteredProducts = useMemo(() => {
     const searchLower = debouncedSearch.toLowerCase().trim();
     const isAllCategory = selectedCategory === "Barchasi";
-    if (!searchLower && isAllCategory) return products;
-
-    // Multi-word search: every term must match somewhere (name/author/barcode/category/description)
     const terms = searchLower.split(/\s+/).filter(Boolean);
 
-    return products.filter(product => {
+    // Stock-status filter. LOW_STOCK matches the card's "kam qolgan" badge.
+    const LOW_STOCK = 5;
+    const matchesStock = (p: Product) => {
+      const s = p.stock ?? 0;
+      if (stockFilter === "out") return s <= 0;
+      if (stockFilter === "low") return s > 0 && s <= LOW_STOCK;
+      if (stockFilter === "available") return s > 0;
+      return true; // "all"
+    };
+
+    const result = products.filter(product => {
+      if (!matchesStock(product)) return false;
       if (!isAllCategory && product.category !== selectedCategory) return false;
       if (!searchLower) return true;
       const haystack = [
@@ -631,7 +642,19 @@ export default function Dashboard() {
       ].filter(Boolean).join(" ").toLowerCase();
       return terms.every(t => haystack.includes(t));
     });
-  }, [products, debouncedSearch, selectedCategory]);
+
+    // In the "Barchasi" stock view, sink out-of-stock products to the bottom
+    // (stable sort keeps the rest in their original order). Skipped for the
+    // other modes where every item is in the same bucket.
+    if (stockFilter === "all") {
+      result.sort((a, b) => {
+        const ao = (a.stock ?? 0) <= 0 ? 1 : 0;
+        const bo = (b.stock ?? 0) <= 0 ? 1 : 0;
+        return ao - bo;
+      });
+    }
+    return result;
+  }, [products, debouncedSearch, selectedCategory, stockFilter]);
 
   // Show only the first `visibleCount` products to keep the grid render
   // fast on tenants with hundreds of products. The "Load more" button
@@ -861,6 +884,27 @@ export default function Dashboard() {
                 </DropdownMenuContent>
               </DropdownMenu>
               <span style={{color: '#64748b', fontSize: '14px'}}>{filteredProducts.length} ta tovar</span>
+
+              {/* Stock-status filter (Mavjud / Kam qolgan / Tugagan / Barchasi) */}
+              <div className="flex bg-gray-100 rounded-lg p-0.5 ml-auto">
+                {([
+                  { key: "available", label: "Mavjud" },
+                  { key: "low", label: "Kam qolgan" },
+                  { key: "out", label: "Tugagan" },
+                  { key: "all", label: "Barchasi" },
+                ] as const).map(opt => (
+                  <button
+                    key={opt.key}
+                    onClick={() => setStockFilter(opt.key)}
+                    className={`px-2.5 py-1.5 text-xs font-medium rounded-md transition-all whitespace-nowrap ${
+                      stockFilter === opt.key ? "bg-white shadow text-primary" : "text-gray-500 hover:text-gray-700"
+                    }`}
+                    data-testid={`button-stock-${opt.key}`}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
             </div>
 
             {/* Product Grid */}

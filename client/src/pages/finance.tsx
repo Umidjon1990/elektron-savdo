@@ -18,7 +18,7 @@ import {
   Users, Printer, Tag, Settings, ChevronDown, Banknote, CreditCard,
   Clock, TrendingUp, ShoppingCart, HandCoins, ArrowDown, ArrowUp,
   AlertTriangle, Calendar, FileText, CircleDollarSign, Landmark,
-  UserCheck, Phone, ChevronRight, X, Building
+  UserCheck, Phone, ChevronRight, X, Building, Search
 } from "lucide-react";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
@@ -124,6 +124,8 @@ export default function FinancePage() {
   const [payNote, setPayNote] = useState("");
   const [saleDetailTx, setSaleDetailTx] = useState<any>(null);
   const [voidConfirmId, setVoidConfirmId] = useState<string | null>(null);
+  // Nasiya qarzdorlar ro'yxati uchun qidiruv (ism, familiya, tel raqami).
+  const [debtSearch, setDebtSearch] = useState("");
 
   const headers = { Authorization: `Bearer ${token}`, "Content-Type": "application/json" };
 
@@ -571,6 +573,27 @@ export default function FinancePage() {
     const pending = debts.filter((d: any) => d.debtStatus === "pending" || d.debtStatus === "partial").length;
     return { totalDebt, totalPaid, remaining, overdue, pending };
   }, [debtTransactions]);
+
+  // Qarzdorni ism/familiya yoki tel raqami bo'yicha qidirish. Telefon
+  // raqamida faqat raqamlar solishtiriladi (format farqidan qat'i nazar).
+  const matchesDebtSearch = (d: any) => {
+    const q = debtSearch.trim().toLowerCase();
+    if (!q) return true;
+    const name = (d.customerName || "").toLowerCase();
+    if (name.includes(q)) return true;
+    const phone = (d.customerPhone || "").replace(/\D/g, "");
+    const qDigits = q.replace(/\D/g, "");
+    return qDigits.length > 0 && phone.includes(qDigits);
+  };
+
+  const debtSearchActive = debtSearch.trim().length > 0;
+  const filteredUnpaidDebts = (debtTransactions || [])
+    .filter((d: any) => d.debtStatus !== "paid" && matchesDebtSearch(d))
+    .sort((a: any, b: any) => {
+      if (a.dueDate && b.dueDate) return new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime();
+      return 0;
+    });
+  const filteredPaidDebts = (debtTransactions || []).filter((d: any) => d.debtStatus === "paid" && matchesDebtSearch(d));
 
   const catExpenses = categories.map((cat: any) => {
     const total = expensesList.filter((e: any) => e.categoryId === cat.id).reduce((sum: number, e: any) => sum + e.amount, 0);
@@ -1100,16 +1123,32 @@ export default function FinancePage() {
               <Card className="border-0 shadow-sm">
                 <CardHeader className="pb-2 pt-3 px-4">
                   <CardTitle className="text-sm font-semibold">Qarzdorlar ro'yxati</CardTitle>
+                  <div className="relative mt-2">
+                    <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-gray-400" />
+                    <Input
+                      value={debtSearch}
+                      onChange={(e) => setDebtSearch(e.target.value)}
+                      placeholder="Ism, familiya yoki tel raqami bo'yicha qidirish..."
+                      className="h-9 pl-8 pr-8 text-sm"
+                      data-testid="input-debt-search"
+                    />
+                    {debtSearch && (
+                      <button
+                        onClick={() => setDebtSearch("")}
+                        className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                        data-testid="button-clear-debt-search"
+                      >
+                        <X className="h-3.5 w-3.5" />
+                      </button>
+                    )}
+                  </div>
                 </CardHeader>
                 <CardContent className="px-4 pb-3">
-                  {debtTransactions.filter((d: any) => d.debtStatus !== "paid").length === 0 ? (
-                    <div className="text-center py-8 text-sm text-gray-400">Qarzdor yo'q</div>
+                  {filteredUnpaidDebts.length === 0 && filteredPaidDebts.length === 0 ? (
+                    <div className="text-center py-8 text-sm text-gray-400">{debtSearchActive ? "Hech narsa topilmadi" : "Qarzdor yo'q"}</div>
                   ) : (
                     <div className="space-y-2">
-                      {debtTransactions.filter((d: any) => d.debtStatus !== "paid").sort((a: any, b: any) => {
-                        if (a.dueDate && b.dueDate) return new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime();
-                        return 0;
-                      }).map((debt: any) => {
+                      {filteredUnpaidDebts.map((debt: any) => {
                         const remaining = debt.totalAmount - (debt.paidAmount || 0);
                         const pct = debt.totalAmount > 0 ? Math.round(((debt.paidAmount || 0) / debt.totalAmount) * 100) : 0;
                         const days = debt.dueDate ? daysUntil(debt.dueDate) : null;
@@ -1147,10 +1186,10 @@ export default function FinancePage() {
                         );
                       })}
 
-                      {debtTransactions.filter((d: any) => d.debtStatus === "paid").length > 0 && (
+                      {filteredPaidDebts.length > 0 && (
                         <div className="pt-3 border-t mt-3">
-                          <p className="text-xs font-semibold text-gray-500 mb-2">To'liq to'langan ({debtTransactions.filter((d: any) => d.debtStatus === "paid").length})</p>
-                          {debtTransactions.filter((d: any) => d.debtStatus === "paid").slice(0, 5).map((debt: any) => (
+                          <p className="text-xs font-semibold text-gray-500 mb-2">To'liq to'langan ({filteredPaidDebts.length})</p>
+                          {filteredPaidDebts.slice(0, debtSearchActive ? 50 : 5).map((debt: any) => (
                             <div key={debt.id} className="flex items-center gap-2 p-2 rounded-lg bg-green-50/50 mb-1">
                               <UserCheck className="h-4 w-4 text-green-600" />
                               <span className="text-xs font-medium flex-1">{debt.customerName || "Noma'lum"}</span>

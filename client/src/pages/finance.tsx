@@ -24,7 +24,6 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell, Legend
 } from "recharts";
-import * as XLSX from "xlsx";
 
 const ICON_MAP: Record<string, any> = {
   Home, Briefcase, Truck, Zap, ShoppingBag, Megaphone, Receipt, Users, Tag, Settings, MoreHorizontal, Wallet, Building, Landmark, HandCoins, ArrowDown, CreditCard, DollarSign, CircleDollarSign
@@ -629,15 +628,21 @@ export default function FinancePage() {
       toast({ title: "Ma'lumot yo'q", description: "Eksport qilish uchun qarzdor yo'q", variant: "destructive" });
       return;
     }
-    const ws = XLSX.utils.json_to_sheet(rows);
-    ws["!cols"] = [
-      { wch: 5 }, { wch: 22 }, { wch: 16 }, { wch: 13 }, { wch: 13 },
-      { wch: 14 }, { wch: 14 }, { wch: 14 }, { wch: 14 }, { wch: 40 },
-    ];
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "Nasiyachilar");
+    const cols = ["№", "Mijoz", "Telefon", "Olingan sana", "Muddat", "Holat", "Jami (so'm)", "To'langan (so'm)", "Qoldiq (so'm)", "Tovarlar"];
+    const esc = (v: any) => String(v ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    const thead = `<tr>${cols.map((c) => `<th style="background:#f0f0f0;font-weight:bold">${esc(c)}</th>`).join("")}</tr>`;
+    const tbody = rows.map((r: any) => `<tr>${cols.map((c) => `<td>${esc((r as any)[c])}</td>`).join("")}</tr>`).join("");
+    const html = `<html xmlns:x="urn:schemas-microsoft-com:office:excel"><head><meta charset="utf-8"></head><body><table border="1">${thead}${tbody}</table></body></html>`;
+    const blob = new Blob(["\ufeff" + html], { type: "application/vnd.ms-excel;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
     const today = new Date().toISOString().slice(0, 10);
-    XLSX.writeFile(wb, `nasiyachilar-${today}.xlsx`);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `nasiyachilar-${today}.xls`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
   };
 
   const { data: debtDetailPayments = [] } = useQuery<any[]>({

@@ -18,12 +18,13 @@ import {
   Users, Printer, Tag, Settings, ChevronDown, Banknote, CreditCard,
   Clock, TrendingUp, ShoppingCart, HandCoins, ArrowDown, ArrowUp,
   AlertTriangle, Calendar, FileText, CircleDollarSign, Landmark,
-  UserCheck, Phone, ChevronRight, X, Building, Search
+  UserCheck, Phone, ChevronRight, X, Building, Search, Download
 } from "lucide-react";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell, Legend
 } from "recharts";
+import * as XLSX from "xlsx";
 
 const ICON_MAP: Record<string, any> = {
   Home, Briefcase, Truck, Zap, ShoppingBag, Megaphone, Receipt, Users, Tag, Settings, MoreHorizontal, Wallet, Building, Landmark, HandCoins, ArrowDown, CreditCard, DollarSign, CircleDollarSign
@@ -126,6 +127,8 @@ export default function FinancePage() {
   const [voidConfirmId, setVoidConfirmId] = useState<string | null>(null);
   // Nasiya qarzdorlar ro'yxati uchun qidiruv (ism, familiya, tel raqami).
   const [debtSearch, setDebtSearch] = useState("");
+  // Qarzdor ustiga bosilganda to'liq ma'lumot ko'rsatish uchun.
+  const [debtDetail, setDebtDetail] = useState<any>(null);
 
   const headers = { Authorization: `Bearer ${token}`, "Content-Type": "application/json" };
 
@@ -594,6 +597,101 @@ export default function FinancePage() {
       return 0;
     });
   const filteredPaidDebts = (debtTransactions || []).filter((d: any) => d.debtStatus === "paid" && matchesDebtSearch(d));
+
+  // To'lanmagan qarzdorlarni 2 guruhga ajratish:
+  //  - overdueDebts: muddati o'tib ketgan (dueDate bor va o'tgan)
+  //  - activeDebts: muddati bor yoki muddat belgilanmagan
+  const overdueDebts = filteredUnpaidDebts.filter((d: any) => d.dueDate && daysUntil(d.dueDate) < 0);
+  const activeDebts = filteredUnpaidDebts.filter((d: any) => !(d.dueDate && daysUntil(d.dueDate) < 0));
+
+  const exportDebtsToExcel = () => {
+    const rows = filteredUnpaidDebts.map((d: any, i: number) => {
+      const remaining = d.totalAmount - (d.paidAmount || 0);
+      const days = d.dueDate ? daysUntil(d.dueDate) : null;
+      const holat = days === null ? "Muddatsiz" : days < 0 ? `${Math.abs(days)} kun o'tgan` : `${days} kun qoldi`;
+      const tovarlar = (d.items || [])
+        .map((it: any) => `${it.product?.name || "Noma'lum"} x${it.quantity}`)
+        .join(", ");
+      return {
+        "№": i + 1,
+        "Mijoz": d.customerName || "Noma'lum",
+        "Telefon": d.customerPhone || "",
+        "Olingan sana": formatDate(d.date),
+        "Muddat": d.dueDate ? formatDate(d.dueDate) : "—",
+        "Holat": holat,
+        "Jami (so'm)": d.totalAmount,
+        "To'langan (so'm)": d.paidAmount || 0,
+        "Qoldiq (so'm)": remaining,
+        "Tovarlar": tovarlar,
+      };
+    });
+    if (rows.length === 0) {
+      toast({ title: "Ma'lumot yo'q", description: "Eksport qilish uchun qarzdor yo'q", variant: "destructive" });
+      return;
+    }
+    const ws = XLSX.utils.json_to_sheet(rows);
+    ws["!cols"] = [
+      { wch: 5 }, { wch: 22 }, { wch: 16 }, { wch: 13 }, { wch: 13 },
+      { wch: 14 }, { wch: 14 }, { wch: 14 }, { wch: 14 }, { wch: 40 },
+    ];
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Nasiyachilar");
+    const today = new Date().toISOString().slice(0, 10);
+    XLSX.writeFile(wb, `nasiyachilar-${today}.xlsx`);
+  };
+
+  const { data: debtDetailPayments = [] } = useQuery<any[]>({
+    queryKey: ["debt-payments", debtDetail?.id],
+    queryFn: async () => {
+      const res = await fetch(`/api/debts/${debtDetail.id}/payments`, { headers });
+      if (!res.ok) throw new Error("Failed");
+      return res.json();
+    },
+    enabled: !!token && !!debtDetail?.id,
+  });
+
+  const renderDebtRow = (debt: any) => {
+    const remaining = debt.totalAmount - (debt.paidAmount || 0);
+    const pct = debt.totalAmount > 0 ? Math.round(((debt.paidAmount || 0) / debt.totalAmount) * 100) : 0;
+    const days = debt.dueDate ? daysUntil(debt.dueDate) : null;
+    const isOverdue = days !== null && days < 0;
+    return (
+      <div
+        key={debt.id}
+        onClick={() => setDebtDetail(debt)}
+        className={`p-3 rounded-lg border cursor-pointer transition-colors hover:bg-gray-50 ${isOverdue ? "border-red-200 bg-red-50/50" : "border-gray-100 bg-white"}`}
+        data-testid={`debt-${debt.id}`}
+      >
+        <div className="flex items-center justify-between mb-2">
+          <div className="flex items-center gap-2">
+            <div className={`w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold ${isOverdue ? "bg-red-500" : "bg-amber-500"}`}>
+              {(debt.customerName || "?")[0].toUpperCase()}
+            </div>
+            <div>
+              <p className="text-sm font-semibold">{debt.customerName || "Noma'lum"}</p>
+              {debt.customerPhone && <p className="text-[10px] text-gray-500 flex items-center gap-0.5"><Phone className="h-2.5 w-2.5" />{debt.customerPhone}</p>}
+            </div>
+          </div>
+          <Button size="sm" variant={isOverdue ? "destructive" : "default"} onClick={(e) => { e.stopPropagation(); setSelectedDebt(debt); setPayAmount(""); setPayNote(""); setPayDialogOpen(true); }}
+            className="text-xs h-7 gap-1" data-testid={`button-pay-${debt.id}`}>
+            <Banknote className="h-3 w-3" /> To'lash
+          </Button>
+        </div>
+        <div className="flex items-center justify-between text-xs mb-1.5">
+          <span className="text-gray-500">Qoldiq: <span className="font-bold text-red-600">{remaining.toLocaleString()}</span> / {debt.totalAmount.toLocaleString()}</span>
+          {days !== null && (
+            <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${isOverdue ? "bg-red-100 text-red-700" : days <= 3 ? "bg-amber-100 text-amber-700" : "bg-gray-100 text-gray-600"}`}>
+              {isOverdue ? `${Math.abs(days)} kun o'tgan` : `${days} kun qoldi`}
+            </span>
+          )}
+        </div>
+        <div className="h-1.5 bg-gray-200 rounded-full overflow-hidden">
+          <div className="h-full rounded-full transition-all bg-green-500" style={{ width: `${pct}%` }} />
+        </div>
+        <p className="text-[10px] text-gray-400 mt-1">{formatDate(debt.date)}{debt.dueDate && ` • Muddat: ${formatDate(debt.dueDate)}`}</p>
+      </div>
+    );
+  };
 
   const catExpenses = categories.map((cat: any) => {
     const total = expensesList.filter((e: any) => e.categoryId === cat.id).reduce((sum: number, e: any) => sum + e.amount, 0);
@@ -1122,7 +1220,19 @@ export default function FinancePage() {
 
               <Card className="border-0 shadow-sm">
                 <CardHeader className="pb-2 pt-3 px-4">
-                  <CardTitle className="text-sm font-semibold">Qarzdorlar ro'yxati</CardTitle>
+                  <div className="flex items-center justify-between gap-2">
+                    <CardTitle className="text-sm font-semibold">Qarzdorlar ro'yxati</CardTitle>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={exportDebtsToExcel}
+                      disabled={filteredUnpaidDebts.length === 0}
+                      className="h-7 text-xs gap-1 shrink-0"
+                      data-testid="button-export-debts"
+                    >
+                      <Download className="h-3.5 w-3.5" /> Excel
+                    </Button>
+                  </div>
                   <div className="relative mt-2">
                     <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-gray-400" />
                     <Input
@@ -1148,43 +1258,25 @@ export default function FinancePage() {
                     <div className="text-center py-8 text-sm text-gray-400">{debtSearchActive ? "Hech narsa topilmadi" : "Qarzdor yo'q"}</div>
                   ) : (
                     <div className="space-y-2">
-                      {filteredUnpaidDebts.map((debt: any) => {
-                        const remaining = debt.totalAmount - (debt.paidAmount || 0);
-                        const pct = debt.totalAmount > 0 ? Math.round(((debt.paidAmount || 0) / debt.totalAmount) * 100) : 0;
-                        const days = debt.dueDate ? daysUntil(debt.dueDate) : null;
-                        const isOverdue = days !== null && days < 0;
-                        return (
-                          <div key={debt.id} className={`p-3 rounded-lg border ${isOverdue ? "border-red-200 bg-red-50/50" : "border-gray-100 bg-white"}`} data-testid={`debt-${debt.id}`}>
-                            <div className="flex items-center justify-between mb-2">
-                              <div className="flex items-center gap-2">
-                                <div className={`w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold ${isOverdue ? "bg-red-500" : "bg-amber-500"}`}>
-                                  {(debt.customerName || "?")[0].toUpperCase()}
-                                </div>
-                                <div>
-                                  <p className="text-sm font-semibold">{debt.customerName || "Noma'lum"}</p>
-                                  {debt.customerPhone && <p className="text-[10px] text-gray-500 flex items-center gap-0.5"><Phone className="h-2.5 w-2.5" />{debt.customerPhone}</p>}
-                                </div>
-                              </div>
-                              <Button size="sm" variant={isOverdue ? "destructive" : "default"} onClick={() => { setSelectedDebt(debt); setPayAmount(""); setPayNote(""); setPayDialogOpen(true); }}
-                                className="text-xs h-7 gap-1" data-testid={`button-pay-${debt.id}`}>
-                                <Banknote className="h-3 w-3" /> To'lash
-                              </Button>
-                            </div>
-                            <div className="flex items-center justify-between text-xs mb-1.5">
-                              <span className="text-gray-500">Qoldiq: <span className="font-bold text-red-600">{remaining.toLocaleString()}</span> / {debt.totalAmount.toLocaleString()}</span>
-                              {days !== null && (
-                                <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${isOverdue ? "bg-red-100 text-red-700" : days <= 3 ? "bg-amber-100 text-amber-700" : "bg-gray-100 text-gray-600"}`}>
-                                  {isOverdue ? `${Math.abs(days)} kun o'tgan` : `${days} kun qoldi`}
-                                </span>
-                              )}
-                            </div>
-                            <div className="h-1.5 bg-gray-200 rounded-full overflow-hidden">
-                              <div className="h-full rounded-full transition-all bg-green-500" style={{ width: `${pct}%` }} />
-                            </div>
-                            <p className="text-[10px] text-gray-400 mt-1">{formatDate(debt.date)}{debt.dueDate && ` • Muddat: ${formatDate(debt.dueDate)}`}</p>
+                      {overdueDebts.length > 0 && (
+                        <div className="space-y-2">
+                          <div className="flex items-center gap-1.5 text-red-600">
+                            <AlertTriangle className="h-3.5 w-3.5" />
+                            <p className="text-xs font-semibold">Muddati tugagan ({overdueDebts.length})</p>
                           </div>
-                        );
-                      })}
+                          {overdueDebts.map((debt: any) => renderDebtRow(debt))}
+                        </div>
+                      )}
+
+                      {activeDebts.length > 0 && (
+                        <div className="space-y-2">
+                          <div className={`flex items-center gap-1.5 text-amber-600 ${overdueDebts.length > 0 ? "pt-2" : ""}`}>
+                            <Clock className="h-3.5 w-3.5" />
+                            <p className="text-xs font-semibold">Muddati bor ({activeDebts.length})</p>
+                          </div>
+                          {activeDebts.map((debt: any) => renderDebtRow(debt))}
+                        </div>
+                      )}
 
                       {filteredPaidDebts.length > 0 && (
                         <div className="pt-3 border-t mt-3">
@@ -1654,6 +1746,111 @@ export default function FinancePage() {
               </div>
             </div>
           )}
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!debtDetail} onOpenChange={(open) => { if (!open) setDebtDetail(null); }}>
+        <DialogContent className="sm:max-w-md max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <HandCoins className="h-4 w-4" />
+              Qarzdor ma'lumoti
+            </DialogTitle>
+          </DialogHeader>
+          {debtDetail && (() => {
+            const remaining = debtDetail.totalAmount - (debtDetail.paidAmount || 0);
+            const days = debtDetail.dueDate ? daysUntil(debtDetail.dueDate) : null;
+            const isOverdue = days !== null && days < 0;
+            return (
+              <div className="space-y-3">
+                <div className="p-3 bg-gray-50 rounded-lg space-y-1">
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-500">Mijoz:</span>
+                    <span className="font-medium">{debtDetail.customerName || "Noma'lum"}</span>
+                  </div>
+                  {debtDetail.customerPhone && (
+                    <div className="flex justify-between text-sm">
+                      <span className="text-gray-500">Telefon:</span>
+                      <span className="font-medium">{debtDetail.customerPhone}</span>
+                    </div>
+                  )}
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-500">Olingan sana:</span>
+                    <span className="font-medium">{formatDateTime(debtDetail.date)}</span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-500">Muddat:</span>
+                    <span className="font-medium">{debtDetail.dueDate ? formatDate(debtDetail.dueDate) : "Muddatsiz"}</span>
+                  </div>
+                  {days !== null && (
+                    <div className="flex justify-between text-sm">
+                      <span className="text-gray-500">Holat:</span>
+                      <span className={`font-medium ${isOverdue ? "text-red-600" : days <= 3 ? "text-amber-600" : "text-gray-700"}`}>
+                        {isOverdue ? `${Math.abs(days)} kun o'tgan` : `${days} kun qoldi`}
+                      </span>
+                    </div>
+                  )}
+                </div>
+
+                <div className="p-3 bg-gray-50 rounded-lg space-y-1">
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-500">Jami:</span>
+                    <span className="font-bold">{debtDetail.totalAmount.toLocaleString()} so'm</span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-500">To'langan:</span>
+                    <span className="font-medium text-green-600">{(debtDetail.paidAmount || 0).toLocaleString()} so'm</span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-500">Qoldiq:</span>
+                    <span className="font-bold text-red-600">{remaining.toLocaleString()} so'm</span>
+                  </div>
+                </div>
+
+                <div className="space-y-1">
+                  <p className="text-xs font-semibold text-gray-500 uppercase">Olingan tovarlar</p>
+                  {(debtDetail.items || []).map((item: any, idx: number) => (
+                    <div key={idx} className="flex items-center justify-between p-2 rounded border bg-white">
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium truncate">{item.product?.name || "Noma'lum"}</p>
+                        <p className="text-[10px] text-gray-400">{(item.product?.price || item.price || 0).toLocaleString()} × {item.quantity}</p>
+                      </div>
+                      <p className="text-sm font-bold shrink-0">{((item.product?.price || item.price || 0) * item.quantity).toLocaleString()}</p>
+                    </div>
+                  ))}
+                </div>
+
+                {debtDetailPayments.length > 0 && (
+                  <div className="space-y-1">
+                    <p className="text-xs font-semibold text-gray-500 uppercase">To'lovlar tarixi</p>
+                    {debtDetailPayments.map((p: any) => (
+                      <div key={p.id} className="flex items-center justify-between p-2 rounded border bg-white">
+                        <span className="text-[11px] text-gray-500">{formatDateTime(p.date)}</span>
+                        <span className="text-sm font-bold text-green-600">{(p.amount || 0).toLocaleString()} so'm</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                <div className="flex gap-2 pt-2">
+                  <Button variant="outline" className="flex-1" onClick={() => setDebtDetail(null)}>Yopish</Button>
+                  <Button
+                    className="flex-1 gap-1"
+                    onClick={() => {
+                      setSelectedDebt(debtDetail);
+                      setPayAmount("");
+                      setPayNote("");
+                      setDebtDetail(null);
+                      setPayDialogOpen(true);
+                    }}
+                    data-testid="button-pay-from-detail"
+                  >
+                    <Banknote className="h-3.5 w-3.5" /> To'lash
+                  </Button>
+                </div>
+              </div>
+            );
+          })()}
         </DialogContent>
       </Dialog>
 

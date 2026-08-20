@@ -70,12 +70,19 @@ const isDev = process.env.NODE_ENV !== "production";
 app.use((req, res, next) => {
   const start = Date.now();
   const path = req.path;
-  let capturedJsonResponse: Record<string, any> | undefined = undefined;
+  let responseSummary: string | undefined;
 
   if (isDev) {
     const originalResJson = res.json;
     res.json = function (bodyJson, ...args) {
-      capturedJsonResponse = bodyJson;
+      if (Array.isArray(bodyJson)) {
+        responseSummary = `[${bodyJson.length} items]`;
+      } else if (bodyJson && typeof bodyJson === "object") {
+        const keys = Object.keys(bodyJson);
+        responseSummary = `{${keys.slice(0, 8).join(",")}${keys.length > 8 ? ",…" : ""}}`;
+      } else if (bodyJson !== undefined) {
+        responseSummary = String(bodyJson).slice(0, 200);
+      }
       return originalResJson.apply(res, [bodyJson, ...args]);
     };
   }
@@ -83,13 +90,13 @@ app.use((req, res, next) => {
   res.on("finish", () => {
     const duration = Date.now() - start;
     if (path.startsWith("/api")) {
+      // Routine production successes create substantial console I/O under
+      // load. Keep only slow requests and failures outside development.
+      if (!isDev && res.statusCode < 400 && duration < 1000) return;
+
       let logLine = `${req.method} ${path} ${res.statusCode} in ${duration}ms`;
-      if (isDev && capturedJsonResponse) {
-        let bodyStr = JSON.stringify(capturedJsonResponse);
-        if (bodyStr.length > 500) {
-          bodyStr = bodyStr.slice(0, 500) + "…";
-        }
-        logLine += ` :: ${bodyStr}`;
+      if (isDev && responseSummary) {
+        logLine += ` :: ${responseSummary}`;
       }
 
       log(logLine);

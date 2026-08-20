@@ -1,0 +1,1 @@
+- [Offline sync pagination](offline-sync-pagination.md) — browse large lists page-by-page, but keep POS reconciliation authoritative until cursor-aware sync exists.

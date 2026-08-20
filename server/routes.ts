@@ -3,9 +3,23 @@ import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { insertProductSchema, insertOrderSchema, insertCategorySchema, insertTransactionSchema, registerTenantSchema, loginSchema, insertExpenseSchema, insertExpenseCategorySchema, insertIncomeCategorySchema, insertCashRegisterEntrySchema, insertCustomerSchema, insertDeliverySchema, insertIndependentDebtSchema } from "@shared/schema";
 import { registerR2Routes } from "./integrations/r2-routes";
-import { sendTelegramNotification } from "./telegram";
+import { queueTelegramNotification } from "./telegram";
 import { authMiddleware, optionalAuth, superAdminOnly, hashPassword, comparePassword, generateToken } from "./auth";
 import { getTenantBySlug, getTenantById, invalidateTenantCache } from "./tenant";
+
+function parsePagination(pageValue: unknown, limitValue: unknown) {
+  const parsedPage = Number.parseInt(String(pageValue ?? "1"), 10);
+  const parsedLimit = Number.parseInt(String(limitValue ?? "50"), 10);
+  const page = Number.isFinite(parsedPage) && parsedPage > 0 ? parsedPage : 1;
+  const limit = Number.isFinite(parsedLimit) && parsedLimit > 0
+    ? Math.min(parsedLimit, 200)
+    : 50;
+  return { page, limit, offset: (page - 1) * limit };
+}
+
+function paginationResponse<T>(items: T[], total: number, page: number, limit: number) {
+  return { items, total, page, limit, hasMore: page * limit < total };
+}
 
 export async function registerRoutes(
   httpServer: Server,
@@ -128,6 +142,14 @@ export async function registerRoutes(
     try {
       const tenant = await getTenantBySlug(req.params.slug);
       if (!tenant) return res.status(404).json({ error: "Do'kon topilmadi" });
+      if (req.query.page !== undefined || req.query.limit !== undefined) {
+        const { page, limit, offset } = parsePagination(req.query.page, req.query.limit);
+        const result = await storage.getProductsPaginated(tenant.id, limit, offset, {
+          search: typeof req.query.search === "string" ? req.query.search.trim() : undefined,
+          category: typeof req.query.category === "string" ? req.query.category.trim() : undefined,
+        });
+        return res.json(paginationResponse(result.products, result.total, page, limit));
+      }
       const products = await storage.getAllProducts(tenant.id);
       res.json(products);
     } catch (error) {
@@ -502,6 +524,11 @@ export async function registerRoutes(
 
   app.get("/api/orders", authMiddleware, async (req, res) => {
     try {
+      if (req.query.page !== undefined || req.query.limit !== undefined) {
+        const { page, limit, offset } = parsePagination(req.query.page, req.query.limit);
+        const result = await storage.getOrdersPaginated(req.tenantId!, limit, offset);
+        return res.json(paginationResponse(result.orders, result.total, page, limit));
+      }
       const orders = await storage.getAllOrders(req.tenantId!);
       res.json(orders);
     } catch (error) {
@@ -542,7 +569,7 @@ export async function registerRoutes(
       res.status(201).json(order);
       if (botToken && chatId) {
         setImmediate(() => {
-          sendTelegramNotification({
+          queueTelegramNotification({
             id: order.id,
             customerName: order.customerName,
             customerPhone: order.customerPhone,
@@ -552,7 +579,7 @@ export async function registerRoutes(
             paymentMethod: order.paymentMethod,
             deliveryType: order.deliveryType,
             createdAt: order.createdAt,
-          }, botToken, chatId).catch(err => console.error('Failed to send Telegram notification:', err));
+          }, botToken, chatId);
         });
       }
     } catch (error) {
@@ -588,7 +615,7 @@ export async function registerRoutes(
           const chatId = tenant?.telegramChatId || process.env.TELEGRAM_CHAT_ID;
 
           if (botToken && chatId) {
-            await sendTelegramNotification({
+            queueTelegramNotification({
               id: order.id,
               customerName: order.customerName,
               customerPhone: order.customerPhone,
@@ -724,6 +751,11 @@ export async function registerRoutes(
 
   app.get("/api/transactions", authMiddleware, async (req, res) => {
     try {
+      if (req.query.page !== undefined || req.query.limit !== undefined) {
+        const { page, limit, offset } = parsePagination(req.query.page, req.query.limit);
+        const result = await storage.getTransactionsPaginated(req.tenantId!, limit, offset);
+        return res.json(paginationResponse(result.transactions, result.total, page, limit));
+      }
       const transactions = await storage.getAllTransactions(req.tenantId!);
       res.json(transactions);
     } catch (error) {
@@ -825,6 +857,9 @@ export async function registerRoutes(
 
       res.status(201).json(transaction);
     } catch (error) {
+      if (error instanceof Error && error.message === "INVALID_TRANSACTION_QUANTITY") {
+        return res.status(400).json({ error: "Mahsulot miqdori musbat son bo'lishi kerak" });
+      }
       console.error("Error creating transaction:", error);
       res.status(400).json({ error: "Tranzaksiyani saqlashda xatolik" });
     }
@@ -839,6 +874,9 @@ export async function registerRoutes(
       }
       res.json(result.transaction);
     } catch (error) {
+      if (error instanceof Error && error.message === "INVALID_TRANSACTION_QUANTITY") {
+        return res.status(400).json({ error: "Tranzaksiyadagi mahsulot miqdori noto'g'ri" });
+      }
       res.status(500).json({ error: "Failed to void transaction" });
     }
   });
@@ -847,6 +885,11 @@ export async function registerRoutes(
 
   app.get("/api/debts", authMiddleware, async (req, res) => {
     try {
+      if (req.query.page !== undefined || req.query.limit !== undefined) {
+        const { page, limit, offset } = parsePagination(req.query.page, req.query.limit);
+        const result = await storage.getDebtTransactionsPaginated(req.tenantId!, limit, offset);
+        return res.json(paginationResponse(result.transactions, result.total, page, limit));
+      }
       const debtTxns = await storage.getDebtTransactions(req.tenantId!);
       res.json(debtTxns);
     } catch (error) {
@@ -1934,6 +1977,22 @@ export async function registerRoutes(
       if (req.query.deliveryType) filters.deliveryType = req.query.deliveryType;
       if (req.query.from) filters.dateFrom = new Date(req.query.from as string);
       if (req.query.to) filters.dateTo = new Date(req.query.to as string);
+      if (typeof req.query.search === "string" && req.query.search.trim()) {
+        filters.search = req.query.search.trim();
+      }
+      if (req.query.page !== undefined || req.query.limit !== undefined) {
+        const { page, limit, offset } = parsePagination(req.query.page, req.query.limit);
+        const result = await storage.getOrdersFilteredPaginated(req.tenantId!, filters, limit, offset);
+        return res.json({
+          ...paginationResponse(result.orders, result.total, page, limit),
+          summary: {
+            total: result.total,
+            new: result.statusCounts.new || 0,
+            delivering: result.statusCounts.out_for_delivery || 0,
+            delivered: result.statusCounts.delivered || 0,
+          },
+        });
+      }
       const orders = await storage.getOrdersFiltered(req.tenantId!, filters);
       res.json(orders);
     } catch (error) {
@@ -2087,12 +2146,9 @@ export async function registerRoutes(
       if (req.query.to) filters.dateTo = new Date(req.query.to as string);
       const deliveriesList = await storage.getDeliveries(req.tenantId!, filters);
 
-      const orderIds = [...new Set(deliveriesList.filter(d => d.orderId).map(d => d.orderId!))];
-      const ordersMap = new Map<string, any>();
-      for (const oid of orderIds) {
-        const o = await storage.getOrder(oid, req.tenantId);
-        if (o) ordersMap.set(oid, o);
-      }
+      const orderIds = Array.from(new Set(deliveriesList.filter(d => d.orderId).map(d => d.orderId!)));
+      const relatedOrders = await storage.getOrdersByIds(orderIds, req.tenantId!);
+      const ordersMap = new Map(relatedOrders.map(order => [order.id, order]));
 
       const enriched = deliveriesList.map(d => ({
         ...d,
@@ -2169,50 +2225,8 @@ export async function registerRoutes(
       const tzOffsetMinutes = req.query.tzOffsetMinutes !== undefined
         ? Number(req.query.tzOffsetMinutes) || 0
         : 0;
-      const dayKey = (d: Date) => new Date(d.getTime() - tzOffsetMinutes * 60000).toISOString().split("T")[0];
 
-      const allTransactions = await storage.getAllTransactions(req.tenantId!);
-      const allExpenses = await storage.getExpenses(req.tenantId!, from, to);
-
-      const days: Record<string, { date: string; revenue: number; expenses: number; profit: number; totalProfit: number; payments: Record<string, number> }> = {};
-      const current = new Date(from);
-      while (current <= to) {
-        const key = dayKey(current);
-        days[key] = { date: key, revenue: 0, expenses: 0, profit: 0, totalProfit: 0, payments: {} };
-        current.setDate(current.getDate() + 1);
-      }
-
-      for (const t of allTransactions) {
-        if (t.status === "voided") continue;
-        const key = dayKey(new Date(t.date));
-        if (days[key]) {
-          days[key].revenue += t.totalAmount;
-          days[key].totalProfit += t.totalProfit || 0;
-          const splits = (t as any).paymentSplits as Array<{ method: string; amount: number }> | null;
-          if (splits && splits.length > 0) {
-            for (const s of splits) {
-              const m = s.method || "Naqd";
-              days[key].payments[m] = (days[key].payments[m] || 0) + (Number(s.amount) || 0);
-            }
-          } else {
-            const method = t.paymentMethod || "Naqd";
-            days[key].payments[method] = (days[key].payments[method] || 0) + t.totalAmount;
-          }
-        }
-      }
-
-      for (const e of allExpenses) {
-        const key = dayKey(new Date(e.date));
-        if (days[key]) {
-          days[key].expenses += e.amount;
-        }
-      }
-
-      const result = Object.values(days).map(d => ({
-        ...d,
-        profit: d.totalProfit - d.expenses,
-      }));
-
+      const result = await storage.getDailyBreakdown(req.tenantId!, from, to, tzOffsetMinutes);
       res.json(result);
     } catch (error) {
       res.status(500).json({ error: "Failed to get daily breakdown" });
@@ -2222,69 +2236,8 @@ export async function registerRoutes(
   // Suppliers CRUD
   app.get("/api/supplier-summary", authMiddleware, async (req: any, res) => {
     try {
-      const products = await storage.getAllProducts(req.tenantId);
-      const suppliers = await storage.getSuppliers(req.tenantId);
-      
-      const supplierMap: Record<string, { name: string; phone: string; totalAmount: number; totalAmountUsd: number; totalProducts: number; totalItems: number; naqd: number; karta: number; nasiya: number; naqdUsd: number; kartaUsd: number; nasiyaUsd: number; products: any[] }> = {};
-      
-      const emptySupplier = () => ({
-        name: "", phone: "", totalAmount: 0, totalAmountUsd: 0, totalProducts: 0, totalItems: 0,
-        naqd: 0, karta: 0, nasiya: 0, naqdUsd: 0, kartaUsd: 0, nasiyaUsd: 0, products: []
-      });
-      
-      for (const s of suppliers) {
-        supplierMap[s.name] = { ...emptySupplier(), name: s.name, phone: s.phone || "" };
-      }
-      
-      for (const p of products) {
-        const sName = (p as any).supplier;
-        if (!sName) continue;
-        if (!supplierMap[sName]) {
-          supplierMap[sName] = { ...emptySupplier(), name: sName };
-        }
-        const amount = ((p as any).costPrice || 0) * (p.stock || 0);
-        const payMethod = (p as any).supplierPaymentMethod || "naqd";
-        const currency = (p as any).supplierCurrency || "uzs";
-        const originalPrice = (p as any).supplierOriginalPrice || 0;
-        const amountUsd = currency === "usd" ? originalPrice * (p.stock || 0) : 0;
-        
-        supplierMap[sName].totalAmount += amount;
-        supplierMap[sName].totalAmountUsd += amountUsd;
-        supplierMap[sName].totalProducts += 1;
-        supplierMap[sName].totalItems += p.stock || 0;
-        if (payMethod === "karta") { supplierMap[sName].karta += amount; supplierMap[sName].kartaUsd += amountUsd; }
-        else if (payMethod === "nasiya") { supplierMap[sName].nasiya += amount; supplierMap[sName].nasiyaUsd += amountUsd; }
-        else { supplierMap[sName].naqd += amount; supplierMap[sName].naqdUsd += amountUsd; }
-        supplierMap[sName].products.push({
-          id: p.id,
-          name: p.name,
-          costPrice: (p as any).costPrice || 0,
-          stock: p.stock,
-          amount,
-          amountUsd,
-          supplierCurrency: currency,
-          supplierOriginalPrice: originalPrice,
-          supplierCurrencyRate: (p as any).supplierCurrencyRate || 0,
-          paymentMethod: payMethod,
-          debtStatus: (p as any).supplierDebtStatus || "pending",
-          paidAmount: (p as any).supplierPaidAmount || 0
-        });
-      }
-      
-      const result = Object.values(supplierMap).filter(s => s.totalProducts > 0 || suppliers.some(sup => sup.name === s.name));
-      const totals = {
-        totalAmount: result.reduce((s, r) => s + r.totalAmount, 0),
-        totalAmountUsd: result.reduce((s, r) => s + r.totalAmountUsd, 0),
-        totalNaqd: result.reduce((s, r) => s + r.naqd, 0),
-        totalKarta: result.reduce((s, r) => s + r.karta, 0),
-        totalNasiya: result.reduce((s, r) => s + r.nasiya, 0),
-        totalNaqdUsd: result.reduce((s, r) => s + r.naqdUsd, 0),
-        totalKartaUsd: result.reduce((s, r) => s + r.kartaUsd, 0),
-        totalNasiyaUsd: result.reduce((s, r) => s + r.nasiyaUsd, 0),
-        supplierCount: result.length,
-      };
-      
-      res.json({ suppliers: result.sort((a, b) => b.totalAmount - a.totalAmount), totals });
+      const summary = await storage.getSupplierSummary(req.tenantId);
+      res.json(summary);
     } catch (error) {
       res.status(500).json({ error: "Failed to fetch supplier summary" });
     }

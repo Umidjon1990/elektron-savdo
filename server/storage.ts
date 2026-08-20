@@ -21,7 +21,7 @@ export interface IStorage {
   
   // Products (tenant-scoped)
   getAllProducts(tenantId: string): Promise<Product[]>;
-  getProductsPaginated(tenantId: string, limit: number, offset: number): Promise<{ products: Product[]; total: number }>;
+  getProductsPaginated(tenantId: string, limit: number, offset: number, filters?: { search?: string; category?: string }): Promise<{ products: Product[]; total: number }>;
   getProductCountsByTenants(tenantIds: string[]): Promise<Map<string, number>>;
   getProduct(id: string, tenantId?: string): Promise<Product | undefined>;
   getProductByBarcode(barcode: string, tenantId: string): Promise<Product | undefined>;
@@ -32,6 +32,8 @@ export interface IStorage {
   
   // Orders (tenant-scoped)
   getAllOrders(tenantId: string): Promise<Order[]>;
+  getOrdersPaginated(tenantId: string, limit: number, offset: number): Promise<{ orders: Order[]; total: number }>;
+  getOrdersByIds(ids: string[], tenantId: string): Promise<Order[]>;
   getOrder(id: string, tenantId?: string): Promise<Order | undefined>;
   createOrder(order: InsertOrder): Promise<Order>;
   updateOrderStatus(id: string, status: string, tenantId?: string): Promise<Order | undefined>;
@@ -49,6 +51,7 @@ export interface IStorage {
   
   // Transactions (tenant-scoped)
   getAllTransactions(tenantId: string): Promise<Transaction[]>;
+  getTransactionsPaginated(tenantId: string, limit: number, offset: number): Promise<{ transactions: Transaction[]; total: number }>;
   getTransaction(id: string, tenantId?: string): Promise<Transaction | undefined>;
   createTransaction(transaction: InsertTransaction): Promise<Transaction>;
   voidTransaction(id: string, tenantId?: string): Promise<{transaction: Transaction, alreadyVoided: boolean} | undefined>;
@@ -73,6 +76,7 @@ export interface IStorage {
 
   // Debt payments
   getDebtTransactions(tenantId: string): Promise<Transaction[]>;
+  getDebtTransactionsPaginated(tenantId: string, limit: number, offset: number): Promise<{ transactions: Transaction[]; total: number }>;
   getDebtPayments(transactionId: string, tenantId?: string): Promise<DebtPayment[]>;
   createDebtPayment(payment: InsertDebtPayment): Promise<DebtPayment>;
   updateTransactionDebt(id: string, paidAmount: number, debtStatus: string, tenantId?: string): Promise<Transaction | undefined>;
@@ -113,7 +117,13 @@ export interface IStorage {
 
   // Orders enhanced
   updateOrder(id: string, data: Partial<InsertOrder>, tenantId?: string): Promise<Order | undefined>;
-  getOrdersFiltered(tenantId: string, filters?: { status?: string; paymentStatus?: string; deliveryType?: string; dateFrom?: Date; dateTo?: Date }): Promise<Order[]>;
+  getOrdersFiltered(tenantId: string, filters?: { status?: string; paymentStatus?: string; deliveryType?: string; dateFrom?: Date; dateTo?: Date; search?: string }): Promise<Order[]>;
+  getOrdersFilteredPaginated(
+    tenantId: string,
+    filters: { status?: string; paymentStatus?: string; deliveryType?: string; dateFrom?: Date; dateTo?: Date; search?: string },
+    limit: number,
+    offset: number
+  ): Promise<{ orders: Order[]; total: number; statusCounts: Record<string, number> }>;
 
   // Financial summary
   getFinancialSummary(tenantId: string, dateFrom: Date, dateTo: Date): Promise<{ revenue: number; expensesTotal: number; profit: number; totalProfit: number; paymentBreakdown: Record<string, number>; transactionCount: number }>;
@@ -136,6 +146,63 @@ export interface IStorage {
   createSupplier(data: InsertSupplier): Promise<Supplier>;
   updateSupplier(id: string, data: Partial<InsertSupplier>, tenantId?: string): Promise<Supplier | undefined>;
   deleteSupplier(id: string, tenantId?: string): Promise<boolean>;
+
+  // Finance optimized queries
+  getDailyBreakdown(
+    tenantId: string,
+    from: Date,
+    to: Date,
+    tzOffsetMinutes: number
+  ): Promise<Array<{
+    date: string;
+    revenue: number;
+    expenses: number;
+    profit: number;
+    totalProfit: number;
+    payments: Record<string, number>;
+  }>>;
+
+  getSupplierSummary(tenantId: string): Promise<{
+    suppliers: Array<{
+      name: string;
+      phone: string;
+      totalAmount: number;
+      totalAmountUsd: number;
+      totalProducts: number;
+      totalItems: number;
+      naqd: number;
+      karta: number;
+      nasiya: number;
+      naqdUsd: number;
+      kartaUsd: number;
+      nasiyaUsd: number;
+      products: Array<{
+        id: string;
+        name: string;
+        costPrice: number;
+        stock: number;
+        amount: number;
+        amountUsd: number;
+        supplierCurrency: string;
+        supplierOriginalPrice: number;
+        supplierCurrencyRate: number;
+        paymentMethod: string;
+        debtStatus: string;
+        paidAmount: number;
+      }>;
+    }>;
+    totals: {
+      totalAmount: number;
+      totalAmountUsd: number;
+      totalNaqd: number;
+      totalKarta: number;
+      totalNasiya: number;
+      totalNaqdUsd: number;
+      totalKartaUsd: number;
+      totalNasiyaUsd: number;
+      supplierCount: number;
+    };
+  }>;
 
   // Attendance
   getAttendanceRecords(tenantId: string, staffId?: string, dateFrom?: Date, dateTo?: Date): Promise<AttendanceRecord[]>;
@@ -271,14 +338,23 @@ export class DatabaseStorage implements IStorage {
     return new Map(rows.map(r => [r.tenantId, r.count]));
   }
 
-  async getProductsPaginated(tenantId: string, limit: number, offset: number): Promise<{ products: Product[]; total: number }> {
+  async getProductsPaginated(tenantId: string, limit: number, offset: number, filters?: { search?: string; category?: string }): Promise<{ products: Product[]; total: number }> {
+    const conditions = [eq(products.tenantId, tenantId)];
+    if (filters?.category) conditions.push(eq(products.category, filters.category));
+    if (filters?.search) {
+      conditions.push(or(
+        ilike(products.name, `%${filters.search}%`),
+        ilike(products.author, `%${filters.search}%`)
+      )!);
+    }
+    const where = and(...conditions);
     const [productList, countResult] = await Promise.all([
       db.select().from(products)
-        .where(eq(products.tenantId, tenantId))
+        .where(where)
         .orderBy(products.sortOrder, products.name)
         .limit(limit).offset(offset),
       db.select({ count: sql<number>`count(*)::int` }).from(products)
-        .where(eq(products.tenantId, tenantId))
+        .where(where)
     ]);
     return { products: productList, total: countResult[0]?.count || 0 };
   }
@@ -341,6 +417,24 @@ export class DatabaseStorage implements IStorage {
     return await db.select().from(orders)
       .where(eq(orders.tenantId, tenantId))
       .orderBy(desc(orders.createdAt));
+  }
+
+  async getOrdersPaginated(tenantId: string, limit: number, offset: number): Promise<{ orders: Order[]; total: number }> {
+    const where = eq(orders.tenantId, tenantId);
+    const [orderList, countResult] = await Promise.all([
+      db.select().from(orders).where(where)
+        .orderBy(desc(orders.createdAt), desc(orders.id))
+        .limit(limit).offset(offset),
+      db.select({ count: sql<number>`count(*)::int` }).from(orders).where(where),
+    ]);
+    return { orders: orderList, total: countResult[0]?.count || 0 };
+  }
+
+  async getOrdersByIds(ids: string[], tenantId: string): Promise<Order[]> {
+    if (ids.length === 0) return [];
+    return db.select().from(orders).where(
+      and(inArray(orders.id, ids), eq(orders.tenantId, tenantId))
+    );
   }
 
   async getOrder(id: string, tenantId?: string): Promise<Order | undefined> {
@@ -442,6 +536,17 @@ export class DatabaseStorage implements IStorage {
       .orderBy(desc(transactions.date));
   }
 
+  async getTransactionsPaginated(tenantId: string, limit: number, offset: number): Promise<{ transactions: Transaction[]; total: number }> {
+    const where = eq(transactions.tenantId, tenantId);
+    const [transactionList, countResult] = await Promise.all([
+      db.select().from(transactions).where(where)
+        .orderBy(desc(transactions.date), desc(transactions.id))
+        .limit(limit).offset(offset),
+      db.select({ count: sql<number>`count(*)::int` }).from(transactions).where(where),
+    ]);
+    return { transactions: transactionList, total: countResult[0]?.count || 0 };
+  }
+
   async getTransaction(id: string, tenantId?: string): Promise<Transaction | undefined> {
     if (tenantId) {
       const [txn] = await db.select().from(transactions).where(
@@ -464,10 +569,18 @@ export class DatabaseStorage implements IStorage {
     // for an N-item cart — meaning 5 items = 1 + 5 = 6 sequential network
     // round trips per sale. That was the #1 cause of the "to'lov qotmoqda"
     // freeze. Now: 1 round trip total for any cart size.
-    const items = (transaction.items as any) as Array<{product?: {id: string}, quantity: number}>;
-    const itemsToDecrement = (items || [])
-      .filter(it => it && it.product && it.product.id && it.quantity > 0)
-      .map(it => ({ id: it.product!.id, qty: it.quantity }));
+    const rawItems = Array.isArray(transaction.items) ? transaction.items as any[] : [];
+    const normalizedItems = rawItems.map((item) => {
+      const quantity = Number(item?.quantity);
+      if (!Number.isFinite(quantity) || quantity <= 0) {
+        throw new Error("INVALID_TRANSACTION_QUANTITY");
+      }
+      return { ...item, quantity };
+    });
+    const normalizedTransaction = { ...transaction, items: normalizedItems } as InsertTransaction;
+    const itemsToDecrement = normalizedItems
+      .filter(item => item?.product?.id)
+      .map(item => ({ id: String(item.product.id), qty: item.quantity }));
 
     // Aggregate quantities by product id (handles cart with duplicate lines).
     const qtyById = new Map<string, number>();
@@ -476,8 +589,8 @@ export class DatabaseStorage implements IStorage {
     }
 
     const newTxn = await db.transaction(async (tx) => {
-      const [inserted] = await tx.insert(transactions).values(transaction).returning();
-      if (qtyById.size > 0 && transaction.status !== "voided" && transaction.tenantId) {
+      const [inserted] = await tx.insert(transactions).values(normalizedTransaction).returning();
+      if (qtyById.size > 0 && normalizedTransaction.status !== "voided" && normalizedTransaction.tenantId) {
         // SECURITY: scope every product update to this transaction's tenant
         // so a crafted client payload cannot decrement another tenant's
         // stock. CONCURRENCY: do the decrement as a single SQL-side
@@ -491,7 +604,7 @@ export class DatabaseStorage implements IStorage {
             .set({ stock: sql`GREATEST(0, ${products.stock} - ${dec})` })
             .where(and(
               eq(products.id, id),
-              eq(products.tenantId, transaction.tenantId!)
+              eq(products.tenantId, normalizedTransaction.tenantId!)
             ));
         }));
       }
@@ -501,39 +614,56 @@ export class DatabaseStorage implements IStorage {
   }
 
   async voidTransaction(id: string, tenantId?: string): Promise<{transaction: Transaction, alreadyVoided: boolean} | undefined> {
-    const existing = await this.getTransaction(id, tenantId);
-    if (!existing) {
-      return undefined;
-    }
-    
-    if (existing.status === "voided") {
-      return { transaction: existing, alreadyVoided: true };
-    }
-    
-    const items = existing.items as Array<{product: {id: string; stock: number}, quantity: number}>;
-    if (items && items.length > 0) {
-      const productIds = items.map(i => i.product.id);
+    return db.transaction(async (tx) => {
+      const conditions = [eq(transactions.id, id)];
+      if (tenantId) conditions.push(eq(transactions.tenantId, tenantId));
+      const where = and(...conditions);
+      const [existing] = await tx.select().from(transactions).where(where).for("update");
+
+      if (!existing) return undefined;
+      if (existing.status === "voided") {
+        return { transaction: existing, alreadyVoided: true };
+      }
+      if (!existing.tenantId) {
+        throw new Error("TRANSACTION_TENANT_MISSING");
+      }
+      const transactionTenantId = existing.tenantId;
+
+      const items = Array.isArray(existing.items) ? existing.items as any[] : [];
       const qtyById = new Map<string, number>();
       for (const item of items) {
-        qtyById.set(item.product.id, (qtyById.get(item.product.id) || 0) + item.quantity);
+        const quantity = Number(item?.quantity);
+        if (!Number.isFinite(quantity) || quantity <= 0) {
+          throw new Error("INVALID_TRANSACTION_QUANTITY");
+        }
+        if (!item?.product?.id) continue;
+        const productId = String(item.product.id);
+        qtyById.set(productId, (qtyById.get(productId) || 0) + quantity);
       }
 
-      await db.transaction(async (tx) => {
-        const dbProducts = await tx.select().from(products).where(inArray(products.id, productIds));
-        await Promise.all(dbProducts.map(p =>
-          tx.update(products)
-            .set({ stock: p.stock + (qtyById.get(p.id) || 0) })
-            .where(eq(products.id, p.id))
-        ));
-      });
-    }
+      // One CASE UPDATE avoids N product writes. SQL-side increments prevent
+      // lost updates; the transaction row lock makes restoration idempotent.
+      const adjustments = Array.from(qtyById.entries());
+      if (adjustments.length > 0) {
+        const productIds = adjustments.map(([productId]) => productId);
+        const cases = sql.join(
+          adjustments.map(([productId, quantity]) => sql`when ${products.id} = ${productId} then cast(${quantity} as real)`),
+          sql.raw(" ")
+        );
+        await tx.update(products)
+          .set({ stock: sql`${products.stock} + case ${cases} else cast(0 as real) end` })
+          .where(and(
+            inArray(products.id, productIds),
+            eq(products.tenantId, transactionTenantId)
+          ));
+      }
 
-    const [updated] = await db
-      .update(transactions)
-      .set({ status: "voided" })
-      .where(eq(transactions.id, id))
-      .returning();
-    return { transaction: updated, alreadyVoided: false };
+      const [updated] = await tx.update(transactions)
+        .set({ status: "voided" })
+        .where(where)
+        .returning();
+      return { transaction: updated, alreadyVoided: false };
+    });
   }
 
   // Expense Categories (tenant-scoped)
@@ -640,6 +770,21 @@ export class DatabaseStorage implements IStorage {
         sql`${transactions.status} != 'voided'`
       )
     ).orderBy(desc(transactions.date));
+  }
+
+  async getDebtTransactionsPaginated(tenantId: string, limit: number, offset: number): Promise<{ transactions: Transaction[]; total: number }> {
+    const where = and(
+      eq(transactions.tenantId, tenantId),
+      sql`(${transactions.paymentMethod} = 'nasiya' OR (${transactions.paymentMethod} = 'mixed' AND ${transactions.debtStatus} IN ('pending','partial')))`,
+      sql`${transactions.status} != 'voided'`
+    );
+    const [transactionList, countResult] = await Promise.all([
+      db.select().from(transactions).where(where)
+        .orderBy(desc(transactions.date), desc(transactions.id))
+        .limit(limit).offset(offset),
+      db.select({ count: sql<number>`count(*)::int` }).from(transactions).where(where),
+    ]);
+    return { transactions: transactionList, total: countResult[0]?.count || 0 };
   }
 
   async getDebtPayments(transactionId: string, tenantId?: string): Promise<DebtPayment[]> {
@@ -1000,14 +1145,54 @@ export class DatabaseStorage implements IStorage {
     return updated;
   }
 
-  async getOrdersFiltered(tenantId: string, filters?: { status?: string; paymentStatus?: string; deliveryType?: string; dateFrom?: Date; dateTo?: Date }): Promise<Order[]> {
+  async getOrdersFiltered(tenantId: string, filters?: { status?: string; paymentStatus?: string; deliveryType?: string; dateFrom?: Date; dateTo?: Date; search?: string }): Promise<Order[]> {
     const conditions = [eq(orders.tenantId, tenantId)];
     if (filters?.status) conditions.push(eq(orders.status, filters.status));
     if (filters?.paymentStatus) conditions.push(eq(orders.paymentStatus, filters.paymentStatus));
     if (filters?.deliveryType) conditions.push(eq(orders.deliveryType, filters.deliveryType));
     if (filters?.dateFrom) conditions.push(gte(orders.createdAt, filters.dateFrom));
     if (filters?.dateTo) conditions.push(lte(orders.createdAt, filters.dateTo));
+    if (filters?.search) {
+      conditions.push(or(
+        ilike(orders.customerName, `%${filters.search}%`),
+        ilike(orders.customerPhone, `%${filters.search}%`)
+      )!);
+    }
     return db.select().from(orders).where(and(...conditions)).orderBy(desc(orders.createdAt));
+  }
+
+  async getOrdersFilteredPaginated(
+    tenantId: string,
+    filters: { status?: string; paymentStatus?: string; deliveryType?: string; dateFrom?: Date; dateTo?: Date; search?: string },
+    limit: number,
+    offset: number
+  ): Promise<{ orders: Order[]; total: number; statusCounts: Record<string, number> }> {
+    const conditions = [eq(orders.tenantId, tenantId)];
+    if (filters.status) conditions.push(eq(orders.status, filters.status));
+    if (filters.paymentStatus) conditions.push(eq(orders.paymentStatus, filters.paymentStatus));
+    if (filters.deliveryType) conditions.push(eq(orders.deliveryType, filters.deliveryType));
+    if (filters.dateFrom) conditions.push(gte(orders.createdAt, filters.dateFrom));
+    if (filters.dateTo) conditions.push(lte(orders.createdAt, filters.dateTo));
+    if (filters.search) {
+      conditions.push(or(
+        ilike(orders.customerName, `%${filters.search}%`),
+        ilike(orders.customerPhone, `%${filters.search}%`)
+      )!);
+    }
+    const where = and(...conditions);
+    const [orderList, countRows] = await Promise.all([
+      db.select().from(orders).where(where)
+        .orderBy(desc(orders.createdAt), desc(orders.id))
+        .limit(limit).offset(offset),
+      db.select({
+        status: orders.status,
+        count: sql<number>`count(*)::int`,
+      }).from(orders).where(where).groupBy(orders.status),
+    ]);
+    const statusCounts: Record<string, number> = {};
+    for (const row of countRows) statusCounts[row.status] = row.count;
+    const total = countRows.reduce((sum, row) => sum + row.count, 0);
+    return { orders: orderList, total, statusCounts };
   }
 
   // Deliveries
@@ -1151,6 +1336,283 @@ export class DatabaseStorage implements IStorage {
   async createAttendanceRecord(data: InsertAttendanceRecord): Promise<AttendanceRecord> {
     const [created] = await db.insert(attendanceRecords).values(data).returning();
     return created;
+  }
+
+  // --------------------------------------------------------------------------
+  // Finance: optimised daily breakdown
+  // --------------------------------------------------------------------------
+  async getDailyBreakdown(
+    tenantId: string,
+    from: Date,
+    to: Date,
+    tzOffsetMinutes: number
+  ): Promise<Array<{
+    date: string;
+    revenue: number;
+    expenses: number;
+    profit: number;
+    totalProfit: number;
+    payments: Record<string, number>;
+  }>> {
+    // The client constructs local calendar boundaries and serializes them as
+    // UTC instants. Use those submitted instants directly for filtering;
+    // applying the offset again would drop boundary hours west/east of UTC.
+    // The offset is only for grouping each timestamp into its local day.
+    const utcFrom = from;
+    const utcTo = to;
+
+    const transactionDay = sql<string>`to_char(${transactions.date} - (${tzOffsetMinutes} * interval '1 minute'), 'YYYY-MM-DD')`;
+    const expenseDay = sql<string>`to_char(${expenses.date} - (${tzOffsetMinutes} * interval '1 minute'), 'YYYY-MM-DD')`;
+    const transactionFilter = and(
+      eq(transactions.tenantId, tenantId),
+      gte(transactions.date, utcFrom),
+      lte(transactions.date, utcTo),
+      sql`${transactions.status} != 'voided'`
+    );
+
+    // Revenue/profit, expenses and payment methods are all grouped by local
+    // day in PostgreSQL. No transaction list (or JSON items blob) crosses the
+    // application boundary, even for multi-year reports.
+    const [txDayRows, expRows, paymentResult] = await Promise.all([
+      db.select({
+        day: transactionDay,
+        revenue: sql<number>`COALESCE(SUM(${transactions.totalAmount}), 0)::bigint`,
+        totalProfit: sql<number>`COALESCE(SUM(${transactions.totalProfit}), 0)::bigint`,
+      }).from(transactions)
+        .where(transactionFilter)
+        .groupBy(sql.raw("1")),
+      db.select({
+        day: expenseDay,
+        total: sql<number>`COALESCE(SUM(${expenses.amount}), 0)::bigint`,
+      }).from(expenses).where(
+        and(
+          eq(expenses.tenantId, tenantId),
+          gte(expenses.date, utcFrom),
+          lte(expenses.date, utcTo)
+        )
+      ).groupBy(sql.raw("1")),
+      db.execute(sql`
+        WITH payment_rows AS (
+          SELECT
+            to_char(${transactions.date} - (${tzOffsetMinutes} * interval '1 minute'), 'YYYY-MM-DD') AS day,
+            COALESCE(NULLIF(${transactions.paymentMethod}, ''), 'Naqd') AS method,
+            ${transactions.totalAmount}::numeric AS amount
+          FROM ${transactions}
+          WHERE ${transactions.tenantId} = ${tenantId}
+            AND ${transactions.date} >= ${utcFrom}
+            AND ${transactions.date} <= ${utcTo}
+            AND ${transactions.status} != 'voided'
+            AND COALESCE(
+              jsonb_array_length(
+                CASE
+                  WHEN jsonb_typeof(COALESCE(${transactions.paymentSplits}::jsonb, '[]'::jsonb)) = 'array'
+                    THEN COALESCE(${transactions.paymentSplits}::jsonb, '[]'::jsonb)
+                  ELSE '[]'::jsonb
+                END
+              ),
+              0
+            ) = 0
+
+          UNION ALL
+
+          SELECT
+            to_char(${transactions.date} - (${tzOffsetMinutes} * interval '1 minute'), 'YYYY-MM-DD') AS day,
+            COALESCE(NULLIF(split.value->>'method', ''), 'Naqd') AS method,
+            COALESCE((split.value->>'amount')::numeric, 0) AS amount
+          FROM ${transactions}
+          CROSS JOIN LATERAL jsonb_array_elements(
+            CASE
+              WHEN jsonb_typeof(COALESCE(${transactions.paymentSplits}::jsonb, '[]'::jsonb)) = 'array'
+                THEN COALESCE(${transactions.paymentSplits}::jsonb, '[]'::jsonb)
+              ELSE '[]'::jsonb
+            END
+          ) AS split(value)
+          WHERE ${transactions.tenantId} = ${tenantId}
+            AND ${transactions.date} >= ${utcFrom}
+            AND ${transactions.date} <= ${utcTo}
+            AND ${transactions.status} != 'voided'
+        )
+        SELECT day, method, COALESCE(SUM(amount), 0)::bigint AS total
+        FROM payment_rows
+        GROUP BY day, method
+      `),
+    ]);
+
+    // Step 3 – build zero-filled day map for the requested range
+    const dayKey = (d: Date) =>
+      new Date(d.getTime() - tzOffsetMinutes * 60000).toISOString().split("T")[0];
+
+    const days: Record<string, {
+      date: string; revenue: number; expenses: number; profit: number;
+      totalProfit: number; payments: Record<string, number>;
+    }> = {};
+
+    const cursor = new Date(from);
+    while (cursor <= to) {
+      const key = dayKey(cursor);
+      days[key] = { date: key, revenue: 0, expenses: 0, profit: 0, totalProfit: 0, payments: {} };
+      cursor.setDate(cursor.getDate() + 1);
+    }
+
+    // Step 4 – merge SQL-aggregated transaction and payment rows
+    for (const row of txDayRows) {
+      if (!days[row.day]) continue;
+      days[row.day].revenue = Number(row.revenue) || 0;
+      days[row.day].totalProfit = Number(row.totalProfit) || 0;
+    }
+    for (const row of paymentResult.rows as Array<{ day: string; method: string; total: string | number }>) {
+      if (!days[row.day]) continue;
+      days[row.day].payments[row.method] = Number(row.total) || 0;
+    }
+
+    // Step 5 – merge SQL-aggregated expenses
+    for (const e of expRows) {
+      if (days[e.day]) {
+        days[e.day].expenses += Number(e.total) || 0;
+      }
+    }
+
+    return Object.values(days).map(d => ({
+      ...d,
+      profit: d.totalProfit - d.expenses,
+    }));
+  }
+
+  // --------------------------------------------------------------------------
+  // Finance: optimised supplier summary
+  // --------------------------------------------------------------------------
+  async getSupplierSummary(tenantId: string): Promise<{
+    suppliers: Array<{
+      name: string;
+      phone: string;
+      totalAmount: number;
+      totalAmountUsd: number;
+      totalProducts: number;
+      totalItems: number;
+      naqd: number;
+      karta: number;
+      nasiya: number;
+      naqdUsd: number;
+      kartaUsd: number;
+      nasiyaUsd: number;
+      products: Array<{
+        id: string;
+        name: string;
+        costPrice: number;
+        stock: number;
+        amount: number;
+        amountUsd: number;
+        supplierCurrency: string;
+        supplierOriginalPrice: number;
+        supplierCurrencyRate: number;
+        paymentMethod: string;
+        debtStatus: string;
+        paidAmount: number;
+      }>;
+    }>;
+    totals: {
+      totalAmount: number;
+      totalAmountUsd: number;
+      totalNaqd: number;
+      totalKarta: number;
+      totalNasiya: number;
+      totalNaqdUsd: number;
+      totalKartaUsd: number;
+      totalNasiyaUsd: number;
+      supplierCount: number;
+    };
+  }> {
+    // Query 1 – registered suppliers
+    const registeredSuppliers = await db.select({
+      name:  suppliers.name,
+      phone: suppliers.phone,
+    }).from(suppliers).where(eq(suppliers.tenantId, tenantId));
+
+    // Query 2 – per-product details (only columns needed, no blobs)
+    const productRows = await db.select({
+      id:                     products.id,
+      name:                   products.name,
+      costPrice:              products.costPrice,
+      stock:                  products.stock,
+      supplier:               products.supplier,
+      supplierPaymentMethod:  products.supplierPaymentMethod,
+      supplierCurrency:       products.supplierCurrency,
+      supplierCurrencyRate:   products.supplierCurrencyRate,
+      supplierOriginalPrice:  products.supplierOriginalPrice,
+      supplierDebtStatus:     products.supplierDebtStatus,
+      supplierPaidAmount:     products.supplierPaidAmount,
+    }).from(products).where(
+      and(eq(products.tenantId, tenantId), sql`${products.supplier} IS NOT NULL AND ${products.supplier} != ''`)
+    );
+
+    // Build supplier map seeded with registered suppliers
+    const emptySupplier = () => ({
+      name: "", phone: "", totalAmount: 0, totalAmountUsd: 0,
+      totalProducts: 0, totalItems: 0,
+      naqd: 0, karta: 0, nasiya: 0,
+      naqdUsd: 0, kartaUsd: 0, nasiyaUsd: 0,
+      products: [] as any[],
+    });
+
+    const supplierMap: Record<string, ReturnType<typeof emptySupplier> & { name: string; phone: string }> = {};
+    for (const s of registeredSuppliers) {
+      supplierMap[s.name] = { ...emptySupplier(), name: s.name, phone: s.phone || "" };
+    }
+
+    for (const p of productRows) {
+      const sName = p.supplier || "";
+      if (!sName) continue;
+      if (!supplierMap[sName]) {
+        supplierMap[sName] = { ...emptySupplier(), name: sName, phone: "" };
+      }
+      const costPrice   = p.costPrice || 0;
+      const stock       = Number(p.stock) || 0;
+      const amount      = costPrice * stock;
+      const currency    = p.supplierCurrency || "uzs";
+      const origPrice   = Number(p.supplierOriginalPrice) || 0;
+      const amountUsd   = currency === "usd" ? origPrice * stock : 0;
+      const payMethod   = p.supplierPaymentMethod || "naqd";
+
+      const sup = supplierMap[sName];
+      sup.totalAmount    += amount;
+      sup.totalAmountUsd += amountUsd;
+      sup.totalProducts  += 1;
+      sup.totalItems     += stock;
+      if (payMethod === "karta")        { sup.karta    += amount; sup.kartaUsd    += amountUsd; }
+      else if (payMethod === "nasiya")  { sup.nasiya   += amount; sup.nasiyaUsd   += amountUsd; }
+      else                              { sup.naqd     += amount; sup.naqdUsd     += amountUsd; }
+
+      sup.products.push({
+        id:                    p.id,
+        name:                  p.name,
+        costPrice,
+        stock,
+        amount,
+        amountUsd,
+        supplierCurrency:      currency,
+        supplierOriginalPrice: origPrice,
+        supplierCurrencyRate:  p.supplierCurrencyRate || 0,
+        paymentMethod:         payMethod,
+        debtStatus:            p.supplierDebtStatus || "pending",
+        paidAmount:            p.supplierPaidAmount || 0,
+      });
+    }
+
+    const result = Object.values(supplierMap).sort((a, b) => b.totalAmount - a.totalAmount);
+
+    const totals = {
+      totalAmount:    result.reduce((s, r) => s + r.totalAmount,    0),
+      totalAmountUsd: result.reduce((s, r) => s + r.totalAmountUsd, 0),
+      totalNaqd:      result.reduce((s, r) => s + r.naqd,           0),
+      totalKarta:     result.reduce((s, r) => s + r.karta,          0),
+      totalNasiya:    result.reduce((s, r) => s + r.nasiya,         0),
+      totalNaqdUsd:   result.reduce((s, r) => s + r.naqdUsd,        0),
+      totalKartaUsd:  result.reduce((s, r) => s + r.kartaUsd,       0),
+      totalNasiyaUsd: result.reduce((s, r) => s + r.nasiyaUsd,      0),
+      supplierCount:  result.length,
+    };
+
+    return { suppliers: result, totals };
   }
 }
 

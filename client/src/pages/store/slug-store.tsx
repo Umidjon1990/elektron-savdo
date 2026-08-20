@@ -1,6 +1,6 @@
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, useDeferredValue } from "react";
 import { useLocation, useParams } from "wouter";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useInfiniteQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -96,6 +96,7 @@ export default function SlugStorePage() {
   const [, setLocation] = useLocation();
   const [searchQuery, setSearchQuery] = useState("");
   const [activeCategory, setActiveCategory] = useState("Barchasi");
+  const deferredSearchQuery = useDeferredValue(searchQuery);
   const { items, addItem, itemCount, total } = useStoreCart(slug);
 
   const { data: tenant, isLoading: tenantLoading, error: tenantError } = useQuery<TenantInfo>({
@@ -109,16 +110,43 @@ export default function SlugStorePage() {
     staleTime: 5 * 60 * 1000,
   });
 
-  const { data: products = [], isLoading: productsLoading } = useQuery<Product[]>({
-    queryKey: ["store-products", slug],
-    queryFn: async () => {
-      const res = await fetch(`/api/store/${slug}/products`);
+  interface ProductsPage {
+    items: Product[];
+    total: number;
+    page: number;
+    limit: number;
+    hasMore: boolean;
+  }
+
+  const {
+    data: productsData,
+    isLoading: productsLoading,
+    isFetchingNextPage,
+    hasNextPage,
+    fetchNextPage,
+  } = useInfiniteQuery<ProductsPage>({
+    queryKey: ["store-products", slug, activeCategory, deferredSearchQuery],
+    queryFn: async ({ pageParam = 1 }) => {
+      const params = new URLSearchParams({
+        page: String(pageParam),
+        limit: "50",
+      });
+      if (activeCategory !== "Barchasi") params.set("category", activeCategory);
+      if (deferredSearchQuery.trim()) params.set("search", deferredSearchQuery.trim());
+      const res = await fetch(`/api/store/${slug}/products?${params}`);
       if (!res.ok) throw new Error("Mahsulotlarni yuklashda xatolik");
       return res.json();
     },
+    initialPageParam: 1,
+    getNextPageParam: (lastPage) => lastPage.hasMore ? lastPage.page + 1 : undefined,
     enabled: !!slug && !!tenant,
     staleTime: 30000,
   });
+
+  const products = useMemo<Product[]>(() => {
+    if (!productsData) return [];
+    return productsData.pages.flatMap((page) => page.items);
+  }, [productsData]);
 
   const { data: categories = [] } = useQuery<Category[]>({
     queryKey: ["store-categories", slug],
@@ -465,6 +493,27 @@ export default function SlugStorePage() {
               ))
             )}
           </div>
+
+          {(hasNextPage || isFetchingNextPage) && (
+            <div className="flex justify-center mt-10">
+              <Button
+                onClick={() => fetchNextPage()}
+                disabled={isFetchingNextPage || !hasNextPage}
+                className="h-12 px-10 rounded-full text-white shadow-lg text-sm font-semibold transition-all hover:scale-105 disabled:opacity-60 disabled:cursor-not-allowed"
+                style={{ backgroundColor: brandColor }}
+                data-testid="button-load-more"
+              >
+                {isFetchingNextPage ? (
+                  <span className="flex items-center gap-2">
+                    <span className="animate-spin rounded-full h-4 w-4 border-b-2 border-white inline-block" />
+                    Yuklanmoqda...
+                  </span>
+                ) : (
+                  "Ko'proq yuklash"
+                )}
+              </Button>
+            </div>
+          )}
         </div>
       </section>
 

@@ -21,6 +21,17 @@ interface OrderData {
   createdAt: Date | string;
 }
 
+interface TelegramJob {
+  order: OrderData;
+  botToken?: string;
+  chatId?: string;
+}
+
+const telegramQueue: TelegramJob[] = [];
+const TELEGRAM_MAX_CONCURRENCY = 2;
+const TELEGRAM_MAX_QUEUE_SIZE = 200;
+let activeTelegramJobs = 0;
+
 function formatOrderMessage(order: OrderData): string {
   const deliveryText = order.deliveryType === 'delivery' ? '🚚 Kuryer orqali' : '🏢 Olib ketish';
   const paymentText = getPaymentMethodText(order.paymentMethod);
@@ -74,7 +85,6 @@ export async function sendTelegramNotification(order: OrderData, botToken?: stri
   const chat = chatId || process.env.TELEGRAM_CHAT_ID;
 
   if (!token || !chat) {
-    console.log('Telegram credentials not configured, skipping notification');
     return false;
   }
 
@@ -87,6 +97,7 @@ export async function sendTelegramNotification(order: OrderData, botToken?: stri
       headers: {
         'Content-Type': 'application/json',
       },
+      signal: AbortSignal.timeout(8000),
       body: JSON.stringify({
         chat_id: chat,
         text: message,
@@ -100,10 +111,34 @@ export async function sendTelegramNotification(order: OrderData, botToken?: stri
       return false;
     }
 
-    console.log('Telegram notification sent successfully');
     return true;
   } catch (error) {
     console.error('Error sending Telegram notification:', error);
     return false;
   }
+}
+
+function drainTelegramQueue() {
+  while (activeTelegramJobs < TELEGRAM_MAX_CONCURRENCY && telegramQueue.length > 0) {
+    const job = telegramQueue.shift()!;
+    activeTelegramJobs += 1;
+    setImmediate(() => {
+      sendTelegramNotification(job.order, job.botToken, job.chatId)
+        .catch(error => console.error("Telegram background job failed:", error))
+        .finally(() => {
+          activeTelegramJobs -= 1;
+          drainTelegramQueue();
+        });
+    });
+  }
+}
+
+export function queueTelegramNotification(order: OrderData, botToken?: string, chatId?: string): boolean {
+  if (telegramQueue.length >= TELEGRAM_MAX_QUEUE_SIZE) {
+    console.warn("Telegram notification queue is full; dropping notification");
+    return false;
+  }
+  telegramQueue.push({ order, botToken, chatId });
+  drainTelegramQueue();
+  return true;
 }

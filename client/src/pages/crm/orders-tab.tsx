@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useDeferredValue } from "react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -39,7 +39,7 @@ import {
 } from "lucide-react";
 import { format, startOfDay, startOfWeek, startOfMonth } from "date-fns";
 import { getAuthHeaders } from "@/lib/auth-context";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useInfiniteQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 
 const statusConfig: Record<string, { label: string; color: string; bg: string }> = {
   new: { label: "Yangi", color: "text-blue-700", bg: "bg-blue-100" },
@@ -108,6 +108,7 @@ export function OrdersTab() {
   const [deliveryFilter, setDeliveryFilter] = useState("all");
   const [dateRange, setDateRange] = useState<string>("all");
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
+  const deferredSearch = useDeferredValue(search);
 
   const dateParams = useMemo(() => {
     const now = new Date();
@@ -117,20 +118,43 @@ export function OrdersTab() {
     return {};
   }, [dateRange]);
 
-  const { data: orders = [], isLoading } = useQuery<OrderType[]>({
-    queryKey: ["orders-filtered", statusFilter, paymentFilter, deliveryFilter, dateRange],
-    queryFn: async () => {
+  type OrdersPage = {
+    items: OrderType[];
+    total: number;
+    page: number;
+    limit: number;
+    hasMore: boolean;
+    summary: { total: number; new: number; delivering: number; delivered: number };
+  };
+  const {
+    data: orderPages,
+    isLoading,
+    hasNextPage,
+    isFetchingNextPage,
+    fetchNextPage,
+  } = useInfiniteQuery<OrdersPage>({
+    queryKey: ["orders-filtered", statusFilter, paymentFilter, deliveryFilter, dateRange, deferredSearch],
+    queryFn: async ({ pageParam = 1 }) => {
       const params = new URLSearchParams();
+      params.set("page", String(pageParam));
+      params.set("limit", "50");
       if (statusFilter !== "all") params.set("status", statusFilter);
       if (paymentFilter !== "all") params.set("paymentStatus", paymentFilter);
       if (deliveryFilter !== "all") params.set("deliveryType", deliveryFilter);
       if (dateParams.from) params.set("from", dateParams.from);
       if (dateParams.to) params.set("to", dateParams.to);
+      if (deferredSearch.trim()) params.set("search", deferredSearch.trim());
       const res = await fetch(`/api/orders-filtered?${params}`, { headers: getAuthHeaders() });
       if (!res.ok) throw new Error("Failed to fetch orders");
       return res.json();
     },
+    initialPageParam: 1,
+    getNextPageParam: (lastPage) => lastPage.hasMore ? lastPage.page + 1 : undefined,
   });
+  const orders = useMemo(
+    () => orderPages?.pages.flatMap(page => page.items) || [],
+    [orderPages]
+  );
 
   const { data: selectedOrder } = useQuery<OrderType>({
     queryKey: ["order-detail", selectedOrderId],
@@ -196,23 +220,16 @@ export function OrdersTab() {
   });
 
   const filteredOrders = useMemo(() => {
-    if (!search.trim()) return orders;
+    if (deferredSearch === search) return orders;
     const s = search.toLowerCase();
-    return orders.filter(
-      (o) =>
-        o.customerName.toLowerCase().includes(s) ||
-        o.customerPhone.includes(s)
+    return orders.filter(o =>
+      o.customerName.toLowerCase().includes(s) || o.customerPhone.includes(s)
     );
-  }, [orders, search]);
+  }, [orders, search, deferredSearch]);
 
   const kpi = useMemo(() => {
-    return {
-      total: orders.length,
-      new: orders.filter((o) => o.status === "new").length,
-      delivering: orders.filter((o) => o.status === "out_for_delivery").length,
-      delivered: orders.filter((o) => o.status === "delivered").length,
-    };
-  }, [orders]);
+    return orderPages?.pages[0]?.summary || { total: 0, new: 0, delivering: 0, delivered: 0 };
+  }, [orderPages]);
 
   const detail = selectedOrder || orders.find((o) => o.id === selectedOrderId);
   const items = (detail?.items as OrderItem[]) || [];
@@ -388,6 +405,18 @@ export function OrdersTab() {
               </TableBody>
             </Table>
           </div>
+          {(hasNextPage || isFetchingNextPage) && (
+            <div className="flex justify-center py-4 border-t">
+              <Button
+                variant="outline"
+                onClick={() => fetchNextPage()}
+                disabled={isFetchingNextPage || !hasNextPage}
+                data-testid="button-load-more-orders"
+              >
+                {isFetchingNextPage ? "Yuklanmoqda..." : "Ko'proq yuklash"}
+              </Button>
+            </div>
+          )}
         </div>
       </div>
 

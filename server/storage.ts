@@ -1,6 +1,6 @@
 import { db } from "@db";
-import { users, products, orders, categories, transactions, tenants, expenses, expenseCategories, incomeCategories, debtPayments, cashRegisterEntries, customers, deliveries, auditLogs, shiftHandovers, staffMembers, attendanceRecords, suppliers } from "@shared/schema";
-import type { User, InsertUser, Product, InsertProduct, Order, InsertOrder, Category, InsertCategory, Transaction, InsertTransaction, Tenant, InsertTenant, Expense, InsertExpense, ExpenseCategory, InsertExpenseCategory, IncomeCategory, InsertIncomeCategory, DebtPayment, InsertDebtPayment, CashRegisterEntry, InsertCashRegisterEntry, Customer, InsertCustomer, Delivery, InsertDelivery, AuditLog, InsertAuditLog, ShiftHandover, InsertShiftHandover, StaffMember, InsertStaffMember, AttendanceRecord, InsertAttendanceRecord, Supplier, InsertSupplier } from "@shared/schema";
+import { users, products, orders, categories, transactions, tenants, expenses, expenseCategories, incomeCategories, debtPayments, independentDebts, independentDebtPayments, cashRegisterEntries, customers, deliveries, auditLogs, shiftHandovers, staffMembers, attendanceRecords, suppliers } from "@shared/schema";
+import type { User, InsertUser, Product, InsertProduct, Order, InsertOrder, Category, InsertCategory, Transaction, InsertTransaction, Tenant, InsertTenant, Expense, InsertExpense, ExpenseCategory, InsertExpenseCategory, IncomeCategory, InsertIncomeCategory, DebtPayment, InsertDebtPayment, IndependentDebt, InsertIndependentDebt, IndependentDebtPayment, CashRegisterEntry, InsertCashRegisterEntry, Customer, InsertCustomer, Delivery, InsertDelivery, AuditLog, InsertAuditLog, ShiftHandover, InsertShiftHandover, StaffMember, InsertStaffMember, AttendanceRecord, InsertAttendanceRecord, Supplier, InsertSupplier } from "@shared/schema";
 import { eq, desc, sql, and, inArray, gte, lte, or, ilike } from "drizzle-orm";
 
 export interface IStorage {
@@ -76,6 +76,15 @@ export interface IStorage {
   getDebtPayments(transactionId: string, tenantId?: string): Promise<DebtPayment[]>;
   createDebtPayment(payment: InsertDebtPayment): Promise<DebtPayment>;
   updateTransactionDebt(id: string, paidAmount: number, debtStatus: string, tenantId?: string): Promise<Transaction | undefined>;
+
+  // Standalone Nasiya ledger (not connected to finance/sales)
+  getIndependentDebts(tenantId: string): Promise<IndependentDebt[]>;
+  getIndependentDebt(id: string, tenantId: string): Promise<IndependentDebt | undefined>;
+  createIndependentDebt(debt: InsertIndependentDebt): Promise<IndependentDebt>;
+  updateIndependentDebt(id: string, data: Partial<IndependentDebt>, tenantId: string): Promise<IndependentDebt | undefined>;
+  voidIndependentDebt(id: string, tenantId: string): Promise<IndependentDebt | undefined>;
+  getIndependentDebtPayments(debtId: string, tenantId: string): Promise<IndependentDebtPayment[]>;
+  recordIndependentDebtPayment(debtId: string, tenantId: string, amount: number, note?: string): Promise<{ debt: IndependentDebt; payment: IndependentDebtPayment }>;
 
   // Cash Register Entries (kirim/chiqim journal)
   getCashRegisterEntries(tenantId: string, type?: string, dateFrom?: Date, dateTo?: Date): Promise<CashRegisterEntry[]>;
@@ -652,6 +661,115 @@ export class DatabaseStorage implements IStorage {
       .where(and(...conditions))
       .returning();
     return updated;
+  }
+
+  // Standalone Nasiya ledger. Keep this implementation isolated from
+  // transaction, stock, income/expense, and cash-register operations.
+  async getIndependentDebts(tenantId: string): Promise<IndependentDebt[]> {
+    return db.select().from(independentDebts)
+      .where(eq(independentDebts.tenantId, tenantId))
+      .orderBy(desc(independentDebts.createdAt));
+  }
+
+  async getIndependentDebt(id: string, tenantId: string): Promise<IndependentDebt | undefined> {
+    const [debt] = await db.select().from(independentDebts).where(
+      and(eq(independentDebts.id, id), eq(independentDebts.tenantId, tenantId))
+    );
+    return debt;
+  }
+
+  async createIndependentDebt(debt: InsertIndependentDebt): Promise<IndependentDebt> {
+    const [created] = await db.insert(independentDebts).values(debt).returning();
+    return created;
+  }
+
+  async updateIndependentDebt(id: string, data: Partial<IndependentDebt>, tenantId: string): Promise<IndependentDebt | undefined> {
+    return db.transaction(async (tx) => {
+      const [current] = await tx.select().from(independentDebts).where(
+        and(eq(independentDebts.id, id), eq(independentDebts.tenantId, tenantId))
+      ).for("update");
+
+      if (!current) return undefined;
+      if (current.status === "voided") throw new Error("NASIYA_VOIDED");
+
+      const totalAmount = data.totalAmount ?? current.totalAmount;
+      if (totalAmount < current.paidAmount) throw new Error("NASIYA_TOTAL_BELOW_PAID");
+
+      // Never trust caller-supplied debt accounting fields. The current,
+      // locked payment balance is the source of truth for the next status.
+      const {
+        id: _id,
+        tenantId: _tenantId,
+        paidAmount: _paidAmount,
+        status: _status,
+        createdAt: _createdAt,
+        updatedAt: _updatedAt,
+        ...editable
+      } = data;
+      const status = totalAmount === current.paidAmount
+        ? "paid"
+        : (current.paidAmount > 0 ? "partial" : "pending");
+
+      const [updated] = await tx.update(independentDebts)
+        .set({ ...editable, totalAmount, status, updatedAt: new Date() })
+        .where(and(eq(independentDebts.id, id), eq(independentDebts.tenantId, tenantId)))
+        .returning();
+      return updated;
+    });
+  }
+
+  async getIndependentDebtPayments(debtId: string, tenantId: string): Promise<IndependentDebtPayment[]> {
+    return db.select().from(independentDebtPayments).where(
+      and(
+        eq(independentDebtPayments.debtId, debtId),
+        eq(independentDebtPayments.tenantId, tenantId)
+      )
+    ).orderBy(desc(independentDebtPayments.date));
+  }
+
+  async voidIndependentDebt(id: string, tenantId: string): Promise<IndependentDebt | undefined> {
+    const [updated] = await db.update(independentDebts)
+      .set({ status: "voided", updatedAt: new Date() })
+      .where(and(eq(independentDebts.id, id), eq(independentDebts.tenantId, tenantId)))
+      .returning();
+    return updated;
+  }
+
+  async recordIndependentDebtPayment(
+    debtId: string,
+    tenantId: string,
+    amount: number,
+    note = ""
+  ): Promise<{ debt: IndependentDebt; payment: IndependentDebtPayment }> {
+    return db.transaction(async (tx) => {
+      const [current] = await tx.select().from(independentDebts).where(
+        and(eq(independentDebts.id, debtId), eq(independentDebts.tenantId, tenantId))
+      ).for("update");
+
+      if (!current) throw new Error("NASIYA_NOT_FOUND");
+      if (current.status === "voided") throw new Error("NASIYA_VOIDED");
+      if (current.status === "paid") throw new Error("NASIYA_ALREADY_PAID");
+
+      const remaining = current.totalAmount - current.paidAmount;
+      if (amount <= 0) throw new Error("NASIYA_INVALID_PAYMENT");
+      if (amount > remaining) throw new Error("NASIYA_OVERPAYMENT");
+
+      const [payment] = await tx.insert(independentDebtPayments).values({
+        tenantId,
+        debtId,
+        amount,
+        note,
+      }).returning();
+
+      const paidAmount = current.paidAmount + amount;
+      const status = paidAmount >= current.totalAmount ? "paid" : "partial";
+      const [debt] = await tx.update(independentDebts)
+        .set({ paidAmount, status, updatedAt: new Date() })
+        .where(and(eq(independentDebts.id, debtId), eq(independentDebts.tenantId, tenantId)))
+        .returning();
+
+      return { debt, payment };
+    });
   }
 
   // Cash Register Entries

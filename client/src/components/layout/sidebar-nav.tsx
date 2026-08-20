@@ -1,6 +1,6 @@
 import { Link, useLocation } from "wouter";
 import { cn } from "@/lib/utils";
-import { LayoutDashboard, Package, Settings, LogOut, Store, Users, Download, MoreHorizontal, Layers, Crown, Wallet, UserCheck, ChevronsLeft, ChevronsRight } from "lucide-react";
+import { LayoutDashboard, Package, Settings, LogOut, Store, Users, Download, MoreHorizontal, Layers, Crown, Wallet, UserCheck, ChevronsLeft, ChevronsRight, BookOpenCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useState, useEffect } from "react";
 import { useAuth } from "@/lib/auth-context";
@@ -21,6 +21,7 @@ function getNavItems(slug?: string) {
     { href: `${prefix}/inventory`, icon: Package, label: "Ombor", primary: true },
     { href: `${prefix}/customers`, icon: Users, label: "Mijozlar", primary: true },
     { href: `${prefix}/finance`, icon: Wallet, label: "Moliya", primary: false },
+    { href: `${prefix}/nasiya`, icon: BookOpenCheck, label: "Nasiya", primary: false },
     { href: `${prefix}/employees`, icon: UserCheck, label: "Xodimlar", primary: false },
     { href: `${prefix}/categories`, icon: Layers, label: "Kategoriyalar", primary: false },
     { href: storeLink, icon: Store, label: "Do'kon", primary: false },

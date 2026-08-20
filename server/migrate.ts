@@ -51,6 +51,43 @@ export async function runMigrations() {
         payment_method TEXT NOT NULL,
         status TEXT NOT NULL DEFAULT 'completed'
       );
+
+      -- Standalone Nasiya ledger. It intentionally has no foreign keys to
+      -- sales, products, finance, or cash-register tables.
+      CREATE TABLE IF NOT EXISTS independent_debts (
+        id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
+        tenant_id VARCHAR NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+        debtor_name TEXT NOT NULL,
+        phone TEXT NOT NULL DEFAULT '',
+        item_description TEXT NOT NULL,
+        total_amount INTEGER NOT NULL CHECK (total_amount > 0),
+        paid_amount INTEGER NOT NULL DEFAULT 0 CHECK (paid_amount >= 0),
+        due_date TIMESTAMP NOT NULL,
+        status TEXT NOT NULL DEFAULT 'pending',
+        note TEXT NOT NULL DEFAULT '',
+        created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+      );
+
+      CREATE TABLE IF NOT EXISTS independent_debt_payments (
+        id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
+        tenant_id VARCHAR NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+        debt_id VARCHAR NOT NULL REFERENCES independent_debts(id) ON DELETE CASCADE,
+        amount INTEGER NOT NULL CHECK (amount > 0),
+        date TIMESTAMP NOT NULL DEFAULT NOW(),
+        note TEXT NOT NULL DEFAULT ''
+      );
+
+      DO $$
+      BEGIN
+        IF NOT EXISTS (
+          SELECT 1 FROM pg_constraint WHERE conname = 'independent_debts_paid_not_over_total'
+        ) THEN
+          ALTER TABLE independent_debts
+            ADD CONSTRAINT independent_debts_paid_not_over_total
+            CHECK (paid_amount <= total_amount);
+        END IF;
+      END $$;
       
       -- Add status column if it doesn't exist (for existing databases)
       DO $$ 
@@ -151,6 +188,9 @@ export async function runMigrations() {
       CREATE INDEX IF NOT EXISTS deliveries_tenant_id_idx ON deliveries(tenant_id);
       CREATE INDEX IF NOT EXISTS debt_payments_tenant_id_idx ON debt_payments(tenant_id);
       CREATE INDEX IF NOT EXISTS cash_register_entries_tenant_id_idx ON cash_register_entries(tenant_id);
+      CREATE INDEX IF NOT EXISTS independent_debts_tenant_status_idx ON independent_debts(tenant_id, status);
+      CREATE INDEX IF NOT EXISTS independent_debts_tenant_due_date_idx ON independent_debts(tenant_id, due_date);
+      CREATE INDEX IF NOT EXISTS independent_debt_payments_tenant_debt_idx ON independent_debt_payments(tenant_id, debt_id);
     `);
     
     console.log("Database migrations completed successfully!");

@@ -1,7 +1,7 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { insertProductSchema, insertOrderSchema, insertCategorySchema, insertTransactionSchema, registerTenantSchema, loginSchema, insertExpenseSchema, insertExpenseCategorySchema, insertIncomeCategorySchema, insertCashRegisterEntrySchema, insertCustomerSchema, insertDeliverySchema } from "@shared/schema";
+import { insertProductSchema, insertOrderSchema, insertCategorySchema, insertTransactionSchema, registerTenantSchema, loginSchema, insertExpenseSchema, insertExpenseCategorySchema, insertIncomeCategorySchema, insertCashRegisterEntrySchema, insertCustomerSchema, insertDeliverySchema, insertIndependentDebtSchema } from "@shared/schema";
 import { registerR2Routes } from "./integrations/r2-routes";
 import { sendTelegramNotification } from "./telegram";
 import { authMiddleware, optionalAuth, superAdminOnly, hashPassword, comparePassword, generateToken } from "./auth";
@@ -888,6 +888,163 @@ export async function registerRoutes(
     } catch (error) {
       console.error("Error processing debt payment:", error);
       res.status(500).json({ error: "To'lov amalga oshirilmadi" });
+    }
+  });
+
+  // ============ STANDALONE NASIYA LEDGER ============
+  // These routes deliberately do not create transactions, stock movements,
+  // income/expense rows, or cash-register entries.
+
+  app.get("/api/independent-debts", authMiddleware, async (req, res) => {
+    try {
+      const debts = await storage.getIndependentDebts(req.tenantId!);
+      res.json(debts);
+    } catch (error) {
+      console.error("Error fetching independent debts:", error);
+      res.status(500).json({ error: "Nasiyalarni yuklashda xatolik" });
+    }
+  });
+
+  app.post("/api/independent-debts", authMiddleware, async (req, res) => {
+    try {
+      const debtorName = String(req.body.debtorName || "").trim();
+      const itemDescription = String(req.body.itemDescription || "").trim();
+      const phone = String(req.body.phone || "").trim();
+      const totalAmount = Number(req.body.totalAmount);
+      const dueDate = new Date(req.body.dueDate);
+
+      if (!debtorName) return res.status(400).json({ error: "Nasiyachi nomini kiriting" });
+      if (!itemDescription) return res.status(400).json({ error: "Tovar yoki xizmatni kiriting" });
+      if (!Number.isInteger(totalAmount) || totalAmount <= 0) {
+        return res.status(400).json({ error: "Summa musbat butun son bo'lishi kerak" });
+      }
+      if (Number.isNaN(dueDate.getTime())) {
+        return res.status(400).json({ error: "Qaytarish muddatini kiriting" });
+      }
+
+      const data = insertIndependentDebtSchema.parse({
+        tenantId: req.tenantId!,
+        debtorName,
+        phone,
+        itemDescription,
+        totalAmount,
+        dueDate,
+        note: String(req.body.note || "").trim(),
+      });
+      const debt = await storage.createIndependentDebt(data);
+      res.status(201).json(debt);
+    } catch (error: any) {
+      console.error("Error creating independent debt:", error);
+      if (error?.name === "ZodError") {
+        return res.status(400).json({ error: "Nasiya ma'lumotlari to'liq emas" });
+      }
+      res.status(500).json({ error: "Nasiyani saqlashda xatolik" });
+    }
+  });
+
+  app.get("/api/independent-debts/:id", authMiddleware, async (req, res) => {
+    try {
+      const debt = await storage.getIndependentDebt(req.params.id, req.tenantId!);
+      if (!debt) return res.status(404).json({ error: "Nasiya topilmadi" });
+      const payments = await storage.getIndependentDebtPayments(debt.id, req.tenantId!);
+      res.json({ ...debt, payments });
+    } catch (error) {
+      console.error("Error fetching independent debt:", error);
+      res.status(500).json({ error: "Nasiya ma'lumotini yuklashda xatolik" });
+    }
+  });
+
+  app.patch("/api/independent-debts/:id", authMiddleware, async (req, res) => {
+    try {
+      const current = await storage.getIndependentDebt(req.params.id, req.tenantId!);
+      if (!current) return res.status(404).json({ error: "Nasiya topilmadi" });
+      if (current.status === "voided") {
+        return res.status(400).json({ error: "Bekor qilingan nasiyani tahrirlab bo'lmaydi" });
+      }
+
+      const data: Record<string, any> = {};
+      if (req.body.debtorName !== undefined) {
+        data.debtorName = String(req.body.debtorName).trim();
+        if (!data.debtorName) return res.status(400).json({ error: "Nasiyachi nomini kiriting" });
+      }
+      if (req.body.phone !== undefined) data.phone = String(req.body.phone).trim();
+      if (req.body.itemDescription !== undefined) {
+        data.itemDescription = String(req.body.itemDescription).trim();
+        if (!data.itemDescription) return res.status(400).json({ error: "Tovar yoki xizmatni kiriting" });
+      }
+      if (req.body.note !== undefined) data.note = String(req.body.note).trim();
+      if (req.body.dueDate !== undefined) {
+        const dueDate = new Date(req.body.dueDate);
+        if (Number.isNaN(dueDate.getTime())) return res.status(400).json({ error: "Muddat noto'g'ri" });
+        data.dueDate = dueDate;
+      }
+      if (req.body.totalAmount !== undefined) {
+        const totalAmount = Number(req.body.totalAmount);
+        if (!Number.isInteger(totalAmount) || totalAmount <= 0) {
+          return res.status(400).json({ error: "Summa musbat butun son bo'lishi kerak" });
+        }
+        if (totalAmount < current.paidAmount) {
+          return res.status(400).json({ error: "Jami summa to'langan summadan kam bo'lmaydi" });
+        }
+        data.totalAmount = totalAmount;
+        data.status = totalAmount === current.paidAmount
+          ? "paid"
+          : (current.paidAmount > 0 ? "partial" : "pending");
+      }
+
+      const updated = await storage.updateIndependentDebt(req.params.id, data, req.tenantId!);
+      if (!updated) return res.status(404).json({ error: "Nasiya topilmadi" });
+      res.json(updated);
+    } catch (error: any) {
+      if (error?.message === "NASIYA_VOIDED") {
+        return res.status(400).json({ error: "Bekor qilingan nasiyani tahrirlab bo'lmaydi" });
+      }
+      if (error?.message === "NASIYA_TOTAL_BELOW_PAID") {
+        return res.status(400).json({ error: "Jami summa to'langan summadan kam bo'lmaydi" });
+      }
+      console.error("Error updating independent debt:", error);
+      res.status(500).json({ error: "Nasiyani yangilashda xatolik" });
+    }
+  });
+
+  app.post("/api/independent-debts/:id/payments", authMiddleware, async (req, res) => {
+    try {
+      const amount = Number(req.body.amount);
+      if (!Number.isInteger(amount) || amount <= 0) {
+        return res.status(400).json({ error: "To'lov summasi musbat butun son bo'lishi kerak" });
+      }
+      const result = await storage.recordIndependentDebtPayment(
+        req.params.id,
+        req.tenantId!,
+        amount,
+        String(req.body.note || "").trim()
+      );
+      res.status(201).json(result);
+    } catch (error: any) {
+      const messages: Record<string, { status: number; error: string }> = {
+        NASIYA_NOT_FOUND: { status: 404, error: "Nasiya topilmadi" },
+        NASIYA_VOIDED: { status: 400, error: "Bekor qilingan nasiyaga to'lov kiritib bo'lmaydi" },
+        NASIYA_ALREADY_PAID: { status: 400, error: "Bu nasiya to'liq yopilgan" },
+        NASIYA_INVALID_PAYMENT: { status: 400, error: "To'lov summasi noto'g'ri" },
+        NASIYA_OVERPAYMENT: { status: 400, error: "To'lov qoldiq qarzdan oshib ketmasligi kerak" },
+      };
+      const known = messages[error?.message];
+      if (known) return res.status(known.status).json({ error: known.error });
+      console.error("Error recording independent debt payment:", error);
+      res.status(500).json({ error: "To'lovni saqlashda xatolik" });
+    }
+  });
+
+  app.post("/api/independent-debts/:id/void", authMiddleware, async (req, res) => {
+    try {
+      const current = await storage.getIndependentDebt(req.params.id, req.tenantId!);
+      if (!current) return res.status(404).json({ error: "Nasiya topilmadi" });
+      if (current.status === "voided") return res.json(current);
+      const updated = await storage.voidIndependentDebt(current.id, req.tenantId!);
+      res.json(updated);
+    } catch (error) {
+      console.error("Error voiding independent debt:", error);
+      res.status(500).json({ error: "Nasiyani bekor qilishda xatolik" });
     }
   });
 

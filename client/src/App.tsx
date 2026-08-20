@@ -34,6 +34,7 @@ const importFinance = () => import("@/pages/finance");
 const importEmployees = () => import("@/pages/employees");
 const importAttendanceCheck = () => import("@/pages/attendance-check");
 const importCourierDeliveries = () => import("@/pages/courier-deliveries");
+const importNasiya = () => import("@/pages/nasiya");
 
 const NotFound = lazy(importNotFound);
 const SuperAdminPage = lazy(importSuperAdmin);
@@ -55,6 +56,7 @@ const FinancePage = lazy(importFinance);
 const EmployeesPage = lazy(importEmployees);
 const AttendanceCheckPage = lazy(importAttendanceCheck);
 const CourierDeliveriesPage = lazy(importCourierDeliveries);
+const NasiyaPage = lazy(importNasiya);
 
 let adminPagesPreloaded = false;
 function preloadAdminPages() {
@@ -83,6 +85,7 @@ function preloadAdminPages() {
     importCategories().catch(() => {});
     importFinance().catch(() => {});
     importEmployees().catch(() => {});
+    importNasiya().catch(() => {});
   }, 100);
 }
 
@@ -310,6 +313,9 @@ function Router() {
       <Route path="/store/:slug/admin/finance">
         {(params) => <SlugProtectedRoute component={FinancePage} slug={params.slug} />}
       </Route>
+      <Route path="/store/:slug/admin/nasiya">
+        {(params) => <SlugProtectedRoute component={NasiyaPage} slug={params.slug} />}
+      </Route>
       <Route path="/store/:slug/admin/employees">
         {(params) => <SlugProtectedRoute component={EmployeesPage} slug={params.slug} />}
       </Route>
@@ -355,6 +361,9 @@ function Router() {
       </Route>
       <Route path="/admin/finance">
         {() => <LegacyAdminRedirect component={FinancePage} subPath="finance" />}
+      </Route>
+      <Route path="/admin/nasiya">
+        {() => <LegacyAdminRedirect component={NasiyaPage} subPath="nasiya" />}
       </Route>
       <Route path="/admin/employees">
         {() => <LegacyAdminRedirect component={EmployeesPage} subPath="employees" />}

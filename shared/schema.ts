@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, integer, timestamp, json, uniqueIndex, boolean, real } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, integer, timestamp, json, uniqueIndex, index, check, boolean, real } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -140,6 +140,38 @@ export const debtPayments = pgTable("debt_payments", {
   date: timestamp("date").notNull(),
   note: text("note"),
 });
+
+// A standalone debt ledger. These records intentionally have no relation to
+// transactions, products, expenses, incomes, or cash-register entries.
+export const independentDebts = pgTable("independent_debts", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  tenantId: varchar("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+  debtorName: text("debtor_name").notNull(),
+  phone: text("phone").notNull().default(""),
+  itemDescription: text("item_description").notNull(),
+  totalAmount: integer("total_amount").notNull(),
+  paidAmount: integer("paid_amount").notNull().default(0),
+  dueDate: timestamp("due_date").notNull(),
+  status: text("status").notNull().default("pending"),
+  note: text("note").notNull().default(""),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+}, (table) => [
+  index("independent_debts_tenant_status_idx").on(table.tenantId, table.status),
+  index("independent_debts_tenant_due_date_idx").on(table.tenantId, table.dueDate),
+  check("independent_debts_paid_not_over_total", sql`${table.paidAmount} <= ${table.totalAmount}`),
+]);
+
+export const independentDebtPayments = pgTable("independent_debt_payments", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  tenantId: varchar("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+  debtId: varchar("debt_id").notNull().references(() => independentDebts.id, { onDelete: "cascade" }),
+  amount: integer("amount").notNull(),
+  date: timestamp("date").notNull().defaultNow(),
+  note: text("note").notNull().default(""),
+}, (table) => [
+  index("independent_debt_payments_tenant_debt_idx").on(table.tenantId, table.debtId),
+]);
 
 export const expenseCategories = pgTable("expense_categories", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -306,6 +338,19 @@ export const insertDebtPaymentSchema = createInsertSchema(debtPayments).omit({
   id: true,
 });
 
+export const insertIndependentDebtSchema = createInsertSchema(independentDebts).omit({
+  id: true,
+  paidAmount: true,
+  status: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertIndependentDebtPaymentSchema = createInsertSchema(independentDebtPayments).omit({
+  id: true,
+  date: true,
+});
+
 export const insertExpenseCategorySchema = createInsertSchema(expenseCategories).omit({
   id: true,
 });
@@ -405,6 +450,12 @@ export type Expense = typeof expenses.$inferSelect;
 
 export type InsertDebtPayment = z.infer<typeof insertDebtPaymentSchema>;
 export type DebtPayment = typeof debtPayments.$inferSelect;
+
+export type InsertIndependentDebt = z.infer<typeof insertIndependentDebtSchema>;
+export type IndependentDebt = typeof independentDebts.$inferSelect;
+
+export type InsertIndependentDebtPayment = z.infer<typeof insertIndependentDebtPaymentSchema>;
+export type IndependentDebtPayment = typeof independentDebtPayments.$inferSelect;
 
 export type InsertCustomer = z.infer<typeof insertCustomerSchema>;
 export type Customer = typeof customers.$inferSelect;

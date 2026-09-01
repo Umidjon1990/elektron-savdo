@@ -21,6 +21,65 @@ function paginationResponse<T>(items: T[], total: number, page: number, limit: n
   return { items, total, page, limit, hasMore: page * limit < total };
 }
 
+const parsedAttendanceOffset = Number.parseInt(process.env.ATTENDANCE_UTC_OFFSET_MINUTES || "300", 10);
+const attendanceUtcOffsetMinutes = Number.isFinite(parsedAttendanceOffset) &&
+  parsedAttendanceOffset >= -720 && parsedAttendanceOffset <= 840
+  ? parsedAttendanceOffset
+  : 300;
+const attendanceUtcOffsetMs = attendanceUtcOffsetMinutes * 60_000;
+
+function attendanceLocalMidnight(year: number, month: number, day: number) {
+  return new Date(Date.UTC(year, month, day) - attendanceUtcOffsetMs);
+}
+
+function getAttendancePeriodBounds(period: unknown, now = new Date()) {
+  const localNow = new Date(now.getTime() + attendanceUtcOffsetMs);
+  const year = localNow.getUTCFullYear();
+  const month = localNow.getUTCMonth();
+  const day = localNow.getUTCDate();
+
+  let start: Date;
+  if (period === "monthly") {
+    start = attendanceLocalMidnight(year, month, 1);
+  } else if (period === "weekly") {
+    start = attendanceLocalMidnight(year, month, day - localNow.getUTCDay());
+  } else {
+    start = attendanceLocalMidnight(year, month, day);
+  }
+
+  const end = new Date(attendanceLocalMidnight(year, month, day + 1).getTime() - 1);
+  return { start, end };
+}
+
+function getAttendanceDayKey(date: Date) {
+  return new Date(date.getTime() + attendanceUtcOffsetMs).toISOString().slice(0, 10);
+}
+
+function parseCoordinate(value: unknown, min: number, max: number): number | null {
+  if ((typeof value !== "string" && typeof value !== "number") || String(value).trim() === "") {
+    return null;
+  }
+  const coordinate = Number(value);
+  return Number.isFinite(coordinate) && coordinate >= min && coordinate <= max
+    ? coordinate
+    : null;
+}
+
+function normalizeLocationRadius(value: unknown) {
+  const radius = Number.parseInt(String(value ?? "100"), 10);
+  return Number.isFinite(radius) ? Math.min(1_000, Math.max(20, radius)) : 100;
+}
+
+function distanceInMeters(lat1: number, lng1: number, lat2: number, lng2: number) {
+  const earthRadius = 6_371_000;
+  const toRad = (degrees: number) => degrees * Math.PI / 180;
+  const dLat = toRad(lat2 - lat1);
+  const dLng = toRad(lng2 - lng1);
+  const a = Math.sin(dLat / 2) ** 2 +
+    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
+  return Math.round(earthRadius * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)));
+}
+
 export async function registerRoutes(
   httpServer: Server,
   app: Express
@@ -1375,6 +1434,11 @@ export async function registerRoutes(
       if (!name || !username || !password) {
         return res.status(400).json({ error: "Name, username and password are required" });
       }
+      const normalizedLat = parseCoordinate(locationLat, -90, 90);
+      const normalizedLng = parseCoordinate(locationLng, -180, 180);
+      if (!isCourier && (normalizedLat === null || normalizedLng === null)) {
+        return res.status(400).json({ error: "Ish joyi lokatsiyasini GPS orqali aniqlang" });
+      }
       const crypto = await import("crypto");
       const token = crypto.randomBytes(16).toString("hex");
       const hashedPassword = await hashPassword(password);
@@ -1387,10 +1451,10 @@ export async function registerRoutes(
         token,
         faceDescriptor: faceDescriptor || null,
         facePhoto: facePhoto || null,
-        locationLat: locationLat || null,
-        locationLng: locationLng || null,
-        locationRadius: locationRadius || 100,
-        locationName: locationName || "",
+        locationLat: normalizedLat === null ? null : String(normalizedLat),
+        locationLng: normalizedLng === null ? null : String(normalizedLng),
+        locationRadius: normalizeLocationRadius(locationRadius),
+        locationName: typeof locationName === "string" ? locationName.trim() : "",
         hourlyRate: hourlyRate || 0,
         isCourier: isCourier || false,
         isActive: true,
@@ -1403,6 +1467,8 @@ export async function registerRoutes(
 
   app.patch("/api/staff/:id", authMiddleware, async (req, res) => {
     try {
+      const existing = await storage.getStaffMember(req.params.id, req.tenantId!);
+      if (!existing) return res.status(404).json({ error: "Staff not found" });
       const data = { ...req.body };
       if (data.password) {
         data.password = await hashPassword(data.password);
@@ -1410,8 +1476,17 @@ export async function registerRoutes(
       delete data.id;
       delete data.tenantId;
       delete data.token;
+      const nextIsCourier = typeof data.isCourier === "boolean" ? data.isCourier : existing.isCourier;
+      const nextLat = parseCoordinate(data.locationLat ?? existing.locationLat, -90, 90);
+      const nextLng = parseCoordinate(data.locationLng ?? existing.locationLng, -180, 180);
+      if (!nextIsCourier && (nextLat === null || nextLng === null)) {
+        return res.status(400).json({ error: "Ish joyi lokatsiyasini GPS orqali aniqlang" });
+      }
+      data.locationLat = nextLat === null ? null : String(nextLat);
+      data.locationLng = nextLng === null ? null : String(nextLng);
+      data.locationRadius = normalizeLocationRadius(data.locationRadius ?? existing.locationRadius);
+      if (typeof data.locationName === "string") data.locationName = data.locationName.trim();
       const updated = await storage.updateStaffMember(req.params.id, data, req.tenantId!);
-      if (!updated) return res.status(404).json({ error: "Staff not found" });
       res.json({ ...updated, password: undefined });
     } catch (error) {
       res.status(500).json({ error: "Failed to update staff" });
@@ -1442,13 +1517,11 @@ export async function registerRoutes(
 
   app.get("/api/attendance/summary", authMiddleware, async (req, res) => {
     try {
-      const now = new Date();
-      const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-      const todayEnd = new Date(todayStart);
-      todayEnd.setHours(23, 59, 59, 999);
+      const { start: todayStart, end: todayEnd } = getAttendancePeriodBounds("daily");
       const staff = await storage.getStaffMembers(req.tenantId!);
       const todayRecords = await storage.getAttendanceRecords(req.tenantId!, undefined, todayStart, todayEnd);
-      const staffSummary = staff.filter(s => s.isActive).map(s => {
+      const attendanceStaff = staff.filter(s => s.isActive && !s.isCourier);
+      const staffSummary = attendanceStaff.map(s => {
         const records = todayRecords.filter(r => r.staffId === s.id);
         const checkIn = records.find(r => r.type === "check_in");
         const checkOut = records.find(r => r.type === "check_out");
@@ -1471,7 +1544,7 @@ export async function registerRoutes(
       const present = staffSummary.filter(s => s.checkIn).length;
       const working = staffSummary.filter(s => s.isPresent).length;
       const absent = staffSummary.filter(s => !s.checkIn).length;
-      res.json({ total: staff.filter(s => s.isActive).length, present, working, absent, staff: staffSummary });
+      res.json({ total: attendanceStaff.length, present, working, absent, staff: staffSummary });
     } catch (error) {
       res.status(500).json({ error: "Failed to fetch summary" });
     }
@@ -1480,22 +1553,10 @@ export async function registerRoutes(
   app.get("/api/attendance/salary", authMiddleware, async (req, res) => {
     try {
       const { staffId, period } = req.query;
-      const now = new Date();
-      let dateFrom: Date;
-      let dateTo = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
-      
-      if (period === "weekly") {
-        dateFrom = new Date(now);
-        dateFrom.setDate(now.getDate() - now.getDay());
-        dateFrom.setHours(0, 0, 0, 0);
-      } else if (period === "monthly") {
-        dateFrom = new Date(now.getFullYear(), now.getMonth(), 1);
-      } else {
-        dateFrom = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-      }
+      const { start: dateFrom, end: dateTo } = getAttendancePeriodBounds(period);
 
       const staff = await storage.getStaffMembers(req.tenantId!);
-      const activeStaff = staff.filter(s => s.isActive);
+      const activeStaff = staff.filter(s => s.isActive && !s.isCourier);
       const targetStaff = staffId ? activeStaff.filter(s => s.id === staffId) : activeStaff;
       
       const results = await Promise.all(targetStaff.map(async (s) => {
@@ -1503,7 +1564,7 @@ export async function registerRoutes(
         
         const dailyMap = new Map<string, { checkIn: Date | null; checkOut: Date | null }>();
         for (const r of records) {
-          const dayKey = new Date(r.date).toISOString().split("T")[0];
+          const dayKey = getAttendanceDayKey(new Date(r.date));
           if (!dailyMap.has(dayKey)) dailyMap.set(dayKey, { checkIn: null, checkOut: null });
           const day = dailyMap.get(dayKey)!;
           const rDate = new Date(r.date);
@@ -1562,10 +1623,8 @@ export async function registerRoutes(
     try {
       const staff = await storage.getStaffByToken(req.params.token);
       if (!staff || !staff.isActive) return res.status(404).json({ error: "Staff not found" });
-      const now = new Date();
-      const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-      const todayEnd = new Date(todayStart);
-      todayEnd.setHours(23, 59, 59, 999);
+      if (staff.isCourier) return res.status(403).json({ error: "Kuriyerlar uchun bu davomat havolasi ishlatilmaydi" });
+      const { start: todayStart, end: todayEnd } = getAttendancePeriodBounds("daily");
       const todayRecords = await storage.getAttendanceRecords(staff.tenantId!, staff.id, todayStart, todayEnd);
       const tenant = await storage.getTenant(staff.tenantId!);
       res.json({
@@ -1587,15 +1646,47 @@ export async function registerRoutes(
     try {
       const staff = await storage.getStaffByToken(req.params.token);
       if (!staff || !staff.isActive) return res.status(404).json({ error: "Staff not found" });
+      if (staff.isCourier) return res.status(403).json({ error: "Kuriyerlar uchun bu davomat havolasi ishlatilmaydi" });
       const { type, faceDescriptor: liveDescriptor, locationLat, locationLng, photo } = req.body;
       if (!type || !["check_in", "check_out"].includes(type)) {
-        return res.status(400).json({ error: "Invalid type" });
+        return res.status(400).json({ error: "Kelish yoki ketish turi noto'g'ri" });
+      }
+
+      const officeLat = parseCoordinate(staff.locationLat, -90, 90);
+      const officeLng = parseCoordinate(staff.locationLng, -180, 180);
+      if (officeLat === null || officeLng === null) {
+        return res.status(409).json({ error: "Ish joyi lokatsiyasi sozlanmagan. Administratorga murojaat qiling." });
+      }
+
+      const currentLat = parseCoordinate(locationLat, -90, 90);
+      const currentLng = parseCoordinate(locationLng, -180, 180);
+      if (currentLat === null || currentLng === null) {
+        return res.status(400).json({ error: "Lokatsiya aniqlanmadi. GPS'ni yoqib, qayta urining." });
+      }
+
+      if (!staff.faceDescriptor || !Array.isArray(staff.faceDescriptor) || staff.faceDescriptor.length !== 128) {
+        return res.status(409).json({ error: "Xodimning yuz rasmi sozlanmagan. Administratorga murojaat qiling." });
+      }
+
+      const { start: todayStart, end: todayEnd } = getAttendancePeriodBounds("daily");
+      const todayRecords = await storage.getAttendanceRecords(staff.tenantId!, staff.id, todayStart, todayEnd);
+      const existingCheckIn = todayRecords.find(record => record.type === "check_in");
+      const existingCheckOut = todayRecords.find(record => record.type === "check_out");
+      if (type === "check_in" && existingCheckIn) {
+        return res.status(409).json({ error: "Bugungi kelish avval qayd etilgan." });
+      }
+      if (type === "check_out" && !existingCheckIn) {
+        return res.status(409).json({ error: "Avval kelishni qayd eting." });
+      }
+      if (type === "check_out" && existingCheckOut) {
+        return res.status(409).json({ error: "Bugungi ketish avval qayd etilgan." });
       }
 
       // Server-side face verification: compare live descriptor with stored descriptor
       let faceScore = 0;
       let faceVerified = false;
       if (liveDescriptor && Array.isArray(liveDescriptor) && liveDescriptor.length === 128 &&
+          liveDescriptor.every(value => typeof value === "number" && Number.isFinite(value)) &&
           staff.faceDescriptor && Array.isArray(staff.faceDescriptor) && staff.faceDescriptor.length === 128) {
         const storedDesc = staff.faceDescriptor as number[];
         let sum = 0;
@@ -1607,22 +1698,9 @@ export async function registerRoutes(
         faceVerified = faceScore >= 50;
       }
 
-      // Verify location using Haversine formula
-      let locationVerified = false;
-      let locationDistance = 0;
-      if (staff.locationLat && staff.locationLng && locationLat && locationLng) {
-        const R = 6371000;
-        const toRad = (d: number) => d * Math.PI / 180;
-        const lat1 = parseFloat(staff.locationLat);
-        const lng1 = parseFloat(staff.locationLng);
-        const lat2 = parseFloat(locationLat);
-        const lng2 = parseFloat(locationLng);
-        const dLat = toRad(lat2 - lat1);
-        const dLng = toRad(lng2 - lng1);
-        const a = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
-        locationDistance = Math.round(R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)));
-        locationVerified = locationDistance <= (staff.locationRadius || 100);
-      }
+      // The client shows an early status, but the server remains authoritative.
+      const locationDistance = distanceInMeters(officeLat, officeLng, currentLat, currentLng);
+      const locationVerified = locationDistance <= normalizeLocationRadius(staff.locationRadius);
 
       let note = "";
       if (!faceVerified) note += "Yuz tasdiqlanmadi. ";
@@ -1647,8 +1725,8 @@ export async function registerRoutes(
         type,
         faceVerified,
         locationVerified,
-        locationLat: locationLat || null,
-        locationLng: locationLng || null,
+        locationLat: String(currentLat),
+        locationLng: String(currentLng),
         faceScore: faceScore || 0,
         locationDistance,
         photo: photo || null,
@@ -1670,23 +1748,13 @@ export async function registerRoutes(
     try {
       const staff = await storage.getStaffByToken(req.params.token);
       if (!staff || !staff.isActive) return res.status(404).json({ error: "Staff not found" });
+      if (staff.isCourier) return res.status(403).json({ error: "Kuriyerlar uchun davomat maoshi hisoblanmaydi" });
       const { period } = req.query;
-      const now = new Date();
-      let dateFrom: Date;
-      let dateTo = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
-      if (period === "weekly") {
-        dateFrom = new Date(now);
-        dateFrom.setDate(now.getDate() - now.getDay());
-        dateFrom.setHours(0, 0, 0, 0);
-      } else if (period === "monthly") {
-        dateFrom = new Date(now.getFullYear(), now.getMonth(), 1);
-      } else {
-        dateFrom = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-      }
+      const { start: dateFrom, end: dateTo } = getAttendancePeriodBounds(period);
       const records = await storage.getAttendanceRecords(staff.tenantId!, staff.id, dateFrom, dateTo);
       const dailyMap = new Map<string, { checkIn: Date | null; checkOut: Date | null }>();
       for (const r of records) {
-        const dayKey = new Date(r.date).toISOString().split("T")[0];
+        const dayKey = getAttendanceDayKey(new Date(r.date));
         if (!dailyMap.has(dayKey)) dailyMap.set(dayKey, { checkIn: null, checkOut: null });
         const day = dailyMap.get(dayKey)!;
         const rDate = new Date(r.date);

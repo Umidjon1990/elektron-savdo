@@ -3,6 +3,7 @@ import { useParams } from "wouter";
 import { Camera, MapPin, CheckCircle2, XCircle, Clock, LogIn, LogOut, Loader2, AlertTriangle, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { detectCurrentCoordinates, type DetectedCoordinates } from "@/lib/geolocation";
 
 interface StaffInfo {
   name: string;
@@ -54,9 +55,9 @@ export default function AttendanceCheckPage() {
   const [cameraError, setCameraError] = useState("");
   const [locationVerified, setLocationVerified] = useState(false);
   const [locationDistance, setLocationDistance] = useState<number | null>(null);
-  const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
   const [locationError, setLocationError] = useState("");
   const [locationLoading, setLocationLoading] = useState(false);
+  const [actionError, setActionError] = useState("");
 
   const [resultMessage, setResultMessage] = useState("");
   const [resultAccepted, setResultAccepted] = useState(false);
@@ -191,63 +192,89 @@ export default function AttendanceCheckPage() {
 
   useEffect(() => {
     if (step === "camera" && staffInfo) {
+      const hasCheckIn = staffInfo.todayRecords.some(record => record.type === "check_in");
+      const hasCheckOut = staffInfo.todayRecords.some(record => record.type === "check_out");
+      if (hasCheckIn && hasCheckOut) {
+        stopCamera();
+        return;
+      }
+      if (!staffInfo.hasFaceDescriptor) {
+        setCameraError("Yuz rasmi administrator tomonidan sozlanmagan.");
+        getLocation();
+        return;
+      }
       startCamera();
       getLocation();
     }
   }, [step, staffInfo]);
 
-  const getLocation = () => {
+  const getLocation = async (): Promise<(DetectedCoordinates & { distance: number; verified: boolean }) | null> => {
     setLocationLoading(true);
     setLocationError("");
-    if (!navigator.geolocation) {
-      setLocationError("GPS qo'llab-quvvatlanmaydi");
-      setLocationLoading(false);
-      return;
-    }
-    navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        const lat = pos.coords.latitude;
-        const lng = pos.coords.longitude;
-        setUserLocation({ lat, lng });
-        setLocationLoading(false);
+    setLocationVerified(false);
+    setLocationDistance(null);
 
-        if (staffInfo?.locationLat && staffInfo?.locationLng) {
-          const R = 6371000;
-          const toRad = (d: number) => d * Math.PI / 180;
-          const lat1 = parseFloat(staffInfo.locationLat);
-          const lng1 = parseFloat(staffInfo.locationLng);
-          const dLat = toRad(lat - lat1);
-          const dLng = toRad(lng - lng1);
-          const a = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(lat1)) * Math.cos(toRad(lat)) * Math.sin(dLng / 2) ** 2;
-          const dist = Math.round(R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)));
-          setLocationDistance(dist);
-          setLocationVerified(dist <= (staffInfo.locationRadius || 100));
-        }
-      },
-      (err) => {
-        setLocationError(err.code === 1 ? "GPS ruxsati berilmadi" : "GPS xatoligi");
-        setLocationLoading(false);
-      },
-      { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
-    );
+    try {
+      if (!staffInfo?.locationLat || !staffInfo?.locationLng) {
+        throw new Error("Ish joyi lokatsiyasi administrator tomonidan sozlanmagan.");
+      }
+
+      const location = await detectCurrentCoordinates();
+      const R = 6371000;
+      const toRad = (d: number) => d * Math.PI / 180;
+      const lat1 = Number(staffInfo.locationLat);
+      const lng1 = Number(staffInfo.locationLng);
+      const dLat = toRad(location.lat - lat1);
+      const dLng = toRad(location.lng - lng1);
+      const a = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(lat1)) * Math.cos(toRad(location.lat)) * Math.sin(dLng / 2) ** 2;
+      const distance = Math.round(R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)));
+      const verified = distance <= (staffInfo.locationRadius || 100);
+
+      setLocationDistance(distance);
+      setLocationVerified(verified);
+      return { ...location, distance, verified };
+    } catch (error: any) {
+      setLocationError(error?.message || "Lokatsiyani aniqlab bo'lmadi. Qayta urining.");
+      return null;
+    } finally {
+      setLocationLoading(false);
+    }
   };
 
   const handleSubmit = async (type: "check_in" | "check_out") => {
+    setActionError("");
+    if (!faceDetected || !liveDescriptor) {
+      setActionError("Avval yuzingiz kamera orqali aniq tasdiqlanishini kuting.");
+      return;
+    }
+
     setStep("submitting");
     try {
+      const freshLocation = await getLocation();
+      if (!freshLocation) {
+        setStep("ready");
+        return;
+      }
+      if (!freshLocation.verified) {
+        setActionError(`Siz ish joyidan ${freshLocation.distance} metr uzoqdasiz. Ruxsat doirasi ${staffInfo?.locationRadius || 100} metr.`);
+        setStep("ready");
+        return;
+      }
+
       const res = await fetch(`/api/attendance/record/${token}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           type,
           faceDescriptor: liveDescriptor,
-          locationLat: userLocation?.lat?.toString() || null,
-          locationLng: userLocation?.lng?.toString() || null,
+          locationLat: freshLocation.lat.toString(),
+          locationLng: freshLocation.lng.toString(),
+          locationAccuracy: freshLocation.accuracy,
           photo: null,
         }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Xatolik");
+      if (!res.ok) throw new Error(data.message || data.error || "Davomatni qayd etib bo'lmadi");
       setResultAccepted(data.accepted);
       setResultMessage(data.message);
       stopCamera();
@@ -259,13 +286,18 @@ export default function AttendanceCheckPage() {
       if (salRes) setSalaryData({ totalHours: salRes.totalHours, totalEarned: salRes.totalEarned, hourlyRate: salRes.hourlyRate, daysWorked: salRes.daysWorked });
       setStep("done");
     } catch (err: any) {
-      setErrorMsg(err.message || "Xatolik yuz berdi");
-      setStep("error");
+      setActionError(err.message || "Davomatni qayd etishda xatolik yuz berdi");
+      setStep("ready");
     }
   };
 
   const todayCheckIn = staffInfo?.todayRecords?.find(r => r.type === "check_in");
   const todayCheckOut = staffInfo?.todayRecords?.find(r => r.type === "check_out");
+  const nextAction: "check_in" | "check_out" | null = !todayCheckIn
+    ? "check_in"
+    : !todayCheckOut
+      ? "check_out"
+      : null;
 
   if (step === "loading") {
     return (
@@ -417,6 +449,8 @@ export default function AttendanceCheckPage() {
           </Card>
         )}
 
+        {nextAction && (
+          <>
         <Card className="overflow-hidden">
           <div className="relative bg-black aspect-[3/4] flex items-center justify-center">
             <video
@@ -435,9 +469,11 @@ export default function AttendanceCheckPage() {
                 <AlertTriangle className="h-12 w-12 text-yellow-400 mb-3" />
                 <p className="text-white text-sm font-medium mb-1">Kamera ochilmadi</p>
                 <p className="text-gray-400 text-xs mb-4">{cameraError}</p>
-                <Button size="sm" onClick={() => { setCameraError(""); startCamera(); }} variant="outline" className="text-white border-white/30">
-                  <RefreshCw className="h-4 w-4 mr-1" /> Qayta urinish
-                </Button>
+                {staffInfo?.hasFaceDescriptor && (
+                  <Button size="sm" onClick={() => { setCameraError(""); startCamera(); }} variant="outline" className="text-white border-white/30">
+                    <RefreshCw className="h-4 w-4 mr-1" /> Qayta urinish
+                  </Button>
+                )}
               </div>
             )}
 
@@ -531,32 +567,46 @@ export default function AttendanceCheckPage() {
 
         {!locationVerified && !locationLoading && (
           <Button variant="outline" size="sm" className="w-full" onClick={getLocation} data-testid="button-refresh-location">
-            <RefreshCw className="h-4 w-4 mr-2" /> GPS yangilash
+            <RefreshCw className="h-4 w-4 mr-2" /> Lokatsiyani qayta aniqlash
           </Button>
         )}
+          </>
+        )}
 
-        <div className="grid grid-cols-2 gap-3">
+        {actionError && (
+          <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700 flex items-start gap-2" data-testid="text-action-error">
+            <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
+            <span>{actionError}</span>
+          </div>
+        )}
+
+        {nextAction ? (
           <Button
             size="lg"
-            className="bg-green-600 hover:bg-green-700 text-white h-14 text-base"
-            onClick={() => handleSubmit("check_in")}
-            disabled={step === "submitting"}
-            data-testid="button-check-in"
+            className={`${nextAction === "check_in" ? "bg-green-600 hover:bg-green-700" : "bg-blue-600 hover:bg-blue-700"} text-white h-14 text-base w-full`}
+            onClick={() => handleSubmit(nextAction)}
+            disabled={step === "submitting" || locationLoading || !locationVerified || !faceDetected}
+            data-testid={nextAction === "check_in" ? "button-check-in" : "button-check-out"}
           >
-            <LogIn className="h-5 w-5 mr-2" />
-            Kelish
+            {step === "submitting" ? (
+              <Loader2 className="h-5 w-5 mr-2 animate-spin" />
+            ) : nextAction === "check_in" ? (
+              <LogIn className="h-5 w-5 mr-2" />
+            ) : (
+              <LogOut className="h-5 w-5 mr-2" />
+            )}
+            {step === "submitting"
+              ? "Tekshirilmoqda..."
+              : nextAction === "check_in"
+                ? "Kelishni qayd etish"
+                : "Ketishni qayd etish"}
           </Button>
-          <Button
-            size="lg"
-            className="bg-blue-600 hover:bg-blue-700 text-white h-14 text-base"
-            onClick={() => handleSubmit("check_out")}
-            disabled={step === "submitting"}
-            data-testid="button-check-out"
-          >
-            <LogOut className="h-5 w-5 mr-2" />
-            Ketish
-          </Button>
-        </div>
+        ) : (
+          <div className="rounded-lg border border-green-200 bg-green-50 p-3 text-center text-sm text-green-700" data-testid="attendance-complete">
+            <CheckCircle2 className="h-5 w-5 mx-auto mb-1" />
+            Bugungi kelish va ketish muvaffaqiyatli yakunlangan.
+          </div>
+        )}
 
         <p className="text-center text-xs text-gray-400" data-testid="text-current-time">
           <Clock className="h-3 w-3 inline mr-1" />

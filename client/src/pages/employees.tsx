@@ -4,6 +4,7 @@ import { useAuth } from "@/lib/auth-context";
 import { SidebarNav } from "@/components/layout/sidebar-nav";
 import { format } from "date-fns";
 import { Checkbox } from "@/components/ui/checkbox";
+import { detectCurrentCoordinates } from "@/lib/geolocation";
 
 let faceModelsLoaded = false;
 let faceModelsLoading = false;
@@ -123,6 +124,8 @@ export default function EmployeesPage() {
   const [formLocationLng, setFormLocationLng] = useState("");
   const [formLocationRadius, setFormLocationRadius] = useState("100");
   const [formLocationName, setFormLocationName] = useState("");
+  const [formLocationAccuracy, setFormLocationAccuracy] = useState<number | null>(null);
+  const [formLocationError, setFormLocationError] = useState("");
   const [formHourlyRate, setFormHourlyRate] = useState("0");
   const [formIsCourier, setFormIsCourier] = useState(false);
   const [formFacePhoto, setFormFacePhoto] = useState("");
@@ -295,7 +298,10 @@ export default function EmployeesPage() {
   const updateStaff = useMutation({
     mutationFn: async ({ id, data }: { id: string; data: any }) => {
       const res = await fetch(`/api/staff/${id}`, { method: "PATCH", headers, body: JSON.stringify(data) });
-      if (!res.ok) throw new Error("Failed");
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: "Xatolik" }));
+        throw new Error(err.error || "Failed");
+      }
       return res.json();
     },
     onSuccess: () => {
@@ -304,7 +310,7 @@ export default function EmployeesPage() {
       closeDialog();
       toast({ title: "Xodim yangilandi" });
     },
-    onError: () => toast({ title: "Xatolik", variant: "destructive" }),
+    onError: (err: any) => toast({ title: err.message || "Xatolik", variant: "destructive" }),
   });
 
   const deleteStaff = useMutation({
@@ -331,6 +337,8 @@ export default function EmployeesPage() {
     setFormLocationLng("");
     setFormLocationRadius("100");
     setFormLocationName("");
+    setFormLocationAccuracy(null);
+    setFormLocationError("");
     setFormHourlyRate("0");
     setFormIsCourier(false);
     setFormFacePhoto("");
@@ -351,6 +359,8 @@ export default function EmployeesPage() {
     setFormLocationLng(staff.locationLng || "");
     setFormLocationRadius(String(staff.locationRadius));
     setFormLocationName(staff.locationName || "");
+    setFormLocationAccuracy(null);
+    setFormLocationError("");
     setFormHourlyRate(String(staff.hourlyRate || 0));
     setFormIsCourier(staff.isCourier || false);
     setFormFacePhoto(staff.facePhoto || "");
@@ -362,6 +372,9 @@ export default function EmployeesPage() {
     if (!formName.trim()) return toast({ title: "Ism kiriting", variant: "destructive" });
     if (!formUsername.trim()) return toast({ title: "Login kiriting", variant: "destructive" });
     if (!editingStaff && !formPassword) return toast({ title: "Parol kiriting", variant: "destructive" });
+    if (!formIsCourier && (!formLocationLat || !formLocationLng)) {
+      return toast({ title: "Avval ish joyi lokatsiyasini aniqlang", variant: "destructive" });
+    }
 
     const data: any = {
       name: formName.trim(),
@@ -389,36 +402,29 @@ export default function EmployeesPage() {
 
   const [gettingLocation, setGettingLocation] = useState(false);
 
-  const handleGetLocation = () => {
-    if (!navigator.geolocation) {
-      return toast({ title: "GPS qo'llab-quvvatlanmaydi. Qo'lda kiriting yoki Google Maps dan nusxalang.", variant: "destructive" });
-    }
+  const handleGetLocation = async () => {
     setGettingLocation(true);
-    const timeoutId = setTimeout(() => {
+    setFormLocationError("");
+    try {
+      const location = await detectCurrentCoordinates();
+      setFormLocationLat(String(location.lat));
+      setFormLocationLng(String(location.lng));
+      setFormLocationAccuracy(location.accuracy);
+      toast({ title: "Ish joyi lokatsiyasi aniqlandi" });
+    } catch (error: any) {
+      const message = error?.message || "Lokatsiyani aniqlab bo'lmadi. Qayta urining.";
+      setFormLocationError(message);
+      toast({ title: message, variant: "destructive" });
+    } finally {
       setGettingLocation(false);
-      toast({ 
-        title: "GPS javob bermadi. Quyidagi usullardan foydalaning: 1) Google Maps dan lat/lng nusxalang, 2) Telegram dan joylashuv yuboring", 
-        variant: "destructive" 
-      });
-    }, 5000);
-    navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        clearTimeout(timeoutId);
-        setFormLocationLat(String(pos.coords.latitude));
-        setFormLocationLng(String(pos.coords.longitude));
-        setGettingLocation(false);
-        toast({ title: `Joylashuv aniqlandi: ${pos.coords.latitude.toFixed(6)}, ${pos.coords.longitude.toFixed(6)}` });
-      },
-      () => {
-        clearTimeout(timeoutId);
-        setGettingLocation(false);
-        toast({ 
-          title: "GPS ishlamadi. Qo'lda kiriting: Google Maps da joyni bosib lat/lng ni nusxalang.", 
-          variant: "destructive" 
-        });
-      },
-      { enableHighAccuracy: false, timeout: 4000, maximumAge: 300000 }
-    );
+    }
+  };
+
+  const openCreateStaffDialog = (isCourier = false) => {
+    closeDialog();
+    setFormIsCourier(isCourier);
+    setStaffDialogOpen(true);
+    if (!isCourier) void handleGetLocation();
   };
 
   const startCamera = async () => {
@@ -617,7 +623,7 @@ export default function EmployeesPage() {
 
               <div className="flex justify-between items-center">
                 <h2 className="text-base font-semibold">Xodimlar ro'yxati</h2>
-                <Button onClick={() => { closeDialog(); setStaffDialogOpen(true); }} data-testid="button-add-staff">
+                <Button onClick={() => openCreateStaffDialog()} data-testid="button-add-staff">
                   <Plus className="h-4 w-4 mr-1" /> Xodim qo'shish
                 </Button>
               </div>
@@ -691,15 +697,17 @@ export default function EmployeesPage() {
                             </div>
                           </div>
                           <div className="flex items-center gap-1.5 mt-3 pt-3 border-t">
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              className="h-7 text-xs flex-1"
-                              onClick={() => copyAttendanceUrl(staff.token)}
-                              data-testid={`button-copy-url-${staff.id}`}
-                            >
-                              <Copy className="h-3 w-3 mr-1" /> Havola
-                            </Button>
+                            {!staff.isCourier && (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="h-7 text-xs flex-1"
+                                onClick={() => copyAttendanceUrl(staff.token)}
+                                data-testid={`button-copy-url-${staff.id}`}
+                              >
+                                <Copy className="h-3 w-3 mr-1" /> Davomat havolasi
+                              </Button>
+                            )}
                             <Button
                               size="sm"
                               variant="outline"
@@ -1019,7 +1027,7 @@ export default function EmployeesPage() {
 
               <div className="flex justify-between items-center">
                 <h2 className="text-base font-semibold">Kuriyerlar ro'yxati</h2>
-                <Button onClick={() => { closeDialog(); setFormIsCourier(true); setStaffDialogOpen(true); }} data-testid="button-add-courier">
+                <Button onClick={() => openCreateStaffDialog(true)} data-testid="button-add-courier">
                   <Plus className="h-4 w-4 mr-1" /> Kuriyer qo'shish
                 </Button>
               </div>
@@ -1377,38 +1385,62 @@ export default function EmployeesPage() {
                   <Label className="text-xs">Joylashuv nomi</Label>
                   <Input value={formLocationName} onChange={e => setFormLocationName(e.target.value)} placeholder="Masalan: Asosiy do'kon" data-testid="input-location-name" />
                 </div>
-                <div className="grid grid-cols-2 gap-2">
-                  <div>
-                    <Label className="text-xs">Latitude</Label>
-                    <Input value={formLocationLat} onChange={e => setFormLocationLat(e.target.value)} placeholder="41.2995" data-testid="input-location-lat" />
-                  </div>
-                  <div>
-                    <Label className="text-xs">Longitude</Label>
-                    <Input value={formLocationLng} onChange={e => setFormLocationLng(e.target.value)} placeholder="69.2401" data-testid="input-location-lng" />
-                  </div>
-                </div>
                 <div>
-                  <Label className="text-xs">Radius (metrda)</Label>
-                  <Input type="number" value={formLocationRadius} onChange={e => setFormLocationRadius(e.target.value)} placeholder="100" data-testid="input-location-radius" />
+                  <Label className="text-xs">Ruxsat doirasi</Label>
+                  <Select value={formLocationRadius} onValueChange={setFormLocationRadius}>
+                    <SelectTrigger data-testid="select-location-radius">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="50">50 metr — qat'iy</SelectItem>
+                      <SelectItem value="100">100 metr — tavsiya etiladi</SelectItem>
+                      <SelectItem value="200">200 metr — bino ichida qulay</SelectItem>
+                      <SelectItem value="300">300 metr — keng hudud</SelectItem>
+                      {!['50', '100', '200', '300'].includes(formLocationRadius) && (
+                        <SelectItem value={formLocationRadius}>{formLocationRadius} metr — avvalgi qiymat</SelectItem>
+                      )}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className={`rounded-md border p-3 text-sm ${
+                  gettingLocation
+                    ? "border-blue-200 bg-blue-50 text-blue-700"
+                    : formLocationLat && formLocationLng
+                      ? "border-green-200 bg-green-50 text-green-700"
+                      : "border-red-200 bg-red-50 text-red-700"
+                }`} data-testid="location-detection-status">
+                  {gettingLocation ? (
+                    <div className="flex items-center gap-2">
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      <span>Ish joyi lokatsiyasi avtomatik aniqlanmoqda...</span>
+                    </div>
+                  ) : formLocationLat && formLocationLng ? (
+                    <div className="flex items-start gap-2">
+                      <CheckCircle2 className="h-4 w-4 mt-0.5 shrink-0" />
+                      <div>
+                        <p className="font-medium">Ish joyi lokatsiyasi aniqlandi</p>
+                        {formLocationAccuracy !== null && (
+                          <p className="text-xs mt-0.5">GPS aniqligi: taxminan {formLocationAccuracy} metr</p>
+                        )}
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="flex items-start gap-2">
+                      <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
+                      <span>{formLocationError || "Ish joyi lokatsiyasi hali aniqlanmadi."}</span>
+                    </div>
+                  )}
                 </div>
                 <Button size="sm" variant="outline" onClick={handleGetLocation} disabled={gettingLocation} className="w-full" data-testid="button-get-location">
                   {gettingLocation ? (
-                    <><Loader2 className="h-4 w-4 mr-1 animate-spin" /> GPS aniqlanmoqda...</>
+                    <><Loader2 className="h-4 w-4 mr-1 animate-spin" /> Aniqlanmoqda...</>
                   ) : (
-                    <><MapPin className="h-4 w-4 mr-1" /> Hozirgi joylashuvni aniqlash (GPS)</>
+                    <><MapPin className="h-4 w-4 mr-1" /> {formLocationLat && formLocationLng ? "Lokatsiyani yangilash" : "Lokatsiyani aniqlash"}</>
                   )}
                 </Button>
-                <div className="bg-blue-50 border border-blue-200 rounded-md p-2 text-xs text-blue-700 space-y-1">
-                  <p className="font-medium">GPS ishlamasa qo'lda kiriting:</p>
-                  <p>1. <a href="https://www.google.com/maps" target="_blank" rel="noopener noreferrer" className="underline text-blue-600">Google Maps</a> ni oching</p>
-                  <p>2. Do'kon joylashuvini bosing</p>
-                  <p>3. Koordinatalarni (masalan: 41.2995, 69.2401) nusxalab yuqoridagi Latitude va Longitude maydonlariga yozing</p>
-                </div>
-                {formLocationLat && formLocationLng && (
-                  <p className="text-xs text-green-600 text-center font-medium">
-                    ✅ Joylashuv: {parseFloat(formLocationLat).toFixed(6)}, {parseFloat(formLocationLng).toFixed(6)}
-                  </p>
-                )}
+                <p className="text-xs text-gray-500">
+                  Shu sahifani ish joyida oching va brauzer so'raganda lokatsiyaga ruxsat bering. Koordinatalarni qo'lda kiritish shart emas.
+                </p>
               </div>
             )}
             {formIsCourier && (
@@ -1422,7 +1454,7 @@ export default function EmployeesPage() {
             <Button variant="outline" onClick={closeDialog}>Bekor qilish</Button>
             <Button
               onClick={handleSubmit}
-              disabled={createStaff.isPending || updateStaff.isPending}
+              disabled={gettingLocation || createStaff.isPending || updateStaff.isPending}
               data-testid="button-save-staff"
             >
               {(createStaff.isPending || updateStaff.isPending) ? "Saqlanmoqda..." : editingStaff ? "Saqlash" : "Qo'shish"}

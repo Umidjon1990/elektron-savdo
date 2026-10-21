@@ -1,3 +1,4 @@
+import { hasProductImage } from "@shared/product-image";
 import { useEffect, useRef, useState } from "react";
 import * as Dialog from "@radix-ui/react-dialog";
 import { Package, X, ZoomIn, ZoomOut } from "lucide-react";
@@ -10,6 +11,10 @@ export function ProductImage({ src, alt, className = "w-full h-full object-cover
   const [thumbnailFailed, setThumbnailFailed] = useState(false);
   useEffect(() => setThumbnailFailed(false), [src]);
   const pinch = useRef<{ distance: number; zoom: number } | null>(null);
+  if (!hasProductImage(src)) return <div role="img" aria-label={`${alt} — rasm yuklanmagan`} className="flex h-full w-full flex-col items-center justify-center gap-2 bg-slate-100 text-slate-400 p-3">
+    <Package className="h-10 w-10" aria-hidden="true" />
+    <span className="text-xs text-center">Rasm yuklanmagan</span>
+  </div>;
   return <Dialog.Root open={open} onOpenChange={value => { setOpen(value); setZoom(1); setFailed(false); }}>
     <Dialog.Trigger asChild>
       <button type="button" className="block w-full h-full cursor-zoom-in" aria-label={`${alt} — rasmni kattalashtirish`} onClick={e => e.stopPropagation()}>

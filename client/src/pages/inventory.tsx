@@ -457,7 +457,7 @@ export default function Inventory() {
           supplierPaymentMethod: newProduct.supplierPaymentMethod || "naqd",
           ...currencyFields,
           description: customFieldValues.description || "",
-          image: newProduct.image || "https://images.unsplash.com/photo-1543002588-bfa74002ed7e?auto=format&fit=crop&q=80&w=300&h=400",
+          image: newProduct.image || "",
           videoUrl: newProduct.videoUrl || undefined,
           metadata: Object.keys(extraMetadata).length > 0 ? extraMetadata : undefined,
           isNew: newProduct.isNew,

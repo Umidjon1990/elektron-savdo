@@ -513,7 +513,7 @@ export async function registerRoutes(
         barcode,
         tenantId: req.tenantId,
         author: req.body.author || "",
-        image: req.body.image || "https://images.unsplash.com/photo-1543002588-bfa74002ed7e?auto=format&fit=crop&q=80&w=300&h=400",
+        image: req.body.image || "",
         category: req.body.category || "Boshqa",
         costPrice: Number(req.body.costPrice) || 0,
         price: Number(req.body.price) || 0,

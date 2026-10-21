@@ -12,7 +12,7 @@ export function product(overrides: Partial<Product> = {}): Product {
   return { id: "0001", tenantId: "store-a", name: "Sinov mahsuloti", author: "", category: "Texnika", barcode: "00001234", image: "", unit: "dona", stock: 3,
     costPrice: 125050, price: 150000, supplierCurrency: "usd", supplierOriginalPrice: 10.25, supplierCurrencyRate: 12200,
     supplier: "", supplierPaymentMethod: "naqd", supplierDebtStatus: "pending", supplierPaidAmount: 0, description: "", videoUrl: null, metadata: null,
-    barcodePrice: null, wholesalePrice: null, sortOrder: 0, isNew: false, ...overrides };
+    discountPrice: null, barcodePrice: null, wholesalePrice: null, sortOrder: 0, isNew: false, ...overrides };
 }
 
 test("USD totals use source prices and unrounded decimal multiplication", () => {

@@ -1,3 +1,4 @@
+import { salePrice } from "@shared/pricing";
 import ExcelJS from "exceljs";
 import type { Product } from "@shared/schema";
 import { costSourceLabels, decimal, inventoryPolicy, summarizeInventory, valueInventoryProduct } from "@shared/inventory-valuation";
@@ -46,7 +47,7 @@ export function createInventoryWorkbook(products: Product[], tenantName: string,
     // performed exactly, with conversion only at this output boundary.
     const numeric = (value: string | number | null | undefined) => value === null || value === undefined ? null : (decimal(value)?.toNumber() ?? null);
     sheet.getRow(r).values = [i + 1, String(p.id), p.name, p.category, String(p.barcode), p.unit || "dona", numeric(v.quantity), numeric(v.unitUsd),
-      v.totalUsd === null ? null : { formula: `G${r}*H${r}`, result: numeric(v.totalUsd)! }, numeric(p.price), "UZS", null,
+      v.totalUsd === null ? null : { formula: `G${r}*H${r}`, result: numeric(v.totalUsd)! }, numeric(salePrice(p)), "UZS", null,
       { formula: `IF(AND(ISNUMBER(L${r}),ISNUMBER(G${r})),L${r}-G${r},"")` },
       `${costSourceLabels[v.source]}${v.invalidQuantity ? "; Qoldiq noto'g'ri" : ""}${v.saleUzs === null ? "; Sotuv qiymati noto'g'ri" : ""}`,
       v.saleUzs === null ? null : { formula: `G${r}*J${r}`, result: numeric(v.saleUzs)! }];

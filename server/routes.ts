@@ -1,3 +1,5 @@
+import { validateCampaign } from "@shared/pricing";
+import { priceOrder, priceTransaction, PricingError } from "./sale-pricing";
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
@@ -528,6 +530,8 @@ export async function registerRoutes(
         if (costUzs === null) return res.status(400).json({ error: "Dollar tannarxi va kurs musbat son bo'lishi kerak; so'm qiymati ruxsat etilgan chegarada bo'lsin" });
         body.costPrice = costUzs;
       }
+      const campaignError = validateCampaign(body);
+      if (campaignError) return res.status(400).json({ error: campaignError });
       const validatedData = insertProductSchema.parse(body);
       const product = await storage.createProduct(validatedData);
       res.status(201).json(product);
@@ -548,6 +552,13 @@ export async function registerRoutes(
   app.patch("/api/products/:id", authMiddleware, async (req, res) => {
     try {
       const data = { ...req.body };
+      // Never permit an edit to move a product into another tenant.
+      delete data.tenantId;
+      delete data.id;
+      const currentProduct = await storage.getProduct(req.params.id, req.tenantId);
+      if (!currentProduct) return res.status(404).json({ error: "Product not found" });
+      const campaignError = validateCampaign({ ...currentProduct, ...data, price: Number(data.price ?? currentProduct.price) });
+      if (campaignError) return res.status(400).json({ error: campaignError });
       if (data.price !== undefined) data.price = Number(data.price) || 0;
       if (data.costPrice !== undefined) data.costPrice = Number(data.costPrice) || 0;
       if (data.stock !== undefined) data.stock = Number(data.stock) || 0;
@@ -644,6 +655,9 @@ export async function registerRoutes(
         deliveryType: req.body.deliveryType || "pickup",
         status: req.body.status || "new",
       };
+      const priced = await priceOrder(orderBody.items, tenantId, (id, tenant) => storage.getProduct(id, tenant));
+      if (priced.totalAmount !== orderBody.totalAmount) return res.status(409).json({ error: "Narxlar o'zgargan. Savatni yangilab, summani qayta tasdiqlang.", items: priced.items, totalAmount: priced.totalAmount });
+      Object.assign(orderBody, priced, { status: "new" });
       const validatedData = insertOrderSchema.parse(orderBody);
       const order = await storage.createOrder(validatedData);
 
@@ -666,6 +680,7 @@ export async function registerRoutes(
         });
       }
     } catch (error) {
+      if (error instanceof PricingError) return res.status(error.status).json({ error: error.message });
       console.error("Error creating store order:", error);
       res.status(500).json({ error: "Failed to create order" });
     }
@@ -850,6 +865,13 @@ export async function registerRoutes(
     try {
       const tenantId = req.tenantId;
       if (!tenantId) return res.status(400).json({ error: "Tenant aniqlanmadi" });
+      if (req.body.pricingVersion === 1) {
+        const existing = req.body.id ? await storage.getTransaction(req.body.id, tenantId) : undefined;
+        if (existing) return res.json(existing);
+        const priced = await priceTransaction(req.body.items, tenantId, (id, tenant) => storage.getProduct(id, tenant), req.body.pricingMode === "snapshot");
+        if (Math.abs(priced.totalAmount - Number(req.body.totalAmount)) > 0.001) return res.status(409).json({ error: "Narx o'zgargan yoki jami noto'g'ri. Savatni yangilang.", items: priced.items });
+        Object.assign(req.body, priced);
+      }
       const totalAmount = Number(req.body.totalAmount) || 0;
       const rawSplits = Array.isArray(req.body.paymentSplits) ? req.body.paymentSplits : null;
       let paymentSplits: Array<{ method: string; amount: number }> | null = null;
@@ -940,6 +962,7 @@ export async function registerRoutes(
 
       res.status(201).json(transaction);
     } catch (error) {
+      if (error instanceof PricingError) return res.status(error.status).json({ error: error.message });
       if (error instanceof Error && error.message === "INVALID_TRANSACTION_QUANTITY") {
         return res.status(400).json({ error: "Mahsulot miqdori musbat son bo'lishi kerak" });
       }

@@ -1,3 +1,4 @@
+import { salePrice } from "@shared/pricing";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -74,7 +75,7 @@ const FIELD_ICONS: Record<string, React.ReactNode> = {
 };
 
 export function CartSidebar({ items, onUpdateQuantity, onUpdateDiscount, onRemove, onClear, onCheckout, paymentMethods, customerFields, deliveryEnabled, splitPaymentsEnabled, couriers }: CartSidebarProps) {
-  const getEffectivePrice = (product: any) => product.price > 0 ? product.price : (product.barcodePrice || product.wholesalePrice || 0);
+  const getEffectivePrice = (product: any) => salePrice(product);
   const subtotal = items.reduce((acc, item) => acc + (getEffectivePrice(item.product) * item.quantity), 0);
   // discount > 0 = skidka (ayiriladi), discount < 0 = ustama (qo'shiladi)
   const totalDiscount = items.reduce((acc, item) => acc + (item.discount || 0), 0);

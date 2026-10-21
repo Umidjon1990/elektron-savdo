@@ -1,3 +1,5 @@
+import { ProductImage } from "@/components/product-image";
+import { ProductPrice } from "@/components/product-price";
 import { useState } from "react";
 import { useLocation } from "wouter";
 import { useCart } from "@/lib/cart-context";
@@ -120,14 +122,14 @@ export default function CartPage() {
             {items.map((item) => (
               <div key={item.product.id} className="bg-white p-4 rounded-xl border border-slate-100 shadow-sm flex gap-4">
                 <div className="w-20 h-28 bg-slate-100 rounded-lg overflow-hidden flex-shrink-0">
-                  <img src={item.product.image} alt={item.product.name} className="w-full h-full object-cover" />
+                  <ProductImage src={item.product.image} alt={item.product.name} className="w-full h-full object-cover" />
                 </div>
                 <div className="flex-1 flex flex-col justify-between">
                   <div>
                     <h3 className="font-bold text-slate-900 line-clamp-2">{item.product.name}</h3>
                     {item.product.author && <p className="text-sm text-slate-500">{item.product.author}</p>}
                     <div className="text-indigo-600 font-bold mt-1">
-                      {item.product.price.toLocaleString()} so'm
+                      <ProductPrice product={item.product} />
                     </div>
                   </div>
                   <div className="flex items-center justify-between mt-4">

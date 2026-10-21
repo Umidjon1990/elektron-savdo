@@ -1,9 +1,11 @@
-import { useState, memo, useEffect, useRef } from "react";
+import { ProductImage } from "@/components/product-image";
+import { ProductPrice } from "@/components/product-price";
+import { memo, useEffect, useRef } from "react";
 import JsBarcode from "jsbarcode";
 import { type Product } from "@/data/mock-products";
 import { Card } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
-import { Package, Plus, ShoppingCart, Play } from "lucide-react";
+import { Plus, Play } from "lucide-react";
 import { VideoPopup } from "@/components/ui/video-popup";
 
 // Renders a compact barcode SVG using JsBarcode. Picks an encoding that
@@ -72,13 +74,10 @@ interface ProductCardProps {
 }
 
 function ProductCardImpl({ product, onClick, size = "default", showBarcode = false }: ProductCardProps) {
-  const [imgLoaded, setImgLoaded] = useState(false);
-  const [imgError, setImgError] = useState(false);
 
   const isLarge = size === "large";
 
   const outOfStock = product.stock <= 0;
-  const displayPrice = product.price > 0 ? product.price : ((product as any).barcodePrice || (product as any).wholesalePrice || 0);
 
   return (
     <Card 
@@ -89,37 +88,14 @@ function ProductCardImpl({ product, onClick, size = "default", showBarcode = fal
           ? "opacity-50 cursor-not-allowed" 
           : "cursor-pointer hover:shadow-xl active:scale-[0.98] hover:shadow-lg"
       )}
-      onClick={() => { if (!outOfStock) onClick(product); }}
+
       data-testid={`product-card-${product.id}`}
     >
       <div 
         className="relative overflow-hidden bg-gradient-to-b from-slate-50 to-slate-100"
         style={{ aspectRatio: isLarge ? '3/4' : '1/1' }}
       >
-        {!imgError && (
-          <img 
-            src={product.image} 
-            alt={product.name}
-            className={cn(
-              "w-full h-full object-cover transition-all duration-300 group-hover:scale-110",
-              imgLoaded ? "opacity-100" : "opacity-0"
-            )}
-            onLoad={() => setImgLoaded(true)}
-            onError={() => setImgError(true)}
-            loading="lazy"
-            decoding="async"
-            width={isLarge ? 300 : 200}
-            height={isLarge ? 400 : 200}
-          />
-        )}
-        {(!imgLoaded || imgError) && (
-          <div className="absolute inset-0 flex flex-col items-center justify-center bg-gradient-to-b from-blue-50 to-slate-100 p-4">
-            <Package className={cn("text-blue-300 mb-2", isLarge ? "w-12 h-12" : "w-8 h-8")} />
-            <p className={cn("text-slate-600 font-medium text-center line-clamp-2", isLarge ? "text-sm" : "text-xs")}>
-              {product.name}
-            </p>
-          </div>
-        )}
+        <ProductImage src={product.image} alt={product.name} />
         
         {outOfStock ? (
           <div className="absolute top-2 left-2 bg-gray-700 text-white text-[10px] font-bold px-2 py-1 rounded-full uppercase tracking-wide shadow-lg">
@@ -131,14 +107,6 @@ function ProductCardImpl({ product, onClick, size = "default", showBarcode = fal
           </div>
         ) : null}
 
-        <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/60 to-transparent p-3 pt-8 opacity-0 group-hover:opacity-100 transition-opacity">
-          <div className="flex items-center justify-center">
-            <div className="bg-white text-blue-600 rounded-full px-4 py-2 flex items-center gap-2 font-semibold text-sm shadow-lg transform translate-y-2 group-hover:translate-y-0 transition-transform">
-              <ShoppingCart className="w-4 h-4" />
-              Qo'shish
-            </div>
-          </div>
-        </div>
         
         <div className={cn(
           "absolute top-2 right-2 bg-white/95 backdrop-blur-sm rounded-full font-bold shadow-md",
@@ -186,14 +154,14 @@ function ProductCardImpl({ product, onClick, size = "default", showBarcode = fal
             "text-blue-600 font-bold font-mono",
             isLarge ? "text-lg" : "text-base"
           )}>
-            {displayPrice.toLocaleString()} <span className="text-slate-400 font-normal text-xs">so'm</span>
+            <ProductPrice product={product} />
           </span>
-          <div className={cn(
-            "rounded-full bg-blue-500 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all transform scale-75 group-hover:scale-100",
+          <button type="button" aria-label={`${product.name} — savatga qo'shish`} disabled={outOfStock} onClick={() => onClick(product)} className={cn(
+            "rounded-full bg-blue-500 text-white flex items-center justify-center transition-all disabled:opacity-40",
             isLarge ? "w-10 h-10" : "w-8 h-8"
           )}>
             <Plus className={isLarge ? "w-5 h-5" : "w-4 h-4"} />
-          </div>
+          </button>
         </div>
         
         {product.videoUrl && product.videoUrl.trim() !== "" && (

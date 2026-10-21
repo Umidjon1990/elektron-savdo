@@ -10,6 +10,7 @@ export interface Product {
   name: string;
   author: string;
   price: number;
+  discountPrice?: number | null;
   costPrice: number;
   supplierCurrency?: string;
   supplierCurrencyRate?: number;

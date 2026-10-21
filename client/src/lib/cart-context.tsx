@@ -1,3 +1,4 @@
+import { salePrice } from "@shared/pricing";
 import { createContext, useContext, useState, type ReactNode } from "react";
 
 export interface Product {
@@ -5,6 +6,7 @@ export interface Product {
   name: string;
   author: string;
   price: number;
+  discountPrice?: number | null;
   costPrice: number;
   stock: number;
   category: string;
@@ -67,7 +69,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
 
   const clearCart = () => setItems([]);
 
-  const total = items.reduce((sum, item) => sum + item.product.price * item.quantity, 0);
+  const total = items.reduce((sum, item) => sum + salePrice(item.product) * item.quantity, 0);
   const itemCount = items.reduce((sum, item) => sum + item.quantity, 0);
 
   return (

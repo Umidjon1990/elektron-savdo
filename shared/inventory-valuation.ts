@@ -9,6 +9,7 @@ export interface InventoryProduct {
   stock: DecimalInput;
   costPrice: DecimalInput;
   price: DecimalInput;
+  discountPrice?: number | null;
   unit?: string | null;
   supplierCurrency?: string | null;
   supplierCurrencyRate?: DecimalInput;
@@ -50,7 +51,9 @@ export function valueInventoryProduct(p: InventoryProduct) {
   const original = decimal(p.supplierOriginalPrice);
   const rate = decimal(p.supplierCurrencyRate);
   const cost = decimal(p.costPrice);
-  const sale = decimal(p.price);
+  const ordinarySale = decimal(p.price);
+  const campaign = decimal(p.discountPrice);
+  const sale = campaign?.gt(0) && ordinarySale && campaign.lt(ordinarySale) ? campaign : ordinarySale;
   let source: CostSource = "unknown";
   let unitUsd: Decimal | null = null;
   const currency = p.supplierCurrency?.toLowerCase();

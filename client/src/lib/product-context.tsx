@@ -9,6 +9,7 @@ interface Product {
   name: string;
   author: string;
   price: number;
+  discountPrice?: number | null;
   costPrice: number;
   barcodePrice?: number;
   wholesalePrice?: number;
@@ -148,10 +149,10 @@ export function ProductProvider({ children }: { children: ReactNode }) {
 
   const updateProductMutation = useMutation({
     mutationFn: async ({ id, data }: { id: string; data: Partial<Omit<Product, "id">> }) => {
-      await updateProductInCache(id, data);
-      setCachedProducts(prev => prev.map(p => p.id === id ? { ...p, ...data } : p));
-      
       if (isOffline) {
+        if ("discountPrice" in data && (data.discountPrice ?? null) !== (products.find(p => p.id === id)?.discountPrice ?? null)) throw new Error("Chegirmani saqlash uchun internet kerak");
+        await updateProductInCache(id, data);
+        setCachedProducts(prev => prev.map(p => p.id === id ? { ...p, ...data } : p));
         return { id, ...data };
       }
       
@@ -160,8 +161,11 @@ export function ProductProvider({ children }: { children: ReactNode }) {
         headers: { "Content-Type": "application/json", ...getAuthHeaders() },
         body: JSON.stringify(data),
       });
-      if (!res.ok) throw new Error("Failed to update product");
-      return res.json();
+      const result = await res.json();
+      if (!res.ok) throw new Error(result.error || "Mahsulot saqlanmadi");
+      await updateProductInCache(id, result);
+      setCachedProducts(prev => prev.map(p => p.id === id ? result : p));
+      return result;
     },
     onSuccess: () => {
       if (!isOffline) {

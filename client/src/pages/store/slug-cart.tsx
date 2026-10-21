@@ -1,3 +1,6 @@
+import { ProductImage } from "@/components/product-image";
+import { ProductPrice } from "@/components/product-price";
+import { salePrice } from "@shared/pricing";
 import { useState, useEffect } from "react";
 import { useLocation, useParams } from "wouter";
 import { useQuery } from "@tanstack/react-query";
@@ -16,6 +19,7 @@ interface Product {
   name: string;
   author?: string;
   price: number;
+  discountPrice?: number | null;
   stock: number;
   category: string;
   image: string;
@@ -107,7 +111,7 @@ export default function SlugCartPage() {
     localStorage.removeItem(`cart_${slug}`);
   };
 
-  const total = items.reduce((s, i) => s + i.product.price * i.quantity, 0);
+  const total = items.reduce((s, i) => s + salePrice(i.product) * i.quantity, 0);
   const brandColor = tenant?.brandColor || "#4f46e5";
 
   const defaultOrderFields: OrderFormField[] = [
@@ -177,7 +181,7 @@ export default function SlugCartPage() {
         customerName: formData.name,
         customerPhone: formData.phone,
         customerTelegram: telegramInfo,
-        items: items.map(i => ({ productId: i.product.id, productName: i.product.name, quantity: i.quantity, price: i.product.price })),
+        items: items.map(i => ({ productId: i.product.id, productName: i.product.name, quantity: i.quantity, price: salePrice(i.product) })),
         totalAmount: total,
         paymentMethod: formData.paymentMethod,
         deliveryType: formData.deliveryType,
@@ -188,7 +192,18 @@ export default function SlugCartPage() {
       const headers: Record<string, string> = { "Content-Type": "application/json" };
 
       const res = await fetch(`/api/store/${slug}/orders`, { method: "POST", headers, body: JSON.stringify(orderData) });
-      if (!res.ok) throw new Error("Buyurtma yuborishda xatolik");
+      if (!res.ok) {
+        const result = await res.json();
+        if (res.status === 409 && Array.isArray(result.items)) {
+          setItems(prev => prev.map(item => {
+            const fresh = result.items.find((line: any) => line.productId === item.product.id);
+            return fresh ? { ...item, product: { ...item.product, price: fresh.regularPrice ?? fresh.price, discountPrice: fresh.discountPrice ?? null } } : item;
+          }));
+          toast({ title: "Narxlar yangilandi", description: "Yangi summani tekshirib, buyurtmani qayta tasdiqlang.", variant: "destructive" });
+          return;
+        }
+        throw new Error(result.error || "Buyurtma yuborishda xatolik");
+      }
 
       toast({ title: "Buyurtma qabul qilindi!", description: "Tez orada siz bilan bog'lanishadi." });
       clearCart();
@@ -240,13 +255,13 @@ export default function SlugCartPage() {
             {items.map((item) => (
               <div key={item.product.id} className="bg-white p-4 rounded-xl border border-slate-100 shadow-sm flex gap-4" data-testid={`cart-item-${item.product.id}`}>
                 <div className="w-20 h-28 bg-slate-100 rounded-lg overflow-hidden flex-shrink-0">
-                  <img src={item.product.image} alt={item.product.name} className="w-full h-full object-cover" />
+                  <ProductImage src={item.product.image} alt={item.product.name} className="w-full h-full object-cover" />
                 </div>
                 <div className="flex-1 flex flex-col justify-between">
                   <div>
                     <h3 className="font-bold text-slate-900 line-clamp-2">{item.product.name}</h3>
                     {item.product.author && <p className="text-sm text-slate-500">{item.product.author}</p>}
-                    <div className="font-bold mt-1" style={{ color: brandColor }}>{item.product.price.toLocaleString()} so'm</div>
+                    <div className="font-bold mt-1" style={{ color: brandColor }}><ProductPrice product={item.product} /></div>
                   </div>
                   <div className="flex items-center justify-between mt-4">
                     <div className="flex items-center gap-3 bg-slate-50 rounded-lg p-1">

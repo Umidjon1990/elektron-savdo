@@ -1,3 +1,4 @@
+import { salePrice } from "@shared/pricing";
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { SidebarNav } from "@/components/layout/sidebar-nav";
@@ -102,6 +103,7 @@ export default function Dashboard() {
   // Pre-opened popup window for auto-print. Opened synchronously inside the
   // user click handler so popup blockers allow it; ReceiptDialog later writes
   // the receipt HTML into this window.
+  const checkoutInProgress = useRef(false);
   const preOpenedPrintWindowRef = useRef<Window | null>(null);
   // Side preview popup (visible alongside the print dialog) so the cashier
   // can read the receipt while the OS print dialog is on screen.
@@ -329,8 +331,10 @@ export default function Dashboard() {
   const clearCart = () => setCart([]);
 
   const handleCheckout = async (method: string = "cash", customerData?: { customerName?: string; customerPhone?: string; customerInfo?: Record<string, string> }, nasiyaData?: { dueDate: string }, deliveryData?: { courierId: string; courierName: string; address: string; customerName: string; customerPhone: string }, paymentSplits?: Array<{ method: string; amount: number }>) => {
+    if (checkoutInProgress.current || !cart.length) return;
+    checkoutInProgress.current = true;
     const total = cart.reduce((acc, item) => {
-      const effectivePrice = item.product.price > 0 ? item.product.price : ((item.product as any).barcodePrice || (item.product as any).wholesalePrice || 0);
+      const effectivePrice = salePrice(item.product);
       const itemTotal = effectivePrice * item.quantity;
       const discount = item.discount || 0;
       return acc + (itemTotal - discount);
@@ -388,7 +392,7 @@ export default function Dashboard() {
               customerName: deliveryData.customerName,
               customerPhone: deliveryData.customerPhone,
               address: deliveryData.address,
-              items: cart.map(item => ({ productId: item.product.id, name: item.product.name, price: item.product.price > 0 ? item.product.price : ((item.product as any).barcodePrice || (item.product as any).wholesalePrice || 0), quantity: item.quantity })),
+              items: cart.map(item => ({ productId: item.product.id, name: item.product.name, price: salePrice(item.product) - (item.discount || 0) / item.quantity, quantity: item.quantity })),
               totalAmount: total,
               status: "confirmed",
               paymentMethod: method,
@@ -496,7 +500,8 @@ export default function Dashboard() {
         className: "bg-green-500 text-white border-none",
       });
       setCart([]);
-    } catch (error) {
+    } catch (error: any) {
+      if (Array.isArray(error.items)) setCart(error.items.map((item: any) => ({ ...item, product: { ...item.product, price: item.product.regularPrice ?? item.product.price, discountPrice: item.product.price < item.product.regularPrice ? item.product.price : null } })));
       console.error("Checkout error:", error);
       // Close orphan pre-opened print window so user is not left with a blank tab
       if (preOpenedPrintWindowRef.current) {
@@ -509,9 +514,11 @@ export default function Dashboard() {
       }
       toast({
         title: "Xatolik!",
-        description: "To'lovni qayta ishlashda xatolik yuz berdi",
+        description: error?.message || "To'lovni qayta ishlashda xatolik yuz berdi",
         variant: "destructive",
       });
+    } finally {
+      checkoutInProgress.current = false;
     }
   };
 

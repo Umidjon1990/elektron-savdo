@@ -1,8 +1,10 @@
-import React, { createContext, useContext, useState, useEffect, type ReactNode } from "react";
+import { salePrice } from "@shared/pricing";
+import React, { createContext, useContext, useState, useEffect, useRef, type ReactNode } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { type CartItem } from "@/pages/dashboard";
 import { db, type CachedTransaction } from "./db";
-import { getOnlineStatus, saveTransactionLocally, getTransactionsFromCache, syncPendingTransactions } from "./db/sync";
+import { getOnlineStatus, getTransactionsFromCache, syncPendingTransactions } from "./db/sync";
+import { getAuthHeaders } from "./auth-context";
 import { useAuth } from "./auth-context";
 
 export interface Transaction {
@@ -49,6 +51,7 @@ export function TransactionProvider({ children }: { children: ReactNode }) {
   const [pendingCount, setPendingCount] = useState(0);
   const [isOffline, setIsOffline] = useState(!getOnlineStatus());
   const [isLoaded, setIsLoaded] = useState(false);
+  const checkoutAttempt = useRef<{ key: string; id: string; date: string } | null>(null);
 
   useEffect(() => {
     if (token) {
@@ -112,7 +115,7 @@ export function TransactionProvider({ children }: { children: ReactNode }) {
     const profit = items.reduce((acc, item) => {
       const costPrice = item.product.costPrice || 0;
       const discount = item.discount || 0;
-      const effectivePrice = item.product.price > 0 ? item.product.price : ((item.product as any).barcodePrice || (item.product as any).wholesalePrice || 0);
+      const effectivePrice = salePrice(item.product);
       const itemProfit = ((effectivePrice * item.quantity) - discount) - (costPrice * item.quantity);
       return acc + itemProfit;
     }, 0);
@@ -127,11 +130,17 @@ export function TransactionProvider({ children }: { children: ReactNode }) {
       ? (hasNasiyaInSplit ? "pending" : "none")
       : (method === "nasiya" ? "pending" : "none");
 
+    const attemptKey = JSON.stringify({ items, total, method, customerData, nasiyaData, paymentSplits });
+    if (checkoutAttempt.current?.key !== attemptKey) checkoutAttempt.current = {
+      key: attemptKey, id: crypto.randomUUID(), date: new Date().toISOString(),
+    };
     const newTransaction: CachedTransaction = {
-      id: crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).substr(2, 9),
-      date: new Date().toISOString(),
+      id: checkoutAttempt.current.id,
+      date: checkoutAttempt.current.date,
+      pricingVersion: 1,
+      pricingMode: getOnlineStatus() ? "current" : "snapshot",
       items: items.map(item => ({
-        product: item.product,
+        product: { ...item.product, price: salePrice(item.product), regularPrice: item.product.price, discountPrice: null },
         quantity: item.quantity,
         discount: item.discount
       })),
@@ -149,12 +158,27 @@ export function TransactionProvider({ children }: { children: ReactNode }) {
       paymentSplits: isMixed ? paymentSplits : undefined,
     };
     
+    // Confirm online prices before issuing a receipt. Disconnected tills keep
+    // their accepted snapshot and replay it explicitly on reconnection.
+    if (getOnlineStatus()) {
+      const res = await fetch("/api/transactions", {
+        method: "POST", headers: { "Content-Type": "application/json", ...getAuthHeaders() },
+        body: JSON.stringify({ ...newTransaction, items, pricingMode: "current" }),
+      });
+      const result = await res.json();
+      if (!res.ok) throw Object.assign(new Error(result.error || "To'lovni saqlab bo'lmadi"), { items: result.items });
+      newTransaction.items = result.items;
+      newTransaction.totalProfit = result.totalProfit;
+      newTransaction.synced = true;
+    }
+    await db.transactions.put(newTransaction);
+    checkoutAttempt.current = null;
     const returnedTransaction: Transaction = {
       id: newTransaction.id,
       date: newTransaction.date,
-      items: items,
+      items: newTransaction.items,
       totalAmount: total,
-      totalProfit: profit,
+      totalProfit: newTransaction.totalProfit,
       paymentMethod: method,
       synced: newTransaction.synced,
       status: "completed" as const,
@@ -167,24 +191,14 @@ export function TransactionProvider({ children }: { children: ReactNode }) {
       paymentSplits: isMixed ? paymentSplits : undefined,
     };
 
-    // INSTANT-CHECKOUT FAST PATH:
-    // 1) Update React state synchronously (no IndexedDB read, no /api/transactions
-    //    fetch). The user can see the receipt the moment we return.
-    // 2) Push the IndexedDB write, the per-item stock decrement, and the
-    //    server sync into the background — none of them block the receipt.
-    // Previously this function awaited:
-    //   - saveTransactionLocally (1 IDB put)
-    //   - N sequential db.products.update (N IDB puts, one per cart item)
-    //   - loadTransactions() → getTransactionsFromCache() → when online,
-    //     a full GET /api/transactions (~1 MB for big tenants) + per-row
-    //     IDB upserts. THIS was the biggest blocker for "to'lov qilish qotib qoldi".
+    // Online checkout is confirmed above; offline sales retain a local price
+    // snapshot. Updating history/stock does not require reloading the whole feed.
     setTransactions(prev => [returnedTransaction, ...prev]);
-    setPendingCount(prev => prev + 1);
+    if (!newTransaction.synced) setPendingCount(prev => prev + 1);
 
-    // Fire-and-forget local persistence + stock update + server sync.
+    // Update cached stock and replay pending offline sales in the background.
     (async () => {
       try {
-        await saveTransactionLocally(newTransaction);
         // Bulk-update stock in one IndexedDB write instead of N sequential awaits.
         const stockUpdates = items
           .filter(it => it && it.product && it.product.id)

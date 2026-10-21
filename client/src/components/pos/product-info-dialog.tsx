@@ -1,3 +1,5 @@
+import { ProductImage } from "@/components/product-image";
+import { ProductPrice } from "@/components/product-price";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { type Product } from "@/data/mock-products";
@@ -22,11 +24,7 @@ export function ProductInfoDialog({ product, isOpen, onClose, onAddToCart }: Pro
         
         <div className="flex flex-col items-center gap-6 py-4">
           <div className="w-32 h-48 rounded-lg overflow-hidden shadow-lg border border-gray-200">
-            <img 
-              src={product.image} 
-              alt={product.name} 
-              className="w-full h-full object-cover"
-            />
+            <ProductImage src={product.image} alt={product.name} className="w-full h-full object-cover" />
           </div>
 
           <div className="w-full space-y-4">
@@ -42,7 +40,7 @@ export function ProductInfoDialog({ product, isOpen, onClose, onAddToCart }: Pro
               <div className="bg-gray-50 p-3 rounded-lg border text-center">
                 <span className="text-xs text-muted-foreground uppercase tracking-wide">Narxi</span>
                 <div className="font-bold text-primary text-lg">
-                  {product.price.toLocaleString()} so'm
+                  <ProductPrice product={product} />
                 </div>
               </div>
               <div className="bg-gray-50 p-3 rounded-lg border text-center">

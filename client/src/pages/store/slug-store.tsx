@@ -1,3 +1,6 @@
+import { ProductImage } from "@/components/product-image";
+import { ProductPrice } from "@/components/product-price";
+import { salePrice } from "@shared/pricing";
 import { useState, useEffect, useCallback, useMemo, useDeferredValue } from "react";
 import { useLocation, useParams } from "wouter";
 import { useQuery, useInfiniteQuery } from "@tanstack/react-query";
@@ -21,6 +24,7 @@ interface Product {
   name: string;
   author?: string;
   price: number;
+  discountPrice?: number | null;
   stock: number;
   category: string;
   image: string;
@@ -57,13 +61,13 @@ function useStoreCart(slug: string) {
   const addItem = useCallback((product: Product) => {
     setItems(prev => {
       const existing = prev.find(i => i.product.id === product.id);
-      if (existing) return prev.map(i => i.product.id === product.id ? { ...i, quantity: i.quantity + 1 } : i);
+      if (existing) return prev.map(i => i.product.id === product.id ? { ...i, product, quantity: i.quantity + 1 } : i);
       return [...prev, { product, quantity: 1 }];
     });
   }, []);
 
   const itemCount = items.reduce((s, i) => s + i.quantity, 0);
-  const total = items.reduce((s, i) => s + i.product.price * i.quantity, 0);
+  const total = items.reduce((s, i) => s + salePrice(i.product) * i.quantity, 0);
 
   return { items, addItem, itemCount, total };
 }
@@ -375,7 +379,7 @@ export default function SlugStorePage() {
                       </div>
                     </div>
                     <div className="relative aspect-[2/3] rounded-xl overflow-hidden mb-3 ring-2 ring-amber-200 ring-offset-2">
-                      <img src={product.image} alt={product.name} className="w-full h-full object-cover" loading="lazy" />
+                      <ProductImage src={product.image} alt={product.name} className="w-full h-full object-cover" />
                     </div>
                     <div className="flex-1 flex flex-col">
                       <div className="text-xs font-medium mb-1 text-amber-600">{product.category}</div>
@@ -383,11 +387,12 @@ export default function SlugStorePage() {
                       {product.author && <p className="text-sm text-slate-500 mb-3">{product.author}</p>}
                       <div className="mt-auto flex items-center justify-between">
                         <div className="font-bold text-lg text-amber-700">
-                          {product.price.toLocaleString()} <span className="text-xs text-slate-500 font-normal">so'm</span>
+                          <ProductPrice product={product} />
                         </div>
                         <Button
                           size="icon"
                           className="h-8 w-8 rounded-full text-white bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 shadow-md shadow-amber-200"
+                          disabled={product.stock <= 0}
                           onClick={() => addItem(product)}
                           data-testid={`button-add-new-${product.id}`}
                         >
@@ -442,7 +447,7 @@ export default function SlugStorePage() {
                     "relative aspect-[2/3] rounded-xl overflow-hidden mb-3",
                     product.isNew ? "ring-2 ring-amber-200 ring-offset-2" : "bg-slate-100"
                   )}>
-                    <img src={product.image} alt={product.name} className="w-full h-full object-cover" loading="lazy" />
+                    <ProductImage src={product.image} alt={product.name} className="w-full h-full object-cover" />
                     {product.stock < 5 && !product.isNew && (
                       <span className="absolute top-2 left-2 bg-red-500 text-white text-[10px] font-bold px-2 py-1 rounded-md">KAM QOLDI</span>
                     )}
@@ -459,7 +464,7 @@ export default function SlugStorePage() {
                         "font-bold text-lg",
                         product.isNew ? "text-amber-700" : "text-slate-900"
                       )}>
-                        {product.price.toLocaleString()} <span className="text-xs text-slate-500 font-normal">so'm</span>
+                        <ProductPrice product={product} />
                       </div>
                       <Button
                         size="icon"
@@ -468,7 +473,8 @@ export default function SlugStorePage() {
                           product.isNew ? "bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 shadow-md shadow-amber-200" : ""
                         )}
                         style={product.isNew ? {} : { backgroundColor: brandColor }}
-                        onClick={() => addItem(product)}
+                        disabled={product.stock <= 0}
+                          onClick={() => addItem(product)}
                         data-testid={`button-add-${product.id}`}
                       >
                         <ShoppingCart className="h-4 w-4" />

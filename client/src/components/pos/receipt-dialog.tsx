@@ -117,9 +117,10 @@ function ReceiptContent({ transaction, settings, receiptLogo, paymentMethods }: 
               <p className="text-xs font-semibold">
                 {item.quantity} x {Number(item.product.price || 0).toLocaleString()}
               </p>
+              {!!item.discount && <p className="text-xs">{item.discount > 0 ? "Qo'lda chegirma" : "Ustama"}: {Math.abs(item.discount).toLocaleString()} so'm</p>}
             </div>
             <div className="text-right font-mono font-bold">
-              {(item.quantity * Number(item.product.price || 0)).toLocaleString()}
+              {(item.quantity * Number(item.product.price || 0) - Number(item.discount || 0)).toLocaleString()}
             </div>
           </div>
         ))}

@@ -1,3 +1,6 @@
+import { ProductImage } from "@/components/product-image";
+import { ProductPrice } from "@/components/product-price";
+import { salePrice } from "@shared/pricing";
 import { useState } from "react";
 import { Minus, Plus, Trash2, Percent } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -18,7 +21,7 @@ export function CartItem({ item, onUpdateQuantity, onUpdateDiscount, onRemove }:
   const [adjInputType, setAdjInputType] = useState<"summa" | "percent">(item.adjustmentInputType || "summa");
   const [adjValue, setAdjValue] = useState(item.adjustmentValue?.toString() || "");
 
-  const effectivePrice = item.product.price > 0 ? item.product.price : ((item.product as any).barcodePrice || (item.product as any).wholesalePrice || 0);
+  const effectivePrice = salePrice(item.product);
   const itemTotal = effectivePrice * item.quantity;
   const adjustmentAmount = item.discount || 0;
   const finalTotal = itemTotal - adjustmentAmount;
@@ -61,7 +64,7 @@ export function CartItem({ item, onUpdateQuantity, onUpdateDiscount, onRemove }:
     <div className="py-3 border-b border-dashed border-gray-200 last:border-0 animate-in slide-in-from-right-4 duration-300">
       <div className="flex gap-3">
         <div className="w-12 h-12 rounded bg-gray-100 overflow-hidden flex-shrink-0">
-          <img src={item.product.image} alt="" className="w-full h-full object-cover" />
+          <ProductImage src={item.product.image} alt={item.product.name} />
         </div>
         
         <div className="flex-1 min-w-0 flex flex-col justify-between">
@@ -90,7 +93,7 @@ export function CartItem({ item, onUpdateQuantity, onUpdateDiscount, onRemove }:
           
           <div className="flex items-center justify-between mt-1">
             <div className="text-xs text-muted-foreground font-mono">
-              {effectivePrice.toLocaleString()} x {item.quantity}
+              <ProductPrice product={item.product} /> × {item.quantity}
             </div>
             
             <div className="flex items-center gap-1">

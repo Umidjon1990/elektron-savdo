@@ -193,6 +193,15 @@ export async function runMigrations() {
       CREATE INDEX IF NOT EXISTS independent_debt_payments_tenant_debt_idx ON independent_debt_payments(tenant_id, debt_id);
     `);
     
+    await client.query(`
+      ALTER TABLE products ADD COLUMN IF NOT EXISTS discount_price INTEGER;
+      DO $$ BEGIN
+        IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'products_discount_price_check') THEN
+          ALTER TABLE products ADD CONSTRAINT products_discount_price_check
+            CHECK (discount_price IS NULL OR (discount_price > 0 AND discount_price < price));
+        END IF;
+      END $$;
+    `);
     console.log("Database migrations completed successfully!");
   } catch (error) {
     console.error("Migration error:", error);

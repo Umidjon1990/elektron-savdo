@@ -67,8 +67,9 @@ export function buildReceiptHtml({ transaction, settings, tenantSettings, noAuto
       <div style="font-size:11px;font-weight:700;">${escapeHtml(item.product.name)}</div>
       <div style="display:flex;justify-content:space-between;font-size:10px;">
         <span style="font-weight:600;">${escapeHtml(item.quantity)} x ${Number(item.product.price || 0).toLocaleString()}</span>
-        <span style="font-weight:700;font-family:monospace;">${(item.quantity * Number(item.product.price || 0)).toLocaleString()}</span>
+        <span style="font-weight:700;font-family:monospace;">${(item.quantity * Number(item.product.price || 0) - Number(item.discount || 0)).toLocaleString()}</span>
       </div>
+      ${item.discount ? `<div style="font-size:10px;">${item.discount > 0 ? "Qo'lda chegirma" : "Ustama"}: ${Math.abs(item.discount).toLocaleString()} so'm</div>` : ''}
     </div>
   `).join('');
 

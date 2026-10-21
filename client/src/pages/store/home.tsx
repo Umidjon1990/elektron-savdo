@@ -1,3 +1,5 @@
+import { ProductImage } from "@/components/product-image";
+import { ProductPrice } from "@/components/product-price";
 import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
@@ -269,7 +271,7 @@ export default function StoreHome() {
                 className="group bg-white rounded-2xl p-3 shadow-sm hover:shadow-xl hover:shadow-indigo-100 transition-all border border-slate-100 flex flex-col"
               >
                 <div className="relative aspect-[2/3] bg-slate-100 rounded-xl overflow-hidden mb-3">
-                  <img src={product.image} alt={product.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+                  <ProductImage src={product.image} alt={product.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
                   {product.stock < 5 && (
                     <span className="absolute top-2 left-2 bg-red-500 text-white text-[10px] font-bold px-2 py-1 rounded-md">
                       KAM QOLDI
@@ -283,7 +285,7 @@ export default function StoreHome() {
                   
                   <div className="mt-auto flex items-center justify-between">
                     <div className="font-bold text-lg text-slate-900">
-                      {product.price.toLocaleString()} <span className="text-xs text-slate-500 font-normal">so'm</span>
+                      <ProductPrice product={product} />
                     </div>
                     <Button 
                       size="icon" 

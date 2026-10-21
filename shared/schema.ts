@@ -49,6 +49,7 @@ export const products = pgTable("products", {
   name: text("name").notNull(),
   author: text("author").notNull().default(""),
   price: integer("price").notNull(),
+  discountPrice: integer("discount_price"),
   costPrice: integer("cost_price").notNull().default(0),
   barcodePrice: integer("barcode_price"),
   wholesalePrice: integer("wholesale_price"),

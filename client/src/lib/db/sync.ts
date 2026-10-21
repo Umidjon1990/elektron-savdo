@@ -185,11 +185,15 @@ export async function syncPendingTransactions(): Promise<void> {
         body: JSON.stringify({
           id: txn.id,
           date: txn.date,
+          pricingVersion: txn.pricingVersion,
+          pricingMode: "snapshot",
           items: (txn.items || []).filter(item => item && item.product).map(item => ({
             product: {
               id: item.product.id,
               name: item.product.name,
               price: item.product.price,
+              discountPrice: item.product.discountPrice,
+              regularPrice: item.product.regularPrice,
               costPrice: item.product.costPrice || 0,
               stock: item.product.stock,
               barcode: item.product.barcode

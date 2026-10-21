@@ -1,3 +1,6 @@
+import { validateCampaign } from "@shared/pricing";
+import { ProductImage } from "@/components/product-image";
+import { ProductPrice } from "@/components/product-price";
 import { useState, useRef, useEffect, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { SidebarNav } from "@/components/layout/sidebar-nav";
@@ -179,6 +182,8 @@ export default function Inventory() {
   const [newProduct, setNewProduct] = useState({
     name: "",
     author: "",
+    discountEnabled: false,
+    discountPrice: "",
     price: "",
     costPrice: "",
     barcodePrice: "",
@@ -228,7 +233,7 @@ export default function Inventory() {
     if (!isAddDialogOpen) {
       setStep(1);
       setEditingId(null);
-      setNewProduct({ name: "", author: "", price: "", costPrice: "", barcodePrice: "", wholesalePrice: "", stock: "", category: "", barcode: "", image: "", videoUrl: "", supplier: "", supplierPaymentMethod: "naqd", supplierCurrency: "uzs", supplierCurrencyRate: "", supplierOriginalPrice: "", isNew: false, unit: "dona" });
+      setNewProduct({ name: "", author: "", discountEnabled: false, discountPrice: "", price: "", costPrice: "", barcodePrice: "", wholesalePrice: "", stock: "", category: "", barcode: "", image: "", videoUrl: "", supplier: "", supplierPaymentMethod: "naqd", supplierCurrency: "uzs", supplierCurrencyRate: "", supplierOriginalPrice: "", isNew: false, unit: "dona" });
       setCustomFieldValues({});
     }
   }, [isAddDialogOpen]);
@@ -238,6 +243,8 @@ export default function Inventory() {
     setNewProduct({
       name: product.name,
       author: product.author,
+      discountEnabled: product.discountPrice != null,
+      discountPrice: product.discountPrice?.toString() || "",
       price: product.price.toString(),
       costPrice: (product.costPrice || 0).toString(),
       barcodePrice: ((product as any).barcodePrice || "").toString(),
@@ -404,11 +411,15 @@ export default function Inventory() {
       const finalPrice = Number(newProduct.price) || 0;
       const fallbackPrice = finalPrice > 0 ? finalPrice : (Number(newProduct.barcodePrice) || Number(newProduct.wholesalePrice) || 0);
 
+      const discountPrice = newProduct.discountEnabled ? Number(newProduct.discountPrice) : null;
+      const campaignError = validateCampaign({ price: fallbackPrice, discountPrice });
+      if (campaignError) throw new Error(campaignError);
       if (editingId) {
         await updateProduct(editingId, {
           name: newProduct.name,
           author: newProduct.author,
           price: fallbackPrice,
+          discountPrice,
           costPrice: Number(newProduct.costPrice) || 0,
           barcodePrice: newProduct.barcodePrice ? Number(newProduct.barcodePrice) : undefined,
           wholesalePrice: newProduct.wholesalePrice ? Number(newProduct.wholesalePrice) : undefined,
@@ -435,6 +446,7 @@ export default function Inventory() {
           name: newProduct.name,
           author: newProduct.author,
           price: fallbackPrice,
+          discountPrice,
           costPrice: Number(newProduct.costPrice) || 0,
           barcodePrice: newProduct.barcodePrice ? Number(newProduct.barcodePrice) : undefined,
           wholesalePrice: newProduct.wholesalePrice ? Number(newProduct.wholesalePrice) : undefined,
@@ -1199,6 +1211,20 @@ export default function Inventory() {
                               />
                             </div>
                             )}
+                            <div className="space-y-2 col-span-full rounded-lg border p-3">
+                              <label className="flex items-center gap-2 text-sm font-medium">
+                                <input type="checkbox" checked={newProduct.discountEnabled} onChange={e => setNewProduct({...newProduct, discountEnabled: e.target.checked})} data-testid="toggle-campaign" />
+                                Chegirma qo'llash
+                              </label>
+                              {newProduct.discountEnabled && <>
+                                <Label htmlFor="discountPrice">Chegirmali narx (so'm)</Label>
+                                <Input id="discountPrice" type="number" min="1" step="1" required value={newProduct.discountPrice} onChange={e => setNewProduct({...newProduct, discountPrice: e.target.value})} data-testid="input-discount-price" />
+                                {validateCampaign({price: Number(newProduct.price), discountPrice: Number(newProduct.discountPrice)})
+                                  ? <p className="text-xs text-red-600">Chegirma narxi oddiy narxdan kichik va noldan katta bo'lsin.</p>
+                                  : <ProductPrice product={{price: Number(newProduct.price), discountPrice: Number(newProduct.discountPrice)}} />}
+                              </>}
+                              <p className="text-xs text-muted-foreground">Mahsulot aksiyasi. Kassadagi qo'lda chegirma yoki ustama alohida qo'llanadi. Ulgurji va etiketka narxi o'zgarmaydi.</p>
+                            </div>
                             {isFieldVisible("barcodePrice") && (
                             <div className="space-y-1">
                               <Label htmlFor="barcodePrice" className="text-xs text-muted-foreground">Barkod narxi (so'm)</Label>
@@ -1359,7 +1385,7 @@ export default function Inventory() {
                       </TableCell>
                       <TableCell>
                         <div className="w-10 h-14 bg-gray-100 rounded overflow-hidden">
-                          <img src={product.image} alt="" className="w-full h-full object-cover" />
+                          <ProductImage src={product.image} alt={product.name} />
                         </div>
                       </TableCell>
                       <TableCell>
@@ -1381,7 +1407,7 @@ export default function Inventory() {
                       </TableCell>
                       <TableCell className="text-right text-xs">{costCell(product)}</TableCell>
                       <TableCell className="text-right font-medium">
-                        {(product.price > 0 ? product.price : ((product as any).barcodePrice || (product as any).wholesalePrice || 0)).toLocaleString()}
+                        <ProductPrice product={product} />
                       </TableCell>
                       <TableCell className="text-right">
                         <span className={`font-medium ${product.stock < 10 ? 'text-red-500' : 'text-green-600'}`}>
@@ -1438,7 +1464,7 @@ export default function Inventory() {
                 <CardContent className="p-3">
                   <div className="flex gap-3">
                     <div className="w-16 h-24 bg-gray-100 rounded overflow-hidden flex-shrink-0">
-                      <img src={product.image} alt="" className="w-full h-full object-cover" />
+                      <ProductImage src={product.image} alt={product.name} />
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex justify-between items-start">
@@ -1496,7 +1522,7 @@ export default function Inventory() {
                       <div className="mt-2 text-xs">Tan narx: {costCell(product)}</div>
                       <div className="mt-3 flex items-center justify-between">
                         <span className="font-bold text-primary">
-                          {(product.price > 0 ? product.price : ((product as any).barcodePrice || (product as any).wholesalePrice || 0)).toLocaleString()} so'm
+                          <ProductPrice product={product} />
                         </span>
                         <div className="flex items-center gap-2 text-xs">
                           <span className="text-muted-foreground">Qoldiq:</span>

@@ -559,7 +559,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createTransaction(transaction: InsertTransaction): Promise<Transaction> {
-    const existing = await this.getTransaction(transaction.id);
+    const existing = await this.getTransaction(transaction.id, transaction.tenantId || undefined);
     if (existing) {
       return existing;
     }

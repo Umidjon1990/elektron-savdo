@@ -5,6 +5,8 @@ export interface CachedProduct {
   name: string;
   author: string;
   price: number;
+  discountPrice?: number | null;
+  regularPrice?: number;
   costPrice: number;
   unit?: string;
   supplierCurrency?: string;
@@ -38,6 +40,8 @@ export interface CachedTransaction {
   totalAmount: number;
   totalProfit: number;
   paymentMethod: string;
+  pricingVersion?: number;
+  pricingMode?: "current" | "snapshot";
   synced: boolean;
   status: 'completed' | 'voided' | 'refunded';
   customerName?: string;

@@ -6,6 +6,10 @@ export interface CachedProduct {
   author: string;
   price: number;
   costPrice: number;
+  unit?: string;
+  supplierCurrency?: string;
+  supplierCurrencyRate?: number;
+  supplierOriginalPrice?: number;
   barcodePrice?: number;
   wholesalePrice?: number;
   stock: number;

@@ -2,7 +2,9 @@ import { useState, useRef, useEffect, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { SidebarNav } from "@/components/layout/sidebar-nav";
 import { useProducts } from "@/lib/product-context";
-import { useAuth } from "@/lib/auth-context";
+import { getAuthHeaders, useAuth } from "@/lib/auth-context";
+import { costSourceLabels, formatUsd, summarizeInventory, usdCostInUzs, valueInventoryProduct } from "@shared/inventory-valuation";
+import { FileSpreadsheet } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Search, Plus, Filter, MoreHorizontal, ScanBarcode, ArrowRight, Check, X, RotateCcw, PackagePlus, ScanText, Upload, Image as ImageIcon, Loader2, Youtube, Trash2, ChevronUp, ChevronDown, GripVertical, Printer, Truck, DollarSign, CreditCard, Banknote, ArrowUpDown } from "lucide-react";
@@ -49,10 +51,41 @@ import { Card, CardContent } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 
 export default function Inventory() {
-  const { products, addProduct, updateStock, updateProduct, deleteProduct } = useProducts();
-  const { token } = useAuth();
+  const { products: contextProducts, isOffline, addProduct, updateStock, updateProduct, deleteProduct } = useProducts();
+  const { token, tenant } = useAuth();
   const queryClient = useQueryClient();
   const [searchQuery, setSearchQuery] = useState("");
+  const [exporting, setExporting] = useState(false);
+  const reportQuery = useQuery<{
+    products: Product[];
+    totals: ReturnType<typeof summarizeInventory>;
+    generatedAt: string;
+    version: string;
+    policy: string;
+  }>({
+    queryKey: ["products", "inventory-report", tenant?.id],
+    queryFn: async () => {
+      const response = await fetch("/api/inventory/report", { headers: getAuthHeaders(), cache: "no-store" });
+      if (!response.ok) throw new Error("Ombor hisobini olishda xatolik");
+      return response.json();
+    },
+    enabled: !!token && !!tenant?.id && !isOffline,
+    staleTime: 0,
+    refetchOnWindowFocus: true,
+    retry: 1,
+  });
+  const report = !isOffline ? reportQuery.data : undefined;
+  const products = report?.products ?? contextProducts;
+  const valuation = useMemo(() => report?.totals ?? summarizeInventory(products), [report, products]);
+  const costCell = (product: Product) => {
+    const v = valueInventoryProduct(product);
+    return <div title={costSourceLabels[v.source]}>
+      <span className={v.unitUsd === null ? "text-amber-700" : "font-medium text-blue-700"}>
+        {v.unitUsd === null ? (v.source === "uzs" ? "Kirim UZSda" : "Aniqlanmagan") : `${formatUsd(v.unitUsd)} $`}
+      </span>
+      {v.source === "historical_rate" && <div className="text-[10px] text-amber-700">Saqlangan kursdan</div>}
+    </div>;
+  };
   
   const { data: categories = [] } = useQuery<Category[]>({
     queryKey: ["/api/categories"],
@@ -362,7 +395,7 @@ export default function Inventory() {
         supplierOriginalPrice,
       };
       if (isUsd && supplierOriginalPrice > 0 && supplierCurrencyRate > 0) {
-        newProduct.costPrice = (supplierOriginalPrice * supplierCurrencyRate).toString();
+        newProduct.costPrice = (usdCostInUzs(supplierOriginalPrice, supplierCurrencyRate) ?? "").toString();
       }
 
       const finalPrice = Number(newProduct.price) || 0;
@@ -449,7 +482,7 @@ export default function Inventory() {
             updates.supplierOriginalPrice = restockData.supplierOriginalPrice ? Number(restockData.supplierOriginalPrice) : 0;
             updates.supplierCurrencyRate = restockData.supplierCurrencyRate ? Number(restockData.supplierCurrencyRate) : 0;
             if (updates.supplierOriginalPrice && updates.supplierCurrencyRate) {
-              updates.costPrice = updates.supplierOriginalPrice * updates.supplierCurrencyRate;
+              updates.costPrice = usdCostInUzs(updates.supplierOriginalPrice, updates.supplierCurrencyRate);
             } else if (restockData.costPrice) {
               updates.costPrice = Number(restockData.costPrice);
             }
@@ -559,6 +592,29 @@ export default function Inventory() {
   }, [products]);
 
   const fmt = (n: number) => Math.round(n).toLocaleString('uz-UZ');
+  const exportInventory = async () => {
+    if (isOffline || !report || reportQuery.isFetching) return;
+    setExporting(true);
+    try {
+      const response = await fetch(`/api/inventory/export?version=${report.version}`, { headers: getAuthHeaders(), cache: "no-store" });
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({}));
+        if (response.status === 409) await reportQuery.refetch();
+        throw new Error(error.error || "Excelga yuklashda xatolik");
+      }
+      const url = URL.createObjectURL(await response.blob());
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = "ombor-reviziya.xlsx";
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 30_000);
+      toast({ title: "Excel tayyor", description: "Barcha mahsulotlar yuklandi. Reviziya qoldiqni o'zgartirmaydi." });
+    } catch (error) {
+      toast({ title: "Excel yuklanmadi", description: error instanceof Error ? error.message : "Qayta urinib ko'ring", variant: "destructive" });
+    } finally { setExporting(false); }
+  };
 
   const moveProduct = async (index: number, direction: "up" | "down") => {
     const newIndex = direction === "up" ? index - 1 : index + 1;
@@ -612,21 +668,21 @@ export default function Inventory() {
           {/* Ombor balansi: tan narx, sotuv narx, nasiya qarz */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-2 md:gap-3 mb-4">
             <div className="bg-white rounded-lg border p-3 md:p-4" data-testid="stat-total-cost">
-              <div className="text-[10px] md:text-xs text-muted-foreground">Jami tan narx</div>
+              <div className="text-[10px] md:text-xs text-muted-foreground">Jami tan narx (USD)</div>
               <div className="text-sm md:text-lg font-semibold mt-1 text-blue-600 truncate">
-                {fmt(inventoryStats.totalCost)} <span className="text-[10px] md:text-xs font-normal text-muted-foreground">so'm</span>
+                {formatUsd(valuation.totalUsd)} <span className="text-[10px] md:text-xs font-normal text-muted-foreground">$</span>
               </div>
               <div className="text-[10px] text-muted-foreground mt-0.5">
-                {inventoryStats.totalUnits.toLocaleString('uz-UZ')} dona
+                {valuation.partial ? "USD aniqlangan mahsulotlar bo'yicha" : "Barcha mahsulotlar bo'yicha"}
               </div>
             </div>
             <div className="bg-white rounded-lg border p-3 md:p-4" data-testid="stat-total-sale">
               <div className="text-[10px] md:text-xs text-muted-foreground">Sotuv qiymati</div>
               <div className="text-sm md:text-lg font-semibold mt-1 text-emerald-600 truncate">
-                {fmt(inventoryStats.totalSale)} <span className="text-[10px] md:text-xs font-normal text-muted-foreground">so'm</span>
+                {Number(valuation.totalSaleUzs).toLocaleString('uz-UZ', { maximumFractionDigits: 2 })} <span className="text-[10px] md:text-xs font-normal text-muted-foreground">so'm</span>
               </div>
               <div className="text-[10px] text-muted-foreground mt-0.5">
-                Foyda: {fmt(inventoryStats.totalSale - inventoryStats.totalCost)}
+                Qoldiq × sotuv narxi; tushum emas
               </div>
             </div>
             <div className="bg-white rounded-lg border p-3 md:p-4" data-testid="stat-nasiya-cost">
@@ -649,6 +705,24 @@ export default function Inventory() {
             </div>
           </div>
 
+          <div className="mb-4 rounded-lg border bg-white p-3 text-xs space-y-1" data-testid="inventory-valuation-note">
+            <p className="font-medium">Qoldiq: {Object.entries(valuation.quantities).map(([unit, q]) => `${Number(q).toLocaleString('uz-UZ')} ${unit}`).join(" · ") || "0"}</p>
+            <p className={valuation.partial ? "text-amber-800" : "text-muted-foreground"}>
+              {[
+                valuation.unknownCount > 0 && `USD aniqlanmagan: ${valuation.unknownCount} ta`,
+                valuation.uzsCount > 0 && `Kirim UZSda: ${valuation.uzsCount} ta`,
+                valuation.restoredCount > 0 && `Saqlangan kursdan: ${valuation.restoredCount} ta`,
+                valuation.invalidCount > 0 && `Xato qoldiq: ${valuation.invalidCount} ta`,
+                valuation.invalidSaleCount > 0 && `Xato sotuv qiymati: ${valuation.invalidSaleCount} ta`,
+              ].filter(Boolean).join(" · ") || "USD tannarxlari to'liq qayd etilgan"}
+            </p>
+            <p className="text-muted-foreground">{report ? `${tenant?.name || "Do'kon"} · Server hisobi: ${new Date(report.generatedAt).toLocaleString('uz-UZ', { timeZone: 'Asia/Tashkent' })} (Toshkent)` : "Keshdagi ma'lumot — server reviziyasi tasdiqlanmagan"}. Kartalar va Excel barcha mahsulotlar bo'yicha.</p>
+            <details className="text-muted-foreground"><summary className="cursor-pointer">Tannarx qanday hisoblangan?</summary>
+              <p className="mt-1">Joriy tannarx × qoldiq. Qayta kirim narxi butun qoldiqqa qo'llanadi. Asl USD narxi bugungi kursga bog'liq emas. Kursdan tiklangan narxning kirim sanasi qayd etilmagan.</p>
+            </details>
+            {isOffline && <p className="text-amber-800">Offline rejim. Joriy reviziya Excelini yuklash uchun internetga ulaning.</p>}
+            {reportQuery.isError && !isOffline && <p className="text-red-700">Server hisobi olinmadi. <button className="underline" onClick={() => reportQuery.refetch()}>Qayta yuklash</button></p>}
+          </div>
           <div className="flex gap-1 mb-4 bg-white rounded-lg p-1 border overflow-x-auto">
             {[
               { key: "all" as const, label: "Barchasi", count: tabCounts.all },
@@ -660,7 +734,7 @@ export default function Inventory() {
                 key={tab.key}
                 onClick={() => setInventoryTab(tab.key)}
                 className={cn(
-                  "flex-1 min-w-[80px] px-3 py-2 rounded-md text-sm font-medium transition-all whitespace-nowrap",
+                  "flex-1 shrink-0 min-w-max px-3 py-2 rounded-md text-sm font-medium transition-all whitespace-nowrap",
                   inventoryTab === tab.key
                     ? tab.key === "out" ? "bg-red-500 text-white shadow-sm" 
                       : tab.key === "low" ? "bg-orange-500 text-white shadow-sm"
@@ -691,7 +765,13 @@ export default function Inventory() {
               />
             </div>
             
-            <div className="flex gap-2">
+            <div className="flex gap-2 flex-wrap">
+              <Button variant="outline" className="gap-2" data-testid="button-export-inventory"
+                disabled={isOffline || !report || reportQuery.isFetching || reportQuery.isError || exporting}
+                onClick={exportInventory} title="Barcha mahsulotlar — qidiruv va filtrlardan qat'i nazar">
+                {exporting ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileSpreadsheet className="h-4 w-4 text-emerald-700" />}
+                Excelga yuklash
+              </Button>
               <Button 
                 variant="outline" 
                 className="gap-2 flex-1 md:flex-none justify-center"
@@ -967,7 +1047,7 @@ export default function Inventory() {
                                   const rate = Number(updates.supplierCurrencyRate || newProduct.supplierCurrencyRate) || 0;
                                   const origPrice = Number(updates.supplierOriginalPrice || newProduct.supplierOriginalPrice) || 0;
                                   if (rate > 0 && origPrice > 0) {
-                                    updates.costPrice = (origPrice * rate).toString();
+                                    updates.costPrice = (usdCostInUzs(origPrice, rate) ?? "").toString();
                                   }
                                 }
                                 if (val === "uzs") {
@@ -1050,7 +1130,7 @@ export default function Inventory() {
                                     onChange={(e) => {
                                       const origPrice = e.target.value;
                                       const rate = Number(newProduct.supplierCurrencyRate) || 0;
-                                      const costPrice = rate > 0 ? (Number(origPrice) * rate).toString() : "";
+                                      const costPrice = (usdCostInUzs(origPrice, rate) ?? "").toString();
                                       setNewProduct(prev => ({...prev, supplierOriginalPrice: origPrice, costPrice}));
                                     }}
                                     className="bg-white h-9"
@@ -1066,7 +1146,7 @@ export default function Inventory() {
                                     onChange={(e) => {
                                       const rate = e.target.value;
                                       const origPrice = Number(newProduct.supplierOriginalPrice) || 0;
-                                      const costPrice = origPrice > 0 ? (origPrice * Number(rate)).toString() : "";
+                                      const costPrice = (usdCostInUzs(origPrice, rate) ?? "").toString();
                                       setNewProduct(prev => ({...prev, supplierCurrencyRate: rate, costPrice}));
                                     }}
                                     className="bg-white h-9"
@@ -1239,7 +1319,8 @@ export default function Inventory() {
                     <TableHead>Nomi</TableHead>
                     <TableHead>Kategoriya</TableHead>
                     <TableHead>Shtrix kod</TableHead>
-                    <TableHead className="text-right">Narxi</TableHead>
+                    <TableHead className="text-right">Tan narx ($)</TableHead>
+                    <TableHead className="text-right">Sotuv narxi (so'm)</TableHead>
                     <TableHead className="text-right">Qoldiq</TableHead>
                     <TableHead className="w-[50px]"></TableHead>
                   </TableRow>
@@ -1291,6 +1372,7 @@ export default function Inventory() {
                       <TableCell className="font-mono text-xs text-muted-foreground">
                         {product.barcode}
                       </TableCell>
+                      <TableCell className="text-right text-xs">{costCell(product)}</TableCell>
                       <TableCell className="text-right font-medium">
                         {(product.price > 0 ? product.price : ((product as any).barcodePrice || (product as any).wholesalePrice || 0)).toLocaleString()}
                       </TableCell>
@@ -1404,6 +1486,7 @@ export default function Inventory() {
                         </span>
                       </div>
                       
+                      <div className="mt-2 text-xs">Tan narx: {costCell(product)}</div>
                       <div className="mt-3 flex items-center justify-between">
                         <span className="font-bold text-primary">
                           {(product.price > 0 ? product.price : ((product as any).barcodePrice || (product as any).wholesalePrice || 0)).toLocaleString()} so'm
@@ -1578,7 +1661,7 @@ export default function Inventory() {
                             ...d,
                             supplierOriginalPrice: val,
                             costPrice: val && d.supplierCurrencyRate
-                              ? (Number(val) * Number(d.supplierCurrencyRate)).toString()
+                              ? (usdCostInUzs(val, d.supplierCurrencyRate) ?? "").toString()
                               : d.costPrice
                           }));
                         }}
@@ -1601,7 +1684,7 @@ export default function Inventory() {
                           ...d,
                           supplierCurrencyRate: val,
                           costPrice: d.supplierOriginalPrice && val
-                            ? (Number(d.supplierOriginalPrice) * Number(val)).toString()
+                            ? (usdCostInUzs(d.supplierOriginalPrice, val) ?? "").toString()
                             : d.costPrice
                         }));
                       }}

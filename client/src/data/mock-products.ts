@@ -11,6 +11,9 @@ export interface Product {
   author: string;
   price: number;
   costPrice: number;
+  supplierCurrency?: string;
+  supplierCurrencyRate?: number;
+  supplierOriginalPrice?: number;
   stock: number;
   category: string;
   barcode: string;

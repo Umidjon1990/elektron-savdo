@@ -6,6 +6,8 @@ import { registerR2Routes } from "./integrations/r2-routes";
 import { queueTelegramNotification } from "./telegram";
 import { authMiddleware, optionalAuth, superAdminOnly, hashPassword, comparePassword, generateToken } from "./auth";
 import { getTenantBySlug, getTenantById, invalidateTenantCache } from "./tenant";
+import { registerInventoryRoutes } from "./inventory-report";
+import { usdCostInUzs } from "@shared/inventory-valuation";
 
 function parsePagination(pageValue: unknown, limitValue: unknown) {
   const parsedPage = Number.parseInt(String(pageValue ?? "1"), 10);
@@ -90,6 +92,11 @@ export async function registerRoutes(
   });
   
   registerR2Routes(app);
+  registerInventoryRoutes(app, {
+    auth: authMiddleware,
+    getProducts: tenantId => storage.getAllProducts(tenantId),
+    getTenant: getTenantById,
+  });
 
   // ============ AUTH ROUTES ============
 
@@ -516,6 +523,11 @@ export async function registerRoutes(
         supplierCurrencyRate: Math.round(Number(req.body.supplierCurrencyRate) || 0),
         supplierOriginalPrice: Number(req.body.supplierOriginalPrice) || 0,
       };
+      if (body.supplierCurrency === "usd") {
+        const costUzs = usdCostInUzs(body.supplierOriginalPrice, body.supplierCurrencyRate);
+        if (costUzs === null) return res.status(400).json({ error: "Dollar tannarxi va kurs musbat son bo'lishi kerak; so'm qiymati ruxsat etilgan chegarada bo'lsin" });
+        body.costPrice = costUzs;
+      }
       const validatedData = insertProductSchema.parse(body);
       const product = await storage.createProduct(validatedData);
       res.status(201).json(product);
@@ -544,6 +556,16 @@ export async function registerRoutes(
       if (data.supplierCurrency !== undefined) data.supplierCurrency = data.supplierCurrency || "uzs";
       if (data.supplierCurrencyRate !== undefined) data.supplierCurrencyRate = Math.round(Number(data.supplierCurrencyRate) || 0);
       if (data.supplierOriginalPrice !== undefined) data.supplierOriginalPrice = Number(data.supplierOriginalPrice) || 0;
+      if (["supplierCurrency", "supplierOriginalPrice", "supplierCurrencyRate", "costPrice"].some(key => key in data)) {
+        const current = await storage.getProduct(req.params.id, req.tenantId);
+        if (!current) return res.status(404).json({ error: "Product not found" });
+        const merged = { ...current, ...data };
+        if (merged.supplierCurrency === "usd") {
+          const costUzs = usdCostInUzs(merged.supplierOriginalPrice, merged.supplierCurrencyRate);
+          if (costUzs === null) return res.status(400).json({ error: "Dollar tannarxi va kursni to'liq kiriting" });
+          data.costPrice = costUzs;
+        }
+      }
       const product = await storage.updateProduct(req.params.id, data, req.tenantId);
       if (!product) return res.status(404).json({ error: "Product not found" });
       res.json(product);

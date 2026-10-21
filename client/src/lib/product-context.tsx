@@ -16,6 +16,16 @@ interface Product {
   category: string;
   barcode: string;
   image: string;
+  unit?: string;
+  description?: string;
+  metadata?: Record<string, string>;
+  supplier?: string;
+  supplierPaymentMethod?: string;
+  supplierCurrency?: string;
+  supplierCurrencyRate?: number;
+  supplierOriginalPrice?: number;
+  supplierPaidAmount?: number;
+  supplierDebtStatus?: string;
   videoUrl?: string;
   sortOrder?: number;
   isNew?: boolean;

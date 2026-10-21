@@ -56,7 +56,7 @@ server Decimal jamlari dastlabki kesh natijalari sifatida ham yoziladi.
 `npm run test:inventory`: hisob, kurs, tarixiy tiklash, noma'lum qiymatlar,
 qayta kirimdagi mavjud siyosat, kasr qoldiq, 151 qatorli XLSXni qayta ochish,
 barcode nollari, formula xavfsizligi, bo'sh inventar, tenant chegarasi, versiya
-mosligi va eksportning yozuv bajarmasligi uchun 11 test. Asl USD narxi yetishmagan
+mosligi va eksportning yozuv bajarmasligi uchun 12 test. Asl USD narxi yetishmagan
 eski yozuvning nomi yoki qoldig'i o'zgarganda, o'zgarishsiz qayta yuborilgan
 valyuta maydonlari qayta baholashni yoki taxminiy narx kiritishni talab qilmaydi.
 
@@ -75,3 +75,11 @@ LibreOffice Calc'da XLSX ochildi, PDFga A4 chop etildi. Bo'sh sanoq -> bo'sh far
 
 Sun'iy namunani yaratish:
 `node --import tsx script/inventory-sample.ts /absolute/output-directory`
+
+## Dollar va so'mni birga ko'rsatish
+
+Jami tannarx kartasi va desktop/mobil mahsulot qatorlarida USD bilan birga
+saqlangan UZS tannarxi ham beriladi. UZS jami `sum(costPrice * stock)` Decimal
+arifmetikada hisoblanadi. Bu bugungi kursdagi ekvivalent emas. UZS kirim yoki
+USD narxi aniqlanmagan mahsulotlar sabab ikki jamining qamrovi farq qilishi
+mumkin; USDning qisman qamrovi va yetishmaydigan ma'lumotlar ko'rinib turadi.

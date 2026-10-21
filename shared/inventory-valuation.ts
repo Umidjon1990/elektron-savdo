@@ -70,6 +70,8 @@ export function valueInventoryProduct(p: InventoryProduct) {
     source,
     unitUsd: unitUsd?.toString() ?? null,
     totalUsd: validQuantity && unitUsd ? unitUsd.mul(quantity!).toString() : null,
+    unitCostUzs: cost?.gte(0) ? cost.toString() : null,
+    totalCostUzs: validQuantity && cost?.gte(0) ? cost.mul(quantity!).toString() : null,
     saleUzs: validQuantity && sale?.gte(0) ? sale.mul(quantity!).toString() : null,
     quantity: quantity?.toString() ?? null,
     invalidQuantity: !validQuantity,
@@ -79,8 +81,9 @@ export function valueInventoryProduct(p: InventoryProduct) {
 export function summarizeInventory(products: InventoryProduct[]) {
   let totalUsd = new Money(0);
   let totalSaleUzs = new Money(0);
+  let totalCostUzs = new Money(0);
   const quantities: Record<string, Decimal> = {};
-  let unknownCount = 0, uzsCount = 0, restoredCount = 0, invalidCount = 0, invalidSaleCount = 0;
+  let unknownCount = 0, uzsCount = 0, restoredCount = 0, invalidCount = 0, invalidSaleCount = 0, invalidCostCount = 0;
   for (const p of products) {
     const v = valueInventoryProduct(p);
     const quantity = decimal(p.stock);
@@ -90,6 +93,8 @@ export function summarizeInventory(products: InventoryProduct[]) {
       quantities[unit] = (quantities[unit] || new Money(0)).add(quantity!);
     }
     if (v.totalUsd !== null) totalUsd = totalUsd.add(v.totalUsd);
+    if (v.totalCostUzs !== null) totalCostUzs = totalCostUzs.add(v.totalCostUzs);
+    else invalidCostCount++;
     if (v.saleUzs !== null) totalSaleUzs = totalSaleUzs.add(v.saleUzs);
     else invalidSaleCount++;
     // Counts concern non-empty stock; empty unknown products cannot hide value.
@@ -100,9 +105,9 @@ export function summarizeInventory(products: InventoryProduct[]) {
     }
   }
   return {
-    totalUsd: totalUsd.toString(), totalSaleUzs: totalSaleUzs.toString(),
+    totalUsd: totalUsd.toString(), totalCostUzs: totalCostUzs.toString(), totalSaleUzs: totalSaleUzs.toString(),
     quantities: Object.fromEntries(Object.entries(quantities).map(([unit, n]) => [unit, n.toString()])),
-    unknownCount, uzsCount, restoredCount, invalidCount, invalidSaleCount,
+    unknownCount, uzsCount, restoredCount, invalidCount, invalidSaleCount, invalidCostCount,
     partial: unknownCount > 0 || uzsCount > 0 || invalidCount > 0,
   };
 }
@@ -111,4 +116,11 @@ export function summarizeInventory(products: InventoryProduct[]) {
 export function formatUsd(value: DecimalInput) {
   const n = decimal(value);
   return n ? n.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, " ") : "—";
+}
+
+export function formatUzs(value: DecimalInput) {
+  const n = decimal(value);
+  if (!n) return "—";
+  const [whole, fraction] = n.toDecimalPlaces(2).toFixed().split(".");
+  return whole.replace(/\B(?=(\d{3})+(?!\d))/g, " ") + (fraction ? `.${fraction}` : "");
 }

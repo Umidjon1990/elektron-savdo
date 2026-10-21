@@ -4,7 +4,7 @@ import { createServer } from "node:http";
 import express from "express";
 import ExcelJS from "exceljs";
 import type { Product } from "../shared/schema";
-import { hasCostChange, summarizeInventory, usdCostInUzs, valueInventoryProduct } from "../shared/inventory-valuation";
+import { formatUzs, hasCostChange, summarizeInventory, usdCostInUzs, valueInventoryProduct } from "../shared/inventory-valuation";
 import { createInventoryWorkbook } from "../server/inventory-workbook";
 import { registerInventoryRoutes } from "../server/inventory-report";
 
@@ -26,6 +26,21 @@ test("USD totals use source prices and unrounded decimal multiplication", () => 
 });
 test("changing UZS rate/cost does not revalue original USD", () => {
   assert.equal(valueInventoryProduct(product({ supplierCurrencyRate: 14000, costPrice: 143500 })).totalUsd, "30.75");
+});
+test("dual currency displays stored UZS cost independently of USD valuation coverage", () => {
+  const usd = product({ stock: 3, supplierOriginalPrice: 10.25, costPrice: 125050 });
+  const local = product({ id: "local", stock: 1.5, unit: "kg", supplierCurrency: "uzs", costPrice: 25000 });
+  const unknown = product({ id: "legacy", stock: 2, supplierOriginalPrice: 0, supplierCurrencyRate: 0, costPrice: 15000 });
+  const totals = summarizeInventory([usd, local, unknown]);
+  assert.equal(totals.totalUsd, "30.75");
+  assert.equal(totals.totalCostUzs, "442650");
+  assert.equal(valueInventoryProduct(usd).unitCostUzs, "125050");
+  assert.equal(valueInventoryProduct(local).totalCostUzs, "37500");
+  assert.equal(totals.unknownCount, 1);
+  assert.equal(totals.invalidCostCount, 0);
+  assert.equal(formatUzs(totals.totalCostUzs), "442 650");
+  assert.equal(summarizeInventory([product({ costPrice: NaN })]).invalidCostCount, 1);
+  assert.equal(valueInventoryProduct(product({ stock: 0.1, costPrice: 15 })).totalCostUzs, "1.5");
 });
 test("UZS INTEGER rounding is explicit while original USD remains precise", () => {
   assert.equal(usdCostInUzs(10.25, 12345), 126536);

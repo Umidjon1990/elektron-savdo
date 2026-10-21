@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { SidebarNav } from "@/components/layout/sidebar-nav";
 import { useProducts } from "@/lib/product-context";
 import { getAuthHeaders, useAuth } from "@/lib/auth-context";
-import { costSourceLabels, formatUsd, summarizeInventory, usdCostInUzs, valueInventoryProduct } from "@shared/inventory-valuation";
+import { costSourceLabels, formatUsd, formatUzs, summarizeInventory, usdCostInUzs, valueInventoryProduct } from "@shared/inventory-valuation";
 import { FileSpreadsheet } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -83,6 +83,9 @@ export default function Inventory() {
       <span className={v.unitUsd === null ? "text-amber-700" : "font-medium text-blue-700"}>
         {v.unitUsd === null ? (v.source === "uzs" ? "Kirim UZSda" : "Aniqlanmagan") : `${formatUsd(v.unitUsd)} $`}
       </span>
+      <div className="text-xs text-slate-600" title="Kirimda saqlangan so'm tannarxi">
+        {v.unitCostUzs === null ? "So'm tannarxi aniqlanmagan" : `${formatUzs(v.unitCostUzs)} so'm`}
+      </div>
       {v.source === "historical_rate" && <div className="text-[10px] text-amber-700">Saqlangan kursdan</div>}
     </div>;
   };
@@ -668,9 +671,12 @@ export default function Inventory() {
           {/* Ombor balansi: tan narx, sotuv narx, nasiya qarz */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-2 md:gap-3 mb-4">
             <div className="bg-white rounded-lg border p-3 md:p-4" data-testid="stat-total-cost">
-              <div className="text-[10px] md:text-xs text-muted-foreground">Jami tan narx (USD)</div>
+              <div className="text-[10px] md:text-xs text-muted-foreground">Jami tan narx</div>
               <div className="text-sm md:text-lg font-semibold mt-1 text-blue-600 truncate">
                 {formatUsd(valuation.totalUsd)} <span className="text-[10px] md:text-xs font-normal text-muted-foreground">$</span>
+              </div>
+              <div className="text-sm font-semibold text-slate-700 mt-1" data-testid="stat-total-cost-uzs">
+                {formatUzs(valuation.totalCostUzs)} <span className="text-xs font-normal">so'm</span>
               </div>
               <div className="text-[10px] text-muted-foreground mt-0.5">
                 {valuation.partial ? "USD aniqlangan mahsulotlar bo'yicha" : "Barcha mahsulotlar bo'yicha"}
@@ -714,11 +720,12 @@ export default function Inventory() {
                 valuation.restoredCount > 0 && `Saqlangan kursdan: ${valuation.restoredCount} ta`,
                 valuation.invalidCount > 0 && `Xato qoldiq: ${valuation.invalidCount} ta`,
                 valuation.invalidSaleCount > 0 && `Xato sotuv qiymati: ${valuation.invalidSaleCount} ta`,
+                valuation.invalidCostCount > 0 && `So'm tannarxi aniqlanmagan: ${valuation.invalidCostCount} ta`,
               ].filter(Boolean).join(" · ") || "USD tannarxlari to'liq qayd etilgan"}
             </p>
             <p className="text-muted-foreground">{report ? `${tenant?.name || "Do'kon"} · Server hisobi: ${new Date(report.generatedAt).toLocaleString('uz-UZ', { timeZone: 'Asia/Tashkent' })} (Toshkent)` : "Keshdagi ma'lumot — server reviziyasi tasdiqlanmagan"}. Kartalar va Excel barcha mahsulotlar bo'yicha.</p>
             <details className="text-muted-foreground"><summary className="cursor-pointer">Tannarx qanday hisoblangan?</summary>
-              <p className="mt-1">Joriy tannarx × qoldiq. Qayta kirim narxi butun qoldiqqa qo'llanadi. Asl USD narxi bugungi kursga bog'liq emas. Kursdan tiklangan narxning kirim sanasi qayd etilmagan.</p>
+              <p className="mt-1">Joriy tannarx × qoldiq. So'm qiymati kirimda saqlangan tannarx bo'yicha, bugungi kursda qayta hisoblanmaydi. USD jamisi faqat dollardagi tannarxi aniqlangan mahsulotlarni qamraydi; so'm jamisi esa so'm tannarxi ma'lum barcha mahsulotlar bo'yicha. Qayta kirim narxi butun qoldiqqa qo'llanadi. Kursdan tiklangan narxning kirim sanasi qayd etilmagan.</p>
             </details>
             {isOffline && <p className="text-amber-800">Offline rejim. Joriy reviziya Excelini yuklash uchun internetga ulaning.</p>}
             {reportQuery.isError && !isOffline && <p className="text-red-700">Server hisobi olinmadi. <button className="underline" onClick={() => reportQuery.refetch()}>Qayta yuklash</button></p>}
@@ -1319,7 +1326,7 @@ export default function Inventory() {
                     <TableHead>Nomi</TableHead>
                     <TableHead>Kategoriya</TableHead>
                     <TableHead>Shtrix kod</TableHead>
-                    <TableHead className="text-right">Tan narx ($)</TableHead>
+                    <TableHead className="text-right">Tan narx ($ / so'm)</TableHead>
                     <TableHead className="text-right">Sotuv narxi (so'm)</TableHead>
                     <TableHead className="text-right">Qoldiq</TableHead>
                     <TableHead className="w-[50px]"></TableHead>

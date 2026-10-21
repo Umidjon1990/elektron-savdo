@@ -1,3 +1,4 @@
+import { salePrice } from "@shared/pricing";
 import { createContext, useContext, useEffect, type ReactNode } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import type { CartItem } from "./cart-context";
@@ -55,7 +56,9 @@ export function OrderProvider({ children }: { children: ReactNode }) {
       const res = await fetch("/api/orders", {
         method: "POST",
         headers: { "Content-Type": "application/json", ...getAuthHeaders() },
-        body: JSON.stringify(order),
+        body: JSON.stringify({ ...order, items: Array.isArray(order.items) ? order.items.map((item: any) => item.product ? {
+          ...item, product: { ...item.product, price: salePrice(item.product), regularPrice: item.product.price, discountPrice: null },
+        } : item) : order.items }),
       });
       if (!res.ok) throw new Error("Failed to create order");
       return res.json();

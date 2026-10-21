@@ -4,7 +4,7 @@ import { createServer } from "node:http";
 import express from "express";
 import ExcelJS from "exceljs";
 import type { Product } from "../shared/schema";
-import { summarizeInventory, usdCostInUzs, valueInventoryProduct } from "../shared/inventory-valuation";
+import { hasCostChange, summarizeInventory, usdCostInUzs, valueInventoryProduct } from "../shared/inventory-valuation";
 import { createInventoryWorkbook } from "../server/inventory-workbook";
 import { registerInventoryRoutes } from "../server/inventory-report";
 
@@ -42,6 +42,12 @@ test("legacy restoration requires USD identity, same-record positive rate and co
   assert.equal(valueInventoryProduct(product({ supplierCurrency: null })).source, "unknown");
   assert.equal(valueInventoryProduct(product({ supplierCurrency: "uzs" })).unitUsd, null);
   assert.equal(valueInventoryProduct(product({ supplierOriginalPrice: 0, costPrice: 0 })).unitUsd, null);
+});
+test("legacy unknown USD rows can be renamed or restocked without inventing a cost", () => {
+  const legacy = product({ supplierOriginalPrice: 0, supplierCurrencyRate: 0 });
+  assert.equal(hasCostChange(legacy, { ...legacy, name: "Yangi nom", stock: 4 }), false);
+  assert.equal(hasCostChange(legacy, { stock: 4 }), false);
+  assert.equal(hasCostChange(legacy, { supplierOriginalPrice: 10.25, supplierCurrencyRate: 12200 }), true);
 });
 test("partial USD totals expose missing rows and separate units", () => {
   const report = summarizeInventory([product(), product({ id: "b", unit: "kg", stock: 1.5, supplierCurrency: "uzs" }), product({ id: "c", unit: "litr", stock: 0.4, supplierOriginalPrice: 0, supplierCurrencyRate: 0 })]);

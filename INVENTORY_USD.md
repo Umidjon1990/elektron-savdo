@@ -56,7 +56,9 @@ server Decimal jamlari dastlabki kesh natijalari sifatida ham yoziladi.
 `npm run test:inventory`: hisob, kurs, tarixiy tiklash, noma'lum qiymatlar,
 qayta kirimdagi mavjud siyosat, kasr qoldiq, 151 qatorli XLSXni qayta ochish,
 barcode nollari, formula xavfsizligi, bo'sh inventar, tenant chegarasi, versiya
-mosligi va eksportning yozuv bajarmasligi uchun 10 test.
+mosligi va eksportning yozuv bajarmasligi uchun 11 test. Asl USD narxi yetishmagan
+eski yozuvning nomi yoki qoldig'i o'zgarganda, o'zgarishsiz qayta yuborilgan
+valyuta maydonlari qayta baholashni yoki taxminiy narx kiritishni talab qilmaydi.
 
 Build: `node --import tsx script/build.ts` (sandboxdagi tsx CLI Unix IPC
 cheklovini chetlab, o'sha build skriptini bajaradi). Client/server build o'tdi.

@@ -7,7 +7,7 @@ import { queueTelegramNotification } from "./telegram";
 import { authMiddleware, optionalAuth, superAdminOnly, hashPassword, comparePassword, generateToken } from "./auth";
 import { getTenantBySlug, getTenantById, invalidateTenantCache } from "./tenant";
 import { registerInventoryRoutes } from "./inventory-report";
-import { usdCostInUzs } from "@shared/inventory-valuation";
+import { hasCostChange, usdCostInUzs } from "@shared/inventory-valuation";
 
 function parsePagination(pageValue: unknown, limitValue: unknown) {
   const parsedPage = Number.parseInt(String(pageValue ?? "1"), 10);
@@ -560,7 +560,9 @@ export async function registerRoutes(
         const current = await storage.getProduct(req.params.id, req.tenantId);
         if (!current) return res.status(404).json({ error: "Product not found" });
         const merged = { ...current, ...data };
-        if (merged.supplierCurrency === "usd") {
+        // A full edit form also resubmits unchanged legacy currency fields.
+        // Renaming/restocking such a row must not require invented USD data.
+        if (merged.supplierCurrency === "usd" && hasCostChange(current, data)) {
           const costUzs = usdCostInUzs(merged.supplierOriginalPrice, merged.supplierCurrencyRate);
           if (costUzs === null) return res.status(400).json({ error: "Dollar tannarxi va kursni to'liq kiriting" });
           data.costPrice = costUzs;

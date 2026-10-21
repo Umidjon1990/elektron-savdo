@@ -40,6 +40,11 @@ export function usdCostInUzs(original: DecimalInput, rate: DecimalInput): number
   return uzs.lte(2147483647) ? uzs.toNumber() : null;
 }
 
+export function hasCostChange(current: InventoryProduct, updates: Partial<InventoryProduct>) {
+  return (["supplierCurrency", "supplierOriginalPrice", "supplierCurrencyRate", "costPrice"] as const)
+    .some(key => key in updates && updates[key] !== current[key]);
+}
+
 export function valueInventoryProduct(p: InventoryProduct) {
   const quantity = decimal(p.stock);
   const original = decimal(p.supplierOriginalPrice);

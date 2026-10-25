@@ -2,11 +2,9 @@ import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import type { Request, Response, NextFunction } from "express";
 import { getTenantById } from "./tenant";
+import { authSecret } from './auth-secret';
 
-const JWT_SECRET = process.env.JWT_SECRET || "kitoblar-olami-jwt-secret-2024-dev-only";
-if (process.env.NODE_ENV === "production" && !process.env.JWT_SECRET) {
-  console.error("WARNING: JWT_SECRET environment variable is not set in production!");
-}
+const JWT_SECRET = authSecret(process.env);
 const JWT_EXPIRES_IN = "30d";
 
 export interface JwtPayload {
@@ -59,6 +57,18 @@ export async function authMiddleware(req: Request, res: Response, next: NextFunc
 
   req.user = payload;
   req.tenantId = payload.tenantId;
+
+  if (['PATCH','PUT'].includes(req.method) && req.body && ['id','tenantId','createdBy','userId'].some(k=>k in req.body)) {
+    return res.status(400).json({error:'Yozuv egasi va identifikatorini o‘zgartirish mumkin emas'});
+  }
+  if(payload.tenantId&&!['GET','HEAD','OPTIONS'].includes(req.method)&&req.body){
+    const {finance}=await import('./finance-runtime');
+    if(!await finance.references(payload.tenantId,req.body))return res.status(400).json({error:'Bog‘langan yozuv bu do‘konga tegishli emas'});
+  }
+  const management = /^\/api\/(expenses|cash-register|suppliers|products|tenant-settings|shift-handovers)/.test(req.path);
+  if(management && !['GET','HEAD','OPTIONS'].includes(req.method) && !payload.isSuper && !['owner','admin','manager'].includes(payload.role)) {
+    return res.status(403).json({error:'Bu moliyaviy amal uchun rahbar huquqi kerak'});
+  }
 
   if (!payload.isSuper && payload.tenantId) {
     const tenant = await getTenantById(payload.tenantId);

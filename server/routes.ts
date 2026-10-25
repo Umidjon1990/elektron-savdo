@@ -1,3 +1,8 @@
+import { finance } from './finance-runtime';
+import { FinanceError } from './finance-service';
+import { publicProduct } from '@shared/public-product';
+import { randomUUID } from 'node:crypto';
+import { Money,periodBounds } from '@shared/finance';
 import { validateCampaign } from "@shared/pricing";
 import { priceOrder, priceTransaction, PricingError } from "./sale-pricing";
 import type { Express } from "express";
@@ -10,6 +15,19 @@ import { authMiddleware, optionalAuth, superAdminOnly, hashPassword, comparePass
 import { getTenantBySlug, getTenantById, invalidateTenantCache } from "./tenant";
 import { registerInventoryRoutes } from "./inventory-report";
 import { hasCostChange, usdCostInUzs } from "@shared/inventory-valuation";
+
+
+function financialId(req: any) { return String(req.body?.requestId || req.headers['idempotency-key'] || randomUUID()); }
+function financialFailure(res: any, error: any) { return res.status(error.status || (error instanceof RangeError ? 400 : error.code === '23505' ? 409 : 500)).json({ error: error.status||error instanceof RangeError ? error.message : 'Hisob amalini saqlab bo‘lmadi', items:error.items }); }
+function productNumbers(data: any) {
+ for (const k of ['stock','costPrice','price','supplierOriginalPrice','supplierCurrencyRate','barcodePrice','wholesalePrice']) {
+  if(data[k] == null) continue;
+  const n=Number(data[k]);if(!Number.isFinite(n)||n<0||n>1e12)throw new FinanceError(k+': musbat va chegaradagi son kerak');
+  if(k==='supplierOriginalPrice'&&(n>1e6||new Money(n).decimalPlaces()>8))throw new FinanceError('USD birlik narxi chegarasi yoki aniqligi noto‘g‘ri');
+  if(['price','costPrice','supplierCurrencyRate','barcodePrice','wholesalePrice'].includes(k)&&(!Number.isInteger(n)||n>2147483647))throw new FinanceError(k+': ruxsat etilgan butun son kerak');
+  if(k==='stock'&&new Money(n).decimalPlaces()>6)throw new FinanceError('Miqdor ko‘pi bilan 6 kasrli');
+ }
+}
 
 function parsePagination(pageValue: unknown, limitValue: unknown) {
   const parsedPage = Number.parseInt(String(pageValue ?? "1"), 10);
@@ -216,10 +234,10 @@ export async function registerRoutes(
           search: typeof req.query.search === "string" ? req.query.search.trim() : undefined,
           category: typeof req.query.category === "string" ? req.query.category.trim() : undefined,
         });
-        return res.json(paginationResponse(result.products, result.total, page, limit));
+        return res.json(paginationResponse(result.products.map(publicProduct), result.total, page, limit));
       }
       const products = await storage.getAllProducts(tenant.id);
-      res.json(products);
+      res.json(products.map(publicProduct));
     } catch (error) {
       res.status(500).json({ error: "Server xatoligi" });
     }
@@ -458,6 +476,21 @@ export async function registerRoutes(
     }
   });
 
+
+  app.post('/api/suppliers/opening-balance', authMiddleware, async (req,res) => {
+    try { res.json(await finance.opening(req.tenantId!,req.user!.userId,financialId(req),req.body)); } catch(e) { financialFailure(res,e); }
+  });
+  app.post('/api/products/:id/restock', authMiddleware, async (req,res) => {
+    try {
+      const current=await storage.getProduct(req.params.id,req.tenantId);if(!current)throw new FinanceError('Mahsulot topilmadi',404);
+      const allowed=['supplier','supplierPaymentMethod','supplierCurrency','supplierOriginalPrice','supplierCurrencyRate','costPrice','price'];
+      const data:any=Object.fromEntries(allowed.filter(k=>req.body[k]!==undefined).map(k=>[k,req.body[k]]));
+      if(data.supplierCurrency==='usd') { const uzs=usdCostInUzs(data.supplierOriginalPrice,data.supplierCurrencyRate);if(uzs===null)throw new FinanceError('Kirim USD tannarxi va kursni kiriting');data.costPrice=uzs; }
+      productNumbers(data);const err=validateCampaign({...current,...data});if(err)throw new FinanceError(err);
+      res.json(await finance.restock(req.tenantId!,req.user!.userId,financialId(req),req.params.id,Number(req.body.quantity),data));
+    } catch(e) { financialFailure(res,e); }
+  });
+
   // ============ PRODUCTS API (tenant-scoped) ============
 
   app.get("/api/products", authMiddleware, async (req, res) => {
@@ -504,6 +537,7 @@ export async function registerRoutes(
 
   app.post("/api/products", authMiddleware, async (req, res) => {
     try {
+      productNumbers(req.body);
       let barcode = req.body.barcode?.trim();
       if (!barcode) {
         barcode = `AUTO-${Date.now()}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`;
@@ -519,6 +553,8 @@ export async function registerRoutes(
         price: Number(req.body.price) || 0,
         stock: Number(req.body.stock) || 0,
         unit: req.body.unit || "dona",
+        supplierPaidAmount:0,
+        supplierDebtStatus:req.body.supplierPaymentMethod==='nasiya'?'pending':'paid',
         barcodePrice: req.body.barcodePrice ? Number(req.body.barcodePrice) : null,
         wholesalePrice: req.body.wholesalePrice ? Number(req.body.wholesalePrice) : null,
         supplierCurrency: req.body.supplierCurrency || "uzs",
@@ -533,7 +569,8 @@ export async function registerRoutes(
       const campaignError = validateCampaign(body);
       if (campaignError) return res.status(400).json({ error: campaignError });
       const validatedData = insertProductSchema.parse(body);
-      const product = await storage.createProduct(validatedData);
+      productNumbers(validatedData);
+      const product = await finance.createProduct(req.tenantId!, req.user!.userId, financialId(req), validatedData);
       res.status(201).json(product);
     } catch (error: any) {
       console.error("Error creating product:", error);
@@ -551,10 +588,12 @@ export async function registerRoutes(
 
   app.patch("/api/products/:id", authMiddleware, async (req, res) => {
     try {
-      const data = { ...req.body };
+      const allowed=['name','author','price','discountPrice','costPrice','stock','unit','category','barcode','image','videoUrl','description','metadata','sortOrder','isNew','barcodePrice','wholesalePrice','supplier','supplierPaymentMethod','supplierCurrency','supplierCurrencyRate','supplierOriginalPrice'];
+      const data: any=Object.fromEntries(allowed.filter(k=>req.body[k]!==undefined).map(k=>[k,req.body[k]]));
       // Never permit an edit to move a product into another tenant.
       delete data.tenantId;
       delete data.id;
+      productNumbers(data);
       const currentProduct = await storage.getProduct(req.params.id, req.tenantId);
       if (!currentProduct) return res.status(404).json({ error: "Product not found" });
       const campaignError = validateCampaign({ ...currentProduct, ...data, price: Number(data.price ?? currentProduct.price) });
@@ -579,7 +618,8 @@ export async function registerRoutes(
           data.costPrice = costUzs;
         }
       }
-      const product = await storage.updateProduct(req.params.id, data, req.tenantId);
+      productNumbers(data);
+      const product = await finance.editProduct(req.tenantId!,req.user!.userId,financialId(req),req.params.id,data,req.body.expectedStock);
       if (!product) return res.status(404).json({ error: "Product not found" });
       res.json(product);
     } catch (error: any) {
@@ -591,14 +631,8 @@ export async function registerRoutes(
     }
   });
 
-  app.delete("/api/products/:id", authMiddleware, async (req, res) => {
-    try {
-      const deleted = await storage.deleteProduct(req.params.id, req.tenantId);
-      if (!deleted) return res.status(404).json({ error: "Mahsulot topilmadi" });
-      res.json({ success: true, message: "Mahsulot o'chirildi" });
-    } catch (error) {
-      res.status(500).json({ error: "Mahsulotni o'chirishda xatolik" });
-    }
+  app.delete("/api/products/:id", authMiddleware, async (req,res)=>{
+    try{res.json(await finance.deleteProduct(req.tenantId!,req.user!.userId,financialId(req),req.params.id));}catch(e){financialFailure(res,e);}
   });
 
   app.put("/api/products/reorder", authMiddleware, async (req, res) => {
@@ -862,129 +896,11 @@ export async function registerRoutes(
   });
 
   app.post("/api/transactions", authMiddleware, async (req, res) => {
-    try {
-      const tenantId = req.tenantId;
-      if (!tenantId) return res.status(400).json({ error: "Tenant aniqlanmadi" });
-      if (req.body.pricingVersion === 1) {
-        const existing = req.body.id ? await storage.getTransaction(req.body.id, tenantId) : undefined;
-        if (existing) return res.json(existing);
-        const priced = await priceTransaction(req.body.items, tenantId, (id, tenant) => storage.getProduct(id, tenant), req.body.pricingMode === "snapshot");
-        if (Math.abs(priced.totalAmount - Number(req.body.totalAmount)) > 0.001) return res.status(409).json({ error: "Narx o'zgargan yoki jami noto'g'ri. Savatni yangilang.", items: priced.items });
-        Object.assign(req.body, priced);
-      }
-      const totalAmount = Number(req.body.totalAmount) || 0;
-      const rawSplits = Array.isArray(req.body.paymentSplits) ? req.body.paymentSplits : null;
-      let paymentSplits: Array<{ method: string; amount: number }> | null = null;
-      if (rawSplits && rawSplits.length > 0) {
-        const cleaned = rawSplits
-          .map((s: any) => ({ method: String(s?.method || "cash"), amount: Number(s?.amount) || 0 }))
-          .filter((s: any) => s.amount > 0);
-        if (cleaned.length > 0) {
-          const sum = cleaned.reduce((a: number, b: any) => a + b.amount, 0);
-          if (Math.abs(sum - totalAmount) > 1) {
-            return res.status(400).json({ error: "Aralash to'lov summasi jamiga teng emas" });
-          }
-          paymentSplits = cleaned;
-        }
-      }
-      const nasiyaSplit = paymentSplits ? paymentSplits.find(s => s.method === "nasiya") : null;
-      const isMixed = !!paymentSplits;
-      if (isMixed) {
-        if (paymentSplits!.length < 2) {
-          return res.status(400).json({ error: "Aralash to'lov uchun kamida 2 ta usul kerak" });
-        }
-        if (nasiyaSplit && nasiyaSplit.amount > 0) {
-          if (!req.body.customerName || !String(req.body.customerName).trim()) {
-            return res.status(400).json({ error: "Nasiya qism uchun mijoz ismi kerak" });
-          }
-          if (!req.body.customerPhone || !String(req.body.customerPhone).trim()) {
-            return res.status(400).json({ error: "Nasiya qism uchun telefon raqam kerak" });
-          }
-          if (!req.body.dueDate) {
-            return res.status(400).json({ error: "Nasiya qism uchun to'lov muddati kerak" });
-          }
-        }
-      }
-      const isNasiya = !isMixed && (req.body.paymentMethod || "cash") === "nasiya";
-      const finalMethod = isMixed ? "mixed" : (req.body.paymentMethod || "cash");
-      const finalDebtStatus = isMixed
-        ? (nasiyaSplit && nasiyaSplit.amount > 0 ? "pending" : "none")
-        : (isNasiya ? "pending" : "none");
-      const finalPaidAmount = isMixed
-        ? (nasiyaSplit && nasiyaSplit.amount > 0 ? Math.max(0, totalAmount - nasiyaSplit.amount) : totalAmount)
-        : (Number(req.body.paidAmount) || 0);
-      const data = {
-        id: req.body.id || crypto.randomUUID(),
-        tenantId,
-        date: new Date(req.body.date),
-        items: req.body.items || [],
-        totalAmount,
-        totalProfit: Number(req.body.totalProfit) || 0,
-        paymentMethod: finalMethod,
-        status: req.body.status || "completed",
-        customerName: req.body.customerName || null,
-        customerPhone: req.body.customerPhone || null,
-        customerInfo: req.body.customerInfo || null,
-        dueDate: req.body.dueDate ? new Date(req.body.dueDate) : null,
-        paidAmount: finalPaidAmount,
-        debtStatus: finalDebtStatus,
-        paymentSplits: paymentSplits || null,
-      };
-      const transaction = await storage.createTransaction(data);
-
-      // Auto-save customer to the customers table whenever the cashier
-      // entered both name and phone. This way every sale grows the
-      // customer database — next time the cashier can search and pick
-      // them instead of re-typing. Best-effort & non-blocking.
-      const cName = (req.body.customerName || "").toString().trim();
-      const cPhone = (req.body.customerPhone || "").toString().trim();
-      if (cName && cPhone) {
-        (async () => {
-          try {
-            const existing = await storage.getCustomerByPhone(cPhone, tenantId);
-            if (!existing) {
-              const cInfo = (req.body.customerInfo && typeof req.body.customerInfo === 'object') ? req.body.customerInfo : {};
-              const addr = (cInfo.address || "").toString().trim();
-              const note = (cInfo.note || "").toString().trim();
-              await storage.createCustomer({
-                tenantId,
-                name: cName,
-                phone: cPhone,
-                addresses: addr ? [{ label: "MFY", address: addr }] : [],
-                notes: note || "",
-              } as any);
-            }
-          } catch (e) {
-            console.error("auto-save customer failed:", e);
-          }
-        })();
-      }
-
-      res.status(201).json(transaction);
-    } catch (error) {
-      if (error instanceof PricingError) return res.status(error.status).json({ error: error.message });
-      if (error instanceof Error && error.message === "INVALID_TRANSACTION_QUANTITY") {
-        return res.status(400).json({ error: "Mahsulot miqdori musbat son bo'lishi kerak" });
-      }
-      console.error("Error creating transaction:", error);
-      res.status(400).json({ error: "Tranzaksiyani saqlashda xatolik" });
-    }
+    try { res.status(201).json(await finance.sale(req.tenantId!,req.user!.userId,req.body)); } catch(error) { financialFailure(res,error); }
   });
 
   app.post("/api/transactions/:id/void", authMiddleware, async (req, res) => {
-    try {
-      const result = await storage.voidTransaction(req.params.id, req.tenantId);
-      if (!result) return res.status(404).json({ error: "Transaction not found" });
-      if (result.alreadyVoided) {
-        return res.status(409).json({ error: "Transaction already voided", transaction: result.transaction });
-      }
-      res.json(result.transaction);
-    } catch (error) {
-      if (error instanceof Error && error.message === "INVALID_TRANSACTION_QUANTITY") {
-        return res.status(400).json({ error: "Tranzaksiyadagi mahsulot miqdori noto'g'ri" });
-      }
-      res.status(500).json({ error: "Failed to void transaction" });
-    }
+    try { const result=await finance.voidSale(req.tenantId!,req.user!.userId,req.params.id,req.body);res.json(result.transaction); } catch(error) { financialFailure(res,error); }
   });
 
   // ============ DEBT / NASIYA ============
@@ -1013,31 +929,7 @@ export async function registerRoutes(
   });
 
   app.post("/api/debts/:transactionId/pay", authMiddleware, async (req, res) => {
-    try {
-      const txn = await storage.getTransaction(req.params.transactionId, req.tenantId);
-      if (!txn) return res.status(404).json({ error: "Tranzaksiya topilmadi" });
-
-      const payAmount = Number(req.body.amount);
-      if (!payAmount || payAmount <= 0) return res.status(400).json({ error: "To'lov summasi noto'g'ri" });
-
-      const newPaid = (txn.paidAmount || 0) + payAmount;
-      const remaining = txn.totalAmount - newPaid;
-      const newStatus = remaining <= 0 ? "paid" : "partial";
-
-      await storage.createDebtPayment({
-        tenantId: req.tenantId!,
-        transactionId: txn.id,
-        amount: payAmount,
-        date: new Date(),
-        note: req.body.note || null,
-      });
-
-      const updated = await storage.updateTransactionDebt(txn.id, Math.min(newPaid, txn.totalAmount), newStatus, req.tenantId);
-      res.json(updated);
-    } catch (error) {
-      console.error("Error processing debt payment:", error);
-      res.status(500).json({ error: "To'lov amalga oshirilmadi" });
-    }
+    try { res.json(await finance.payDebt(req.tenantId!,req.user!.userId,financialId(req),req.params.transactionId,req.body)); } catch(error) { financialFailure(res,error); }
   });
 
   // ============ STANDALONE NASIYA LEDGER ============
@@ -1080,7 +972,7 @@ export async function registerRoutes(
         dueDate,
         note: String(req.body.note || "").trim(),
       });
-      const debt = await storage.createIndependentDebt(data);
+      const debt = await finance.independent(req.tenantId!,req.user!.userId,financialId(req),data);
       res.status(201).json(debt);
     } catch (error: any) {
       console.error("Error creating independent debt:", error);
@@ -1141,7 +1033,7 @@ export async function registerRoutes(
           : (current.paidAmount > 0 ? "partial" : "pending");
       }
 
-      const updated = await storage.updateIndependentDebt(req.params.id, data, req.tenantId!);
+      const updated = await finance.independent(req.tenantId!,req.user!.userId,financialId(req),data,req.params.id);
       if (!updated) return res.status(404).json({ error: "Nasiya topilmadi" });
       res.json(updated);
     } catch (error: any) {
@@ -1156,32 +1048,8 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/independent-debts/:id/payments", authMiddleware, async (req, res) => {
-    try {
-      const amount = Number(req.body.amount);
-      if (!Number.isInteger(amount) || amount <= 0) {
-        return res.status(400).json({ error: "To'lov summasi musbat butun son bo'lishi kerak" });
-      }
-      const result = await storage.recordIndependentDebtPayment(
-        req.params.id,
-        req.tenantId!,
-        amount,
-        String(req.body.note || "").trim()
-      );
-      res.status(201).json(result);
-    } catch (error: any) {
-      const messages: Record<string, { status: number; error: string }> = {
-        NASIYA_NOT_FOUND: { status: 404, error: "Nasiya topilmadi" },
-        NASIYA_VOIDED: { status: 400, error: "Bekor qilingan nasiyaga to'lov kiritib bo'lmaydi" },
-        NASIYA_ALREADY_PAID: { status: 400, error: "Bu nasiya to'liq yopilgan" },
-        NASIYA_INVALID_PAYMENT: { status: 400, error: "To'lov summasi noto'g'ri" },
-        NASIYA_OVERPAYMENT: { status: 400, error: "To'lov qoldiq qarzdan oshib ketmasligi kerak" },
-      };
-      const known = messages[error?.message];
-      if (known) return res.status(known.status).json({ error: known.error });
-      console.error("Error recording independent debt payment:", error);
-      res.status(500).json({ error: "To'lovni saqlashda xatolik" });
-    }
+  app.post("/api/independent-debts/:id/payments", authMiddleware, async (req,res)=>{
+    try {res.status(201).json(await finance.payIndependent(req.tenantId!,req.user!.userId,financialId(req),req.params.id,req.body));}catch(e){financialFailure(res,e);}
   });
 
   app.post("/api/independent-debts/:id/void", authMiddleware, async (req, res) => {
@@ -1189,7 +1057,7 @@ export async function registerRoutes(
       const current = await storage.getIndependentDebt(req.params.id, req.tenantId!);
       if (!current) return res.status(404).json({ error: "Nasiya topilmadi" });
       if (current.status === "voided") return res.json(current);
-      const updated = await storage.voidIndependentDebt(current.id, req.tenantId!);
+      const updated = await finance.independent(req.tenantId!,req.user!.userId,financialId(req),{},current.id,true);
       res.json(updated);
     } catch (error) {
       console.error("Error voiding independent debt:", error);
@@ -1295,39 +1163,15 @@ export async function registerRoutes(
   });
 
   app.post("/api/expenses", authMiddleware, async (req, res) => {
-    try {
-      const data = insertExpenseSchema.parse({
-        ...req.body,
-        tenantId: req.tenantId,
-        date: new Date(req.body.date),
-      });
-      const expense = await storage.createExpense(data);
-      res.json(expense);
-    } catch (error) {
-      res.status(500).json({ error: "Failed to create expense" });
-    }
+    try { res.status(201).json(await finance.entry(req.tenantId!,req.user!.userId,financialId(req),'expenses',req.body)); } catch(error) { financialFailure(res,error); }
   });
 
   app.patch("/api/expenses/:id", authMiddleware, async (req, res) => {
-    try {
-      const updateData: any = { ...req.body };
-      if (updateData.date) updateData.date = new Date(updateData.date);
-      const updated = await storage.updateExpense(req.params.id, updateData, req.tenantId);
-      if (!updated) return res.status(404).json({ error: "Expense not found" });
-      res.json(updated);
-    } catch (error) {
-      res.status(500).json({ error: "Failed to update expense" });
-    }
+    try { res.json(await finance.entry(req.tenantId!,req.user!.userId,financialId(req),'expenses',req.body,req.params.id)); } catch(error) { financialFailure(res,error); }
   });
 
   app.delete("/api/expenses/:id", authMiddleware, async (req, res) => {
-    try {
-      const deleted = await storage.deleteExpense(req.params.id, req.tenantId);
-      if (!deleted) return res.status(404).json({ error: "Expense not found" });
-      res.json({ success: true });
-    } catch (error) {
-      res.status(500).json({ error: "Failed to delete expense" });
-    }
+    try { res.json(await finance.entry(req.tenantId!,req.user!.userId,financialId(req),'expenses',req.body||{},req.params.id,true)); } catch(error) { financialFailure(res,error); }
   });
 
   // ============ CASH REGISTER ============
@@ -1357,39 +1201,15 @@ export async function registerRoutes(
   });
 
   app.post("/api/cash-register/entries", authMiddleware, async (req, res) => {
-    try {
-      const data = insertCashRegisterEntrySchema.parse({
-        ...req.body,
-        tenantId: req.tenantId,
-        date: new Date(req.body.date || new Date()),
-        createdBy: req.user?.userId,
-      });
-      const entry = await storage.createCashRegisterEntry(data);
-      res.status(201).json(entry);
-    } catch (error: any) {
-      console.error("Error creating cash register entry:", error);
-      res.status(400).json({ error: "Kiritishda xatolik" });
-    }
+    try { res.status(201).json(await finance.entry(req.tenantId!,req.user!.userId,financialId(req),'cash_register_entries',req.body)); } catch(error) { financialFailure(res,error); }
   });
 
   app.patch("/api/cash-register/entries/:id", authMiddleware, async (req, res) => {
-    try {
-      const updated = await storage.updateCashRegisterEntry(req.params.id, req.body, req.tenantId);
-      if (!updated) return res.status(404).json({ error: "Entry not found" });
-      res.json(updated);
-    } catch (error) {
-      res.status(500).json({ error: "Failed to update entry" });
-    }
+    try { res.json(await finance.entry(req.tenantId!,req.user!.userId,financialId(req),'cash_register_entries',req.body,req.params.id)); } catch(error) { financialFailure(res,error); }
   });
 
   app.delete("/api/cash-register/entries/:id", authMiddleware, async (req, res) => {
-    try {
-      const deleted = await storage.deleteCashRegisterEntry(req.params.id, req.tenantId);
-      if (!deleted) return res.status(404).json({ error: "Entry not found" });
-      res.json({ success: true });
-    } catch (error) {
-      res.status(500).json({ error: "Failed to delete entry" });
-    }
+    try { res.json(await finance.entry(req.tenantId!,req.user!.userId,financialId(req),'cash_register_entries',req.body||{},req.params.id,true)); } catch(error) { financialFailure(res,error); }
   });
 
   // ============ SHIFT HANDOVERS ============
@@ -1423,7 +1243,7 @@ export async function registerRoutes(
         totalCard: balance.card,
         totalNasiya: balance.nasiya,
         totalExpenses: balance.totalExpense,
-        totalAmount: balance.cash + balance.card,
+        totalAmount: balance.total,
         handedByName,
         receivedByName,
         note: note || "",
@@ -1850,7 +1670,7 @@ export async function registerRoutes(
       const orderIds = [...new Set([...activeDeliveries, ...completedDeliveries].filter(d => d.orderId).map(d => d.orderId!))];
       const ordersMap = new Map<string, any>();
       for (const oid of orderIds) {
-        const o = await storage.getOrder(oid, staff.tenantId);
+        const o = await storage.getOrder(oid, staff.tenantId || undefined);
         if (o) ordersMap.set(oid, { id: o.id, customerName: o.customerName, customerPhone: o.customerPhone, address: o.address, totalAmount: o.totalAmount, items: o.items, paymentMethod: o.paymentMethod });
       }
 
@@ -1879,7 +1699,7 @@ export async function registerRoutes(
       const { status, note } = req.body;
       if (status !== "delivered") return res.status(400).json({ error: "Faqat 'delivered' statusi ruxsat etilgan" });
 
-      const updated = await storage.updateDelivery(delivery.id, { status: "delivered", completedAt: new Date(), note: note || "Kuriyer tomonidan yetkazildi" }, staff.tenantId);
+      const updated = await storage.updateDelivery(delivery.id, { status: "delivered", completedAt: new Date(), note: note || "Kuriyer tomonidan yetkazildi" }, staff.tenantId || undefined);
       if (!updated) return res.status(500).json({ error: "Yangilab bo'lmadi" });
 
       await storage.createAuditLog({
@@ -1918,32 +1738,11 @@ export async function registerRoutes(
         const span = dateTo.getTime() - dateFrom.getTime();
         prevTo = new Date(dateFrom.getTime() - 1);
         prevFrom = new Date(prevTo.getTime() - span);
-      } else if (period === "week") {
-        const dayOfWeek = now.getDay() || 7;
-        dateFrom = new Date(now);
-        dateFrom.setDate(now.getDate() - dayOfWeek + 1);
-        dateFrom.setHours(0, 0, 0, 0);
-        prevTo = new Date(dateFrom);
-        prevTo.setMilliseconds(-1);
-        prevFrom = new Date(prevTo);
-        prevFrom.setDate(prevTo.getDate() - 6);
-        prevFrom.setHours(0, 0, 0, 0);
-        dateTo = new Date(now); dateTo.setHours(23, 59, 59, 999);
-      } else if (period === "month") {
-        dateFrom = new Date(now.getFullYear(), now.getMonth(), 1);
-        prevTo = new Date(dateFrom);
-        prevTo.setMilliseconds(-1);
-        prevFrom = new Date(prevTo.getFullYear(), prevTo.getMonth(), 1);
-        dateTo = new Date(now); dateTo.setHours(23, 59, 59, 999);
       } else {
-        dateFrom = new Date(now);
-        dateFrom.setHours(0, 0, 0, 0);
-        prevTo = new Date(dateFrom);
-        prevTo.setMilliseconds(-1);
-        prevFrom = new Date(prevTo);
-        prevFrom.setHours(0, 0, 0, 0);
-        dateTo = new Date(now); dateTo.setHours(23, 59, 59, 999);
+        ({dateFrom,dateTo}=periodBounds(period));
+        const span=dateTo.getTime()-dateFrom.getTime();prevTo=new Date(dateFrom.getTime()-1);prevFrom=new Date(prevTo.getTime()-span);
       }
+      if(!Number.isFinite(dateFrom.getTime())||!Number.isFinite(dateTo.getTime())||dateFrom>dateTo)throw new FinanceError('Hisobot sanasi noto‘g‘ri');
 
       const current = await storage.getFinancialSummary(req.tenantId!, dateFrom, dateTo);
       const previous = await storage.getFinancialSummary(req.tenantId!, prevFrom, prevTo);
@@ -2117,6 +1916,7 @@ export async function registerRoutes(
 
   app.patch("/api/orders/:id", authMiddleware, async (req, res) => {
     try {
+      if(['paymentStatus','debtAmount','paymentMethod','totalAmount','items'].some(k=>k in req.body)&&await finance.linkedOrder(req.tenantId!,req.params.id))return res.status(409).json({error:'Bu buyurtma savdoga bog‘langan. To‘lovni savdo qarzi orqali qayd eting.'});
       const allowedFields = ["address", "courier", "courierId", "paymentStatus", "debtAmount", "deliveryType", "paymentMethod", "deliveryScheduledAt", "customerName", "customerPhone"];
       const data: Record<string, any> = {};
       for (const key of allowedFields) {
@@ -2156,6 +1956,7 @@ export async function registerRoutes(
       const order = await storage.getOrder(req.params.id, req.tenantId);
       if (!order) return res.status(404).json({ error: "Buyurtma topilmadi" });
 
+      if(status==='cancelled'&&(await finance.linkedOrder(req.tenantId!,order.id))?.status==='completed')return res.status(409).json({error:'Bog‘langan savdoni pul qaytarish bilan bekor qiling.'});
       const allowedTransitions: Record<string, string[]> = {
         new: ["confirmed", "cancelled"],
         confirmed: ["preparing", "cancelled"],
@@ -2180,7 +1981,7 @@ export async function registerRoutes(
       const updateData: any = { status, statusHistory: history };
 
       if (status === "delivered") {
-        updateData.paymentStatus = order.paymentMethod === "cash" || order.paymentMethod === "card" ? "paid" : order.paymentStatus;
+        // Fulfilment does not prove that funds were collected.
         const existing = await storage.getDeliveriesByOrder(order.id, req.tenantId);
         if (existing.length > 0) {
           await storage.updateDelivery(existing[0].id, {
@@ -2207,9 +2008,7 @@ export async function registerRoutes(
         }
       }
 
-      if (status === "cancelled") {
-        updateData.paymentStatus = "unpaid";
-      }
+      // Cancelling delivery does not erase recorded payments.
 
       const updated = await storage.updateOrder(req.params.id, updateData, req.tenantId);
 
@@ -2322,7 +2121,8 @@ export async function registerRoutes(
       const entityType = req.query.entityType as string | undefined;
       const entityId = req.query.entityId as string | undefined;
       const logs = await storage.getAuditLogs(req.tenantId!, entityType, entityId);
-      res.json(logs);
+      const financial=await finance.auditTrail(req.tenantId!,entityType,entityId);
+      res.json([...logs,...financial].sort((a,b)=>new Date(b.createdAt).getTime()-new Date(a.createdAt).getTime()));
     } catch (error) {
       res.status(500).json({ error: "Failed to fetch audit logs" });
     }
@@ -2387,25 +2187,8 @@ export async function registerRoutes(
     }
   });
 
-  app.patch("/api/products/:id/supplier-debt", authMiddleware, async (req: any, res) => {
-    try {
-      const { status, paidAmount } = req.body;
-      const validStatuses = ["pending", "partial", "paid"];
-      if (status && !validStatuses.includes(status)) {
-        return res.status(400).json({ error: "Invalid status" });
-      }
-      const product = await storage.getProduct(req.params.id);
-      if (!product || (product as any).tenantId !== req.tenantId) {
-        return res.status(404).json({ error: "Product not found" });
-      }
-      const updates: any = {};
-      if (status) updates.supplierDebtStatus = status;
-      if (paidAmount !== undefined) updates.supplierPaidAmount = Number(paidAmount);
-      const updated = await storage.updateProduct(req.params.id, updates);
-      res.json(updated);
-    } catch (error) {
-      res.status(500).json({ error: "Failed to update supplier debt" });
-    }
+  app.patch("/api/products/:id/supplier-debt", authMiddleware, async (req, res) => {
+    try { throw new FinanceError('Eski qarzni tahrirlash o‘rniga ochilish qoldig‘ini tasdiqlang; yangi to‘lov uchun ta’minotchiga to‘lov tugmasidan foydalaning',409); } catch(error) { financialFailure(res,error); }
   });
 
   app.delete("/api/suppliers/:id", authMiddleware, async (req: any, res) => {
@@ -2422,188 +2205,8 @@ export async function registerRoutes(
   // unpaid nasiya products (oldest first), updating each product's debt
   // status. Optionally records an expense entry so the cash register
   // reflects the outflow.
-  app.post("/api/suppliers/pay-debt", authMiddleware, async (req: any, res) => {
-    try {
-      const { supplierName, amount, paymentMethod, expenseCategoryId, note, recordExpense, currency } = req.body || {};
-      const payAmount = Number(amount);
-      if (!supplierName || !payAmount || payAmount <= 0) {
-        return res.status(400).json({ error: "supplierName va musbat amount kerak" });
-      }
-      const method = paymentMethod === "karta" ? "karta" : "naqd";
-      // Currency the user is paying IN. "uzs" (default) = sums of costPrice*stock
-      // (UZS). "usd" = sums of supplierOriginalPrice*stock for products whose
-      // supplier price was originally entered in USD; we convert back to UZS
-      // per-product using each product's stored supplierCurrencyRate when
-      // updating the debt and computing the cash-register expense.
-      const payCurrency: "uzs" | "usd" = currency === "usd" ? "usd" : "uzs";
-      const currencyLabel = payCurrency === "usd" ? "$" : "so'm";
-
-      // If recording an expense, validate the category exists for this tenant
-      // BEFORE we apply any debt updates (avoid partial-failure surprises).
-      if (recordExpense !== false && expenseCategoryId) {
-        const tenantCategories = await storage.getExpenseCategories(req.tenantId);
-        if (!tenantCategories.some((c: any) => c.id === expenseCategoryId)) {
-          return res.status(400).json({ error: "Xarajat kategoriyasi topilmadi" });
-        }
-      }
-
-      const allProducts = await storage.getAllProducts(req.tenantId);
-      // Deterministic ordering: existing storage order (sortOrder) is used as
-      // a stable secondary key. Without a per-product createdAt we cannot do
-      // strict oldest-first; debts are paid down in the order returned by
-      // storage which is consistent across requests.
-      const baseFiltered = allProducts.filter((p: any) =>
-        (p.supplier || "") === supplierName &&
-        (p.supplierPaymentMethod || "naqd") === "nasiya" &&
-        (p.supplierDebtStatus || "pending") !== "paid"
-      );
-
-      // Each "debt slot" carries: total UZS price, already-paid UZS, plus the
-      // USD originals so we can run the math in either currency without
-      // losing precision. `costPrice` is always UZS; for USD products we
-      // recompute UZS-total from `supplierOriginalPrice * rate * stock` as a
-      // sanity floor so rounding never makes us short by 1 so'm.
-      const debts = baseFiltered
-        .map((p: any) => {
-          const stock = p.stock || 0;
-          const cur: "uzs" | "usd" = (p.supplierCurrency || "uzs") === "usd" ? "usd" : "uzs";
-          const rate = p.supplierCurrencyRate || 0;
-          const uzsTotal = (p.costPrice || 0) * stock;
-          const uzsPaid = p.supplierPaidAmount || 0;
-          const usdTotal = cur === "usd" ? (p.supplierOriginalPrice || 0) * stock : 0;
-          const usdPaid = cur === "usd" && rate > 0 ? uzsPaid / rate : 0;
-          return {
-            id: p.id,
-            name: p.name,
-            currency: cur,
-            rate,
-            uzsTotal,
-            uzsPaid,
-            usdTotal,
-            usdPaid,
-          };
-        })
-        // Only keep debt slots that match the payment currency AND still owe.
-        // For USD payments we additionally require a positive
-        // supplierCurrencyRate — without it we cannot convert any USD amount
-        // into a UZS expense / supplierPaidAmount, so the product is not
-        // eligible for USD payment at all (it can still be paid in UZS via
-        // the supplier's per-product debt screen). This keeps the backend's
-        // payment math consistent with what the frontend's `nasiyaUsdRemaining`
-        // exposes to the user.
-        .filter(d => {
-          if (payCurrency === "usd") return d.currency === "usd" && d.rate > 0 && d.usdTotal - d.usdPaid > 0.0001;
-          return d.uzsTotal - d.uzsPaid > 0;
-        });
-
-      const totalDebt = payCurrency === "usd"
-        ? debts.reduce((s, p) => s + (p.usdTotal - p.usdPaid), 0)
-        : debts.reduce((s, p) => s + (p.uzsTotal - p.uzsPaid), 0);
-
-      if (totalDebt <= 0) {
-        return res.status(400).json({
-          error: payCurrency === "usd"
-            ? "Bu yetkazib beruvchida dollar qarzi yo'q"
-            : "Bu yetkazib beruvchida qarz yo'q",
-        });
-      }
-      // For USD, allow tiny floating-point overshoot (≤ 0.01 USD).
-      const overshoot = payCurrency === "usd" ? 0.01 : 0;
-      if (payAmount > totalDebt + overshoot) {
-        return res.status(400).json({
-          error: `To'lov miqdori qarzdan oshib ketdi. Maksimal: ${totalDebt.toLocaleString()} ${currencyLabel}`,
-        });
-      }
-
-      let remaining = payAmount;
-      const updates: { id: string; status: "paid" | "partial"; paidAmount: number; uzsDelta: number }[] = [];
-
-      for (const p of debts) {
-        if (remaining <= 0.0001) break;
-        if (payCurrency === "usd") {
-          const owedUsd = p.usdTotal - p.usdPaid;
-          if (remaining >= owedUsd - 0.0001) {
-            // Fully pay this product in USD → snap UZS paidAmount to the
-            // exact stored UZS total so we never leave a 1 so'm dust debt.
-            const uzsDelta = Math.max(0, p.uzsTotal - p.uzsPaid);
-            updates.push({ id: p.id, status: "paid", paidAmount: p.uzsTotal, uzsDelta });
-            remaining -= owedUsd;
-          } else {
-            // Partial USD payment → convert to UZS using product's own rate.
-            // The filter above already excludes rate<=0 products from USD
-            // payments, so we can safely multiply here without checking.
-            const usdPortion = remaining;
-            const uzsDelta = Math.round(usdPortion * p.rate);
-            const newPaid = Math.min(p.uzsTotal, (p.uzsPaid || 0) + uzsDelta);
-            updates.push({ id: p.id, status: "partial", paidAmount: newPaid, uzsDelta: newPaid - p.uzsPaid });
-            remaining = 0;
-          }
-        } else {
-          const owed = p.uzsTotal - p.uzsPaid;
-          if (remaining >= owed) {
-            updates.push({ id: p.id, status: "paid", paidAmount: p.uzsTotal, uzsDelta: owed });
-            remaining -= owed;
-          } else {
-            updates.push({ id: p.id, status: "partial", paidAmount: p.uzsPaid + remaining, uzsDelta: remaining });
-            remaining = 0;
-          }
-        }
-      }
-
-      // Apply updates in parallel (per-product PATCH equivalent)
-      await Promise.all(updates.map(u =>
-        storage.updateProduct(u.id, {
-          supplierDebtStatus: u.status,
-          supplierPaidAmount: u.paidAmount,
-        } as any, req.tenantId)
-      ));
-
-      // Total UZS that actually left the cash register. For USD payments this
-      // is the sum of per-product UZS deltas (each computed from that
-      // product's own historical exchange rate), NOT today's rate × payAmount.
-      const usedUzs = updates.reduce((s, u) => s + u.uzsDelta, 0);
-      // What we tell the user we "used" of their input — same currency they
-      // typed in.
-      const used = payCurrency === "usd" ? payAmount - remaining : usedUzs;
-
-      // Optionally create an expense so the cash register reflects the outflow
-      let expenseId: string | undefined;
-      if (recordExpense !== false && expenseCategoryId) {
-        try {
-          const methodLabel = method === "karta" ? "Karta" : "Naqd";
-          const currencyText = payCurrency === "usd"
-            ? `$${used.toLocaleString()} ≈ ${usedUzs.toLocaleString()} so'm`
-            : `${methodLabel}`;
-          const description = note?.trim()
-            ? `${supplierName}: ${note.trim()} (${currencyText})`
-            : `${supplierName} - tovar qarzi to'lovi (${currencyText})`;
-          const expense = await storage.createExpense({
-            tenantId: req.tenantId,
-            amount: usedUzs,
-            categoryId: expenseCategoryId,
-            description,
-            date: new Date(),
-          } as any);
-          expenseId = (expense as any)?.id;
-        } catch (e) {
-          // Expense creation should not block the debt payment itself.
-          console.error("[pay-debt] failed to create expense:", e);
-        }
-      }
-
-      res.json({
-        success: true,
-        currency: payCurrency,
-        used,
-        usedUzs,
-        leftover: payAmount - used,
-        productsUpdated: updates.length,
-        expenseId,
-      });
-    } catch (error) {
-      console.error("[pay-debt] error:", error);
-      res.status(500).json({ error: "To'lovni amalga oshirib bo'lmadi" });
-    }
+  app.post("/api/suppliers/pay-debt", authMiddleware, async (req, res) => {
+    try { res.json(await finance.paySupplier(req.tenantId!,req.user!.userId,financialId(req),req.body)); } catch(error) { financialFailure(res,error); }
   });
 
   return httpServer;

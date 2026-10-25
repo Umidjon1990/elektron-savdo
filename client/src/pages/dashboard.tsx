@@ -1,3 +1,4 @@
+import { adjustment,Money,cartTotal } from '@shared/finance';
 import { salePrice } from "@shared/pricing";
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
@@ -307,7 +308,8 @@ export default function Dashboard() {
       if (item.product.id === id) {
         const newQty = item.quantity + delta;
         if (delta > 0 && newQty > item.product.stock) return item;
-        return { ...item, quantity: Math.max(1, newQty) };
+        const quantity=Math.max(1,newQty);
+        return { ...item, quantity, discount:item.adjustmentInputType==='percent'?adjustment(salePrice(item.product),quantity,item.adjustmentValue||0,'percent',item.adjustmentType||'skidka'):item.discount };
       }
       return item;
     }));
@@ -333,12 +335,7 @@ export default function Dashboard() {
   const handleCheckout = async (method: string = "cash", customerData?: { customerName?: string; customerPhone?: string; customerInfo?: Record<string, string> }, nasiyaData?: { dueDate: string }, deliveryData?: { courierId: string; courierName: string; address: string; customerName: string; customerPhone: string }, paymentSplits?: Array<{ method: string; amount: number }>) => {
     if (checkoutInProgress.current || !cart.length) return;
     checkoutInProgress.current = true;
-    const total = cart.reduce((acc, item) => {
-      const effectivePrice = salePrice(item.product);
-      const itemTotal = effectivePrice * item.quantity;
-      const discount = item.discount || 0;
-      return acc + (itemTotal - discount);
-    }, 0);
+    const total = cartTotal(cart);
 
     // SYNCHRONOUSLY open the print popup before any await. This keeps it inside
     // the browser's user-activation window so popup blockers allow it.
@@ -381,47 +378,8 @@ export default function Dashboard() {
     }
 
     try {
-      const transaction = await addTransaction(cart, total, method, customerData, nasiyaData, paymentSplits);
+      const transaction = await addTransaction(cart, total, method, customerData, nasiyaData, paymentSplits, deliveryData);
 
-      if (deliveryData && token) {
-        try {
-          const orderRes = await fetch("/api/orders", {
-            method: "POST",
-            headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-            body: JSON.stringify({
-              customerName: deliveryData.customerName,
-              customerPhone: deliveryData.customerPhone,
-              address: deliveryData.address,
-              items: cart.map(item => ({ productId: item.product.id, name: item.product.name, price: salePrice(item.product) - (item.discount || 0) / item.quantity, quantity: item.quantity })),
-              totalAmount: total,
-              status: "confirmed",
-              paymentMethod: method,
-              paymentStatus: "paid",
-              deliveryType: "delivery",
-              courier: deliveryData.courierName,
-              courierId: deliveryData.courierId,
-            }),
-          });
-          if (orderRes.ok) {
-            const order = await orderRes.json();
-            await fetch("/api/deliveries", {
-              method: "POST",
-              headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-              body: JSON.stringify({
-                orderId: order.id,
-                customerId: "",
-                address: deliveryData.address,
-                courier: deliveryData.courierName,
-                courierId: deliveryData.courierId,
-                status: "pending",
-              }),
-            });
-          }
-        } catch (e) {
-          console.error("Delivery creation failed:", e);
-        }
-      }
-      
       // Stock decrement happens atomically server-side inside POST
       // /api/transactions (one round trip for any cart size). Locally,
       // transaction-context.addTransaction has already updated IndexedDB

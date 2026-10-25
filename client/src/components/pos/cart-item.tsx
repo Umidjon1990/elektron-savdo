@@ -1,3 +1,4 @@
+import { adjustment } from '@shared/finance';
 import { ProductImage } from "@/components/product-image";
 import { ProductPrice } from "@/components/product-price";
 import { salePrice } from "@shared/pricing";
@@ -33,7 +34,7 @@ export function CartItem({ item, onUpdateQuantity, onUpdateDiscount, onRemove }:
     let calculatedAmount = 0;
     if (inputType === "percent") {
       const clampedPercent = Math.min(num, 100);
-      calculatedAmount = Math.round(itemTotal * clampedPercent / 100);
+      calculatedAmount = Math.abs(adjustment(effectivePrice,item.quantity,clampedPercent,"percent",type));
     } else {
       calculatedAmount = type === "skidka" ? Math.min(num, itemTotal) : num;
     }

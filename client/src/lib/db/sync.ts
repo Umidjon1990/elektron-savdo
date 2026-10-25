@@ -1,6 +1,9 @@
 import { db, type CachedProduct, type CachedCategory, type CachedTransaction, setLastSyncTime, setCatalogVersion, getCatalogVersion } from './index';
 import { getAuthHeaders } from '../auth-context';
 
+const activeTenant=()=>localStorage.getItem('kitoblar_tenant_id');
+const currentTransactions=()=>db.transactions.filter(t=>!!activeTenant()&&t.tenantId===activeTenant()).reverse().sortBy('date');
+
 let isOnline = typeof navigator !== 'undefined' ? navigator.onLine : true;
 
 if (typeof window !== 'undefined') {
@@ -84,13 +87,15 @@ export async function saveTransactionLocally(transaction: Omit<CachedTransaction
 
 export async function syncTransactionsFromServer(): Promise<CachedTransaction[]> {
   try {
+    const tenantAtStart=activeTenant();
     const headers = getAuthHeaders();
     if (!headers.Authorization) {
-      return await db.transactions.orderBy('date').reverse().toArray();
+      return await currentTransactions();
     }
     const res = await fetch('/api/transactions', { headers });
     if (!res.ok) throw new Error('Failed to fetch transactions');
     const serverTransactions = await res.json();
+    if(activeTenant()!==tenantAtStart||getAuthHeaders().Authorization!==headers.Authorization)return currentTransactions();
     
     // Authoritative reconciliation: every transaction the server returns must
     // be marked synced=true locally — including ones already present. Without
@@ -112,6 +117,8 @@ export async function syncTransactionsFromServer(): Promise<CachedTransaction[]>
           totalProfit: txn.totalProfit || 0,
           paymentMethod: txn.paymentMethod,
           synced: true,
+          pendingOperation:undefined,
+          tenantId:tenantAtStart||undefined,
           status: txn.status || 'completed',
           customerName: txn.customerName,
           customerPhone: txn.customerPhone,
@@ -121,10 +128,17 @@ export async function syncTransactionsFromServer(): Promise<CachedTransaction[]>
           debtStatus: txn.debtStatus || "none",
           paymentSplits: txn.paymentSplits || undefined,
         });
-      } else if (existing.synced === false || existing.status !== (txn.status || 'completed')) {
+      } else if (existing.pendingOperation === 'void' && txn.status !== 'voided') {
+        // A pending local reversal is not overwritten by the server's old sale.
+        continue;
+      } else {
         // Already in IDB — reconcile flag and status with server truth.
         await db.transactions.update(txn.id, {
+          items:txn.items||[],
+          paymentSplits:txn.paymentSplits||undefined,
           synced: true,
+          pendingOperation:undefined,
+          tenantId:tenantAtStart||undefined,
           status: txn.status || 'completed',
           totalAmount: txn.totalAmount,
           totalProfit: txn.totalProfit || 0,
@@ -134,25 +148,12 @@ export async function syncTransactionsFromServer(): Promise<CachedTransaction[]>
       }
     }
 
-    // Also clean up "ghost" pending transactions: anything older than 24h that
-    // is still synced=false but the server doesn't know about. These are
-    // unrecoverable POST failures from old sessions; leaving them inflates
-    // the Moliya total on every page load.
-    const staleCutoff = Date.now() - 24 * 60 * 60 * 1000;
-    const allLocal = await db.transactions.toArray();
-    for (const local of allLocal) {
-      if (local.synced === false && !serverIds.has(local.id)) {
-        const ts = new Date(local.date).getTime();
-        if (ts < staleCutoff) {
-          await db.transactions.delete(local.id);
-        }
-      }
-    }
-    
-    return await db.transactions.orderBy('date').reverse().toArray();
+    // An unacknowledged sale never expires. Retain it until explicitly reconciled.
+
+    return await currentTransactions();
   } catch (error) {
     console.error('Failed to sync transactions from server:', error);
-    return await db.transactions.orderBy('date').reverse().toArray();
+    return await currentTransactions();
   }
 }
 
@@ -160,24 +161,28 @@ export async function getTransactionsFromCache(): Promise<CachedTransaction[]> {
   if (isOnline) {
     return await syncTransactionsFromServer();
   }
-  return await db.transactions.orderBy('date').reverse().toArray();
+  return await currentTransactions();
 }
 
 export async function getPendingTransactions(): Promise<CachedTransaction[]> {
-  return await db.transactions.filter(txn => txn.synced === false).toArray();
+  return await db.transactions.filter(txn => txn.synced === false && !!activeTenant() && txn.tenantId===activeTenant()).toArray();
 }
 
 export async function markTransactionSynced(id: string): Promise<void> {
   await db.transactions.update(id, { synced: true });
 }
 
+let syncRunning=false;
 export async function syncPendingTransactions(): Promise<void> {
-  if (!isOnline) return;
-  
+  if (!isOnline || syncRunning) return;
+  syncRunning=true;
+  try {
+  const tenantAtStart=activeTenant();
   const pending = await getPendingTransactions();
-  const headers = { 'Content-Type': 'application/json', ...getAuthHeaders() };
+  const headers: Record<string,string> = { 'Content-Type': 'application/json', ...getAuthHeaders() };
   
   for (const txn of pending) {
+    if(activeTenant()!==tenantAtStart||getAuthHeaders().Authorization!==headers.Authorization)break;
     try {
       const res = await fetch('/api/transactions', {
         method: 'POST',
@@ -185,7 +190,8 @@ export async function syncPendingTransactions(): Promise<void> {
         body: JSON.stringify({
           id: txn.id,
           date: txn.date,
-          pricingVersion: txn.pricingVersion,
+          pricingVersion: 1,
+          delivery:txn.delivery,
           pricingMode: "snapshot",
           items: (txn.items || []).filter(item => item && item.product).map(item => ({
             product: {
@@ -204,7 +210,7 @@ export async function syncPendingTransactions(): Promise<void> {
           totalAmount: txn.totalAmount,
           totalProfit: txn.totalProfit || 0,
           paymentMethod: txn.paymentMethod,
-          status: txn.status || "completed",
+          status: "completed",
           customerName: txn.customerName,
           customerPhone: txn.customerPhone,
           customerInfo: txn.customerInfo,
@@ -216,7 +222,11 @@ export async function syncPendingTransactions(): Promise<void> {
       });
       
       if (res.ok) {
-        await markTransactionSynced(txn.id);
+        if(txn.pendingOperation==='void'||txn.status==='voided') {
+          const reversal=await fetch(`/api/transactions/${txn.id}/void`,{method:'POST',headers,body:JSON.stringify({refundConfirmed:txn.refundConfirmed===true})});
+          if(!reversal.ok)continue;
+        }
+        await db.transactions.update(txn.id,{synced:true,pendingOperation:undefined});
         // Stock decrement is now done atomically server-side inside
         // POST /api/transactions (storage.createTransaction). The previous
         // per-item sequential PATCH loop here was 1 extra round trip PER
@@ -226,6 +236,7 @@ export async function syncPendingTransactions(): Promise<void> {
       console.error('Failed to sync transaction:', txn.id, error);
     }
   }
+  } finally { syncRunning=false; }
 }
 
 export async function initializeOfflineData(): Promise<{ products: CachedProduct[]; categories: CachedCategory[] }> {

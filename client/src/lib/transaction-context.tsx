@@ -1,3 +1,4 @@
+import { Money,localDay,periodBounds } from '@shared/finance';
 import { salePrice } from "@shared/pricing";
 import React, { createContext, useContext, useState, useEffect, useRef, type ReactNode } from "react";
 import { useQueryClient } from "@tanstack/react-query";
@@ -29,7 +30,7 @@ interface TransactionContextType {
   transactions: Transaction[];
   pendingCount: number;
   isOffline: boolean;
-  addTransaction: (items: CartItem[], total: number, method: string, customerData?: { customerName?: string; customerPhone?: string; customerInfo?: Record<string, string> }, nasiyaData?: { dueDate: string }, paymentSplits?: Array<{ method: string; amount: number }>) => Promise<Transaction>;
+  addTransaction: (items: CartItem[], total: number, method: string, customerData?: { customerName?: string; customerPhone?: string; customerInfo?: Record<string, string> }, nasiyaData?: { dueDate: string }, paymentSplits?: Array<{ method: string; amount: number }>, delivery?:any) => Promise<Transaction>;
   voidTransaction: (id: string) => Promise<void>;
   getStats: () => {
     todayTotal: number;
@@ -45,7 +46,7 @@ interface TransactionContextType {
 const TransactionContext = createContext<TransactionContextType | undefined>(undefined);
 
 export function TransactionProvider({ children }: { children: ReactNode }) {
-  const { token } = useAuth();
+  const { token,tenant } = useAuth();
   const queryClient = useQueryClient();
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [pendingCount, setPendingCount] = useState(0);
@@ -111,15 +112,10 @@ export function TransactionProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
-  const addTransaction = async (items: CartItem[], total: number, method: string, customerData?: { customerName?: string; customerPhone?: string; customerInfo?: Record<string, string> }, nasiyaData?: { dueDate: string }, paymentSplits?: Array<{ method: string; amount: number }>): Promise<Transaction> => {
-    const profit = items.reduce((acc, item) => {
-      const costPrice = item.product.costPrice || 0;
-      const discount = item.discount || 0;
-      const effectivePrice = salePrice(item.product);
-      const itemProfit = ((effectivePrice * item.quantity) - discount) - (costPrice * item.quantity);
-      return acc + itemProfit;
-    }, 0);
-    
+  const addTransaction = async (items: CartItem[], total: number, method: string, customerData?: { customerName?: string; customerPhone?: string; customerInfo?: Record<string, string> }, nasiyaData?: { dueDate: string }, paymentSplits?: Array<{ method: string; amount: number }>, delivery?:any): Promise<Transaction> => {
+    total=new Money(total).toDecimalPlaces(2).toNumber();
+    const cost=items.reduce((sum,item)=>sum.add(new Money(item.product.costPrice||0).mul(item.quantity)),new Money(0)).toDecimalPlaces(2);
+    const profit=new Money(total).sub(cost).toNumber();
     const nasiyaSplit = (paymentSplits || []).find(s => s.method === "nasiya");
     const hasNasiyaInSplit = !!(nasiyaSplit && nasiyaSplit.amount > 0);
     const isMixed = !!(paymentSplits && paymentSplits.length > 0);
@@ -131,10 +127,14 @@ export function TransactionProvider({ children }: { children: ReactNode }) {
       : (method === "nasiya" ? "pending" : "none");
 
     const attemptKey = JSON.stringify({ items, total, method, customerData, nasiyaData, paymentSplits });
+    if(checkoutAttempt.current&&checkoutAttempt.current.key!==attemptKey){const pending=await db.transactions.get(checkoutAttempt.current.id);if(pending&&!pending.synced)throw new Error('Oldingi to‘lov natijasi kutilmoqda. Avval uni sinxronlang.');}
     if (checkoutAttempt.current?.key !== attemptKey) checkoutAttempt.current = {
       key: attemptKey, id: crypto.randomUUID(), date: new Date().toISOString(),
     };
     const newTransaction: CachedTransaction = {
+      tenantId:tenant?.id,
+      pendingOperation:'sale',
+      delivery,
       id: checkoutAttempt.current.id,
       date: checkoutAttempt.current.date,
       pricingVersion: 1,
@@ -158,6 +158,8 @@ export function TransactionProvider({ children }: { children: ReactNode }) {
       paymentSplits: isMixed ? paymentSplits : undefined,
     };
     
+    // Persist the intent before the network call so a lost acknowledgement is recoverable.
+    await db.transactions.put(newTransaction);
     // Confirm online prices before issuing a receipt. Disconnected tills keep
     // their accepted snapshot and replay it explicitly on reconnection.
     if (getOnlineStatus()) {
@@ -166,13 +168,18 @@ export function TransactionProvider({ children }: { children: ReactNode }) {
         body: JSON.stringify({ ...newTransaction, items, pricingMode: "current" }),
       });
       const result = await res.json();
-      if (!res.ok) throw Object.assign(new Error(result.error || "To'lovni saqlab bo'lmadi"), { items: result.items });
+      if (!res.ok) {
+        if(res.status>=400&&res.status<500){await db.transactions.delete(newTransaction.id);checkoutAttempt.current=null;}
+        throw Object.assign(new Error(result.error || "To‘lovni saqlab bo‘lmadi"), { items: result.items });
+      }
       newTransaction.items = result.items;
       newTransaction.totalProfit = result.totalProfit;
       newTransaction.synced = true;
+      newTransaction.pendingOperation=undefined;
     }
     await db.transactions.put(newTransaction);
     checkoutAttempt.current = null;
+    for(const key of ["cash-balance","finance-summary","finance-daily"])queryClient.invalidateQueries({queryKey:[key]});
     const returnedTransaction: Transaction = {
       id: newTransaction.id,
       date: newTransaction.date,
@@ -221,85 +228,40 @@ export function TransactionProvider({ children }: { children: ReactNode }) {
     return returnedTransaction;
   };
 
-  const voidTransaction = async (id: string): Promise<void> => {
-    const transaction = await db.transactions.get(id);
-    if (!transaction) {
-      throw new Error("Transaction not found");
-    }
-    
-    if (transaction.status === "voided") {
-      throw new Error("Transaction already voided");
-    }
-
-    const online = getOnlineStatus();
-
-    // ALWAYS restore stock locally first for INSTANT UI feedback. The user
-    // clicks "X" in Finance and expects to see the stock in Ombor go up
-    // immediately — not after a network round-trip + 5-min stale query
-    // refetch. The subsequent refetchQueries below replaces this with the
-    // server-truth value, overwriting any drift. Previously this was
-    // skipped when online, which is exactly why users reported "X bossam
-    // omborga qaytmayapti" — the inventory cache was stale.
-    for (const item of (transaction.items || [])) {
-      if (!item || !item.product || !item.product.id) continue;
-      const product = await db.products.get(item.product.id);
-      if (product) {
-        await db.products.update(item.product.id, {
-          stock: product.stock + item.quantity
-        });
-      }
-    }
-
-    await db.transactions.update(id, { 
-      status: "voided",
-      synced: false
-    });
-    
-    let serverOk = false;
-    if (online) {
-      try {
-        const { getAuthHeaders } = await import("./auth-context");
-        const res = await fetch(`/api/transactions/${id}/void`, { method: "POST", headers: getAuthHeaders() });
-        // 409 = already voided on server; treat as success so we still refetch.
-        serverOk = res.ok || res.status === 409;
-      } catch (error) {
-        console.error("Failed to sync voided transaction:", error);
-      }
-    }
-
-    // refetchQueries (NOT invalidateQueries) FORCES an immediate refetch
-    // even with staleTime: 5min and refetchOnMount: false set in
-    // product-context. invalidateQueries only marks stale and waits for
-    // an active observer — but the user might be on Finance page where
-    // the products query observer doesn't exist, so the inventory page
-    // would still show old stock when they navigate back.
-    if (serverOk) {
-      await queryClient.refetchQueries({ queryKey: ["products"] });
-    }
-    await queryClient.invalidateQueries({ queryKey: ["/api/transactions"] });
-
-    await loadTransactions();
-  };
+  const voidTransaction = async (id:string):Promise<void> => {
+ const transaction=await db.transactions.get(id);if(!transaction||transaction.status==='voided')throw new Error('Savdo topilmadi yoki bekor qilingan');
+ if(!window.confirm('Savdoni bekor qilish tovarlarni qaytaradi. Qabul qilingan pul shu to‘lov usullariga qaytarilganini tasdiqlaysizmi?'))return;
+ const online=getOnlineStatus();
+ if(online){
+   if(!transaction.synced)await syncPendingTransactions();
+   const res=await fetch('/api/transactions/'+id+'/void',{method:'POST',headers:{'Content-Type':'application/json',...getAuthHeaders()},body:JSON.stringify({refundConfirmed:true})});
+   const result=await res.json();if(!res.ok)throw new Error(result.error||'Bekor qilish saqlanmadi');
+ }
+ for(const item of transaction.items||[]){const p=await db.products.get(item.product.id);if(p)await db.products.update(p.id,{stock:new Money(p.stock).add(item.quantity).toNumber()});}
+ await db.transactions.update(id,{status:'voided',pendingOperation:online?undefined:'void',refundConfirmed:true,synced:online});
+ if(online)await queryClient.refetchQueries({queryKey:['products']});
+ await queryClient.invalidateQueries({queryKey:['finance-summary']});await loadTransactions();
+};
 
   const getStats = () => {
-    const activeTransactions = transactions.filter(t => t.status !== "voided");
+    const activeTransactions = transactions.filter(t => t.status === "completed");
     
-    const today = new Date().toISOString().split('T')[0];
-    const todayTransactions = activeTransactions.filter(t => t.date.startsWith(today));
+    const today = localDay(new Date());
+    const todayTransactions = activeTransactions.filter(t => localDay(t.date)===today);
     
     const now = new Date();
-    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
+    const startOfMonth = periodBounds("month",undefined,now).dateFrom.toISOString();
     const monthTransactions = activeTransactions.filter(t => t.date >= startOfMonth);
     
     const safeItems = (items: any[]) => (items || []).filter((item: any) => item && item.product);
     
     return {
-      todayTotal: todayTransactions.reduce((acc, t) => acc + t.totalAmount, 0),
+      todayTotal: todayTransactions.reduce((acc,t)=>acc.add(t.totalAmount),new Money(0)).toNumber(),
       todayCount: todayTransactions.length,
-      monthTotal: monthTransactions.reduce((acc, t) => acc + t.totalAmount, 0),
+      monthTotal: monthTransactions.reduce((acc,t)=>acc.add(t.totalAmount),new Money(0)).toNumber(),
       totalItemsSold: todayTransactions.reduce((acc, t) => acc + safeItems(t.items).reduce((sum, item) => sum + item.quantity, 0), 0),
-      todayProfit: todayTransactions.reduce((acc, t) => acc + (t.totalProfit || 0), 0),
-      monthProfit: monthTransactions.reduce((acc, t) => acc + (t.totalProfit || 0), 0)
+      todayProfit: todayTransactions.reduce((acc,t)=>acc.add(t.totalProfit||0),new Money(0)).toNumber(),
+      monthProfit: monthTransactions.reduce((acc,t)=>acc.add(t.totalProfit||0),new Money(0)).toNumber()
     };
   };
 

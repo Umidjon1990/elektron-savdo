@@ -1,3 +1,4 @@
+import { financialFetch as fetch } from './financial-fetch';
 import { createContext, useContext, useState, useEffect, type ReactNode } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { db, type CachedProduct } from "./db";
@@ -77,6 +78,7 @@ export function ProductProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (token && cacheLoaded && !isOffline) {
       queryClient.invalidateQueries({ queryKey: ["products"] });
+        for(const key of ["supplier-summary","cash-balance","finance-summary","finance-daily"])queryClient.invalidateQueries({queryKey:[key]});
     }
     if (!token) {
       setCachedProducts([]);
@@ -119,14 +121,8 @@ export function ProductProvider({ children }: { children: ReactNode }) {
   const addProductMutation = useMutation({
     mutationFn: async (product: Omit<Product, "id">) => {
       const productWithDefaults = { ...product, costPrice: product.costPrice ?? 0 };
-      if (isOffline) {
-        const tempId = 'temp_' + Math.random().toString(36).substr(2, 9);
-        const newProduct = { ...productWithDefaults, id: tempId } as Product;
-        await addProductToCache(newProduct);
-        setCachedProducts(prev => [...prev, newProduct]);
-        return newProduct;
-      }
-      
+      if (isOffline) throw new Error('Mahsulot kirimi uchun internet kerak');
+
       const res = await fetch("/api/products", {
         method: "POST",
         headers: { "Content-Type": "application/json", ...getAuthHeaders() },
@@ -143,23 +139,19 @@ export function ProductProvider({ children }: { children: ReactNode }) {
     onSuccess: () => {
       if (!isOffline) {
         queryClient.invalidateQueries({ queryKey: ["products"] });
+        for(const key of ["supplier-summary","cash-balance","finance-summary","finance-daily"])queryClient.invalidateQueries({queryKey:[key]});
       }
     },
   });
 
   const updateProductMutation = useMutation({
     mutationFn: async ({ id, data }: { id: string; data: Partial<Omit<Product, "id">> }) => {
-      if (isOffline) {
-        if ("discountPrice" in data && (data.discountPrice ?? null) !== (products.find(p => p.id === id)?.discountPrice ?? null)) throw new Error("Chegirmani saqlash uchun internet kerak");
-        await updateProductInCache(id, data);
-        setCachedProducts(prev => prev.map(p => p.id === id ? { ...p, ...data } : p));
-        return { id, ...data };
-      }
-      
+      if (isOffline) throw new Error('Mahsulotni tahrirlash uchun internet kerak');
+
       const res = await fetch(`/api/products/${id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json", ...getAuthHeaders() },
-        body: JSON.stringify(data),
+        body: JSON.stringify({...data,expectedStock:products.find(p=>p.id===id)?.stock}),
       });
       const result = await res.json();
       if (!res.ok) throw new Error(result.error || "Mahsulot saqlanmadi");
@@ -170,6 +162,7 @@ export function ProductProvider({ children }: { children: ReactNode }) {
     onSuccess: () => {
       if (!isOffline) {
         queryClient.invalidateQueries({ queryKey: ["products"] });
+        for(const key of ["supplier-summary","cash-balance","finance-summary","finance-daily"])queryClient.invalidateQueries({queryKey:[key]});
       }
     },
   });
@@ -193,23 +186,19 @@ export function ProductProvider({ children }: { children: ReactNode }) {
 
   const deleteProductMutation = useMutation({
     mutationFn: async (id: string) => {
-      await db.products.delete(id);
-      setCachedProducts(prev => prev.filter(p => p.id !== id));
-      
-      if (isOffline) {
-        return { success: true };
-      }
-      
+      if(isOffline)throw new Error('Mahsulotni o‘chirish uchun internet kerak');
       const res = await fetch(`/api/products/${id}`, {
         method: "DELETE",
         headers: getAuthHeaders(),
       });
-      if (!res.ok) throw new Error("Mahsulotni o'chirishda xatolik");
+      if (!res.ok) {const error=await res.json();throw new Error(error.error||"Mahsulot o‘chirilmadi");}
+      await db.products.delete(id);setCachedProducts(prev=>prev.filter(p=>p.id!==id));
       return res.json();
     },
     onSuccess: () => {
       if (!isOffline) {
         queryClient.invalidateQueries({ queryKey: ["products"] });
+        for(const key of ["supplier-summary","cash-balance","finance-summary","finance-daily"])queryClient.invalidateQueries({queryKey:[key]});
       }
     },
   });
@@ -221,6 +210,7 @@ export function ProductProvider({ children }: { children: ReactNode }) {
   const refreshProducts = async () => {
     if (!isOffline) {
       await queryClient.invalidateQueries({ queryKey: ["products"] });
+        for(const key of ["supplier-summary","cash-balance","finance-summary","finance-daily"])queryClient.invalidateQueries({queryKey:[key]});
     }
   };
 

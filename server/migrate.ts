@@ -1,3 +1,4 @@
+import { financeMigrationSql } from "./finance-migrations";
 import { pool } from "./db";
 
 export async function runMigrations() {
@@ -141,7 +142,7 @@ export async function runMigrations() {
         IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='products' AND column_name='supplier_original_price') THEN
           ALTER TABLE products ADD COLUMN supplier_original_price REAL NOT NULL DEFAULT 0;
         ELSE
-          ALTER TABLE products ALTER COLUMN supplier_original_price TYPE REAL USING supplier_original_price::REAL;
+          -- Precision is managed by the versioned finance migration.
         END IF;
       END $$;
 
@@ -154,7 +155,7 @@ export async function runMigrations() {
       END $$;
 
       -- Change stock to REAL for decimal support (litr)
-      ALTER TABLE products ALTER COLUMN stock TYPE REAL USING stock::REAL;
+      -- Stock precision is managed by the versioned finance migration.
 
       -- Add default_dollar_rate to tenants
       DO $$ 
@@ -202,6 +203,12 @@ export async function runMigrations() {
         END IF;
       END $$;
     `);
+    await client.query('BEGIN');
+    try {
+      await client.query("SELECT pg_advisory_xact_lock(hashtextextended('finance-migration',0))");
+      await client.query(financeMigrationSql);
+      await client.query('COMMIT');
+    } catch (e) { await client.query('ROLLBACK'); throw e; }
     console.log("Database migrations completed successfully!");
   } catch (error) {
     console.error("Migration error:", error);

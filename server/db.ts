@@ -2,6 +2,10 @@ import { drizzle } from "drizzle-orm/node-postgres";
 import pg from "pg";
 import * as schema from "@shared/schema";
 
+// Existing TIMESTAMP columns store UTC wall time. node-postgres otherwise
+// interprets them in the host timezone, shifting payment dates on non-UTC hosts.
+process.env.TZ = 'UTC';
+
 if (!process.env.DATABASE_URL) {
   throw new Error(
     "DATABASE_URL must be set. Did you forget to provision a database?",
@@ -10,6 +14,7 @@ if (!process.env.DATABASE_URL) {
 
 export const pool = new pg.Pool({
   connectionString: process.env.DATABASE_URL,
+  options: '-c timezone=UTC',
   max: 20,
   min: 2,
   idleTimeoutMillis: 30000,

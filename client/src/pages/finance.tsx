@@ -1,3 +1,5 @@
+import { financialFetch as fetch } from '@/lib/financial-fetch';
+import { periodBounds } from '@shared/finance';
 import { useState, useEffect, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/lib/auth-context";
@@ -131,37 +133,9 @@ export default function FinancePage() {
 
   const headers = { Authorization: `Bearer ${token}`, "Content-Type": "application/json" };
 
-  const getDateRange = () => {
-    const now = new Date();
-    let dateFrom: Date;
-    let dateTo: Date;
-    if (period === "week") {
-      const d = now.getDay() || 7;
-      dateFrom = new Date(now);
-      dateFrom.setDate(now.getDate() - d + 1);
-      dateFrom.setHours(0, 0, 0, 0);
-      dateTo = new Date(now); dateTo.setHours(23, 59, 59, 999);
-    } else if (period === "month") {
-      dateFrom = new Date(now.getFullYear(), now.getMonth(), 1);
-      dateTo = new Date(now); dateTo.setHours(23, 59, 59, 999);
-    } else if (period === "lastmonth") {
-      // O'tgan oy: oldingi oyning 1-kunidan oxirgi kunigacha.
-      dateFrom = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-      dateTo = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59, 999);
-    } else if (period === "custom" && selectedMonth) {
-      // Tanlangan oy: "YYYY-MM" — o'sha oyning 1-kunidan oxirgi kunigacha.
-      const [y, m] = selectedMonth.split("-").map(Number);
-      dateFrom = new Date(y, m - 1, 1);
-      dateTo = new Date(y, m, 0, 23, 59, 59, 999);
-    } else {
-      dateFrom = new Date(now);
-      dateFrom.setHours(0, 0, 0, 0);
-      dateTo = new Date(now); dateTo.setHours(23, 59, 59, 999);
-    }
-    return { dateFrom, dateTo };
-  };
+  const getDateRange = () => periodBounds(period, selectedMonth);
 
-  const { data: balance } = useQuery<any>({
+  const { data: balance, isError:balanceError } = useQuery<any>({
     queryKey: ["cash-balance", period, selectedMonth],
     queryFn: async () => {
       const { dateFrom, dateTo } = getDateRange();
@@ -189,7 +163,7 @@ export default function FinancePage() {
       // Send the user's local-day boundaries so server returns the same window
       // the client expects (avoids mobile vs desktop mismatch when server TZ ≠ user TZ).
       const { dateFrom, dateTo } = getDateRange();
-      const tz = new Date().getTimezoneOffset();
+      const tz = -300;
       const res = await fetch(`/api/finance/summary?period=${period}&from=${dateFrom.toISOString()}&to=${dateTo.toISOString()}&tzOffsetMinutes=${tz}`, { headers });
       if (!res.ok) throw new Error("Failed");
       return res.json();
@@ -226,13 +200,14 @@ export default function FinancePage() {
     // Both devices send the same from/to window, so the server returns an
     // identical result — guaranteeing consistency. Offline sales appear once
     // they sync (which happens within seconds of reconnecting).
-    if (serverSummary) {
+    if (serverSummary && !summaryError) {
       const totalProfit = serverSummary.totalProfit || 0;
       const expensesTotal = serverSummary.expensesTotal || 0;
       return {
         revenue: serverSummary.revenue || 0,
         expensesTotal,
-        profit: totalProfit - expensesTotal,
+        profit: serverSummary.profit ?? 0,
+        profitKnown:serverSummary.profitKnown===true,
         totalProfit,
         paymentBreakdown: { ...(serverSummary.paymentBreakdown || {}) },
         transactionCount: serverSummary.transactionCount || 0,
@@ -245,7 +220,7 @@ export default function FinancePage() {
     // zeros instead of local data — this avoids a brief flicker where local
     // cache values flash before the authoritative server total arrives.
     if (!summaryError) {
-      return { revenue: 0, expensesTotal: 0, profit: 0, totalProfit: 0, paymentBreakdown: {}, transactionCount: 0, prevRevenue: 0, prevExpenses: 0 };
+      return { profitKnown:false, revenue: 0, expensesTotal: 0, profit: 0, totalProfit: 0, paymentBreakdown: {}, transactionCount: 0, prevRevenue: 0, prevExpenses: 0 };
     }
 
     // True offline / failed query: best-effort fallback to the local cache so
@@ -259,7 +234,7 @@ export default function FinancePage() {
     let revenue = 0, totalProfit = 0, count = 0;
     const paymentBreakdown: Record<string, number> = {};
     for (const t of (allTransactions || [])) {
-      if (t.status === "voided") continue;
+      if (t.status !== "completed") continue;
       if (!inRange(t)) continue;
       revenue += t.totalAmount;
       totalProfit += t.totalProfit || 0;
@@ -275,14 +250,14 @@ export default function FinancePage() {
         paymentBreakdown[method] = (paymentBreakdown[method] || 0) + t.totalAmount;
       }
     }
-    return { revenue, expensesTotal: 0, profit: totalProfit, totalProfit, paymentBreakdown, transactionCount: count, prevRevenue: 0, prevExpenses: 0 };
+    return { profitKnown:false, revenue, expensesTotal: 0, profit: 0, totalProfit, paymentBreakdown, transactionCount: count, prevRevenue: 0, prevExpenses: 0 };
   }, [allTransactions, serverSummary, summaryError, period, selectedMonth]);
 
   const { data: serverDailyData = [] } = useQuery<any[]>({
     queryKey: ["finance-daily", period, selectedMonth],
     queryFn: async () => {
       const { dateFrom, dateTo } = getDateRange();
-      const tz = new Date().getTimezoneOffset();
+      const tz = -300;
       const res = await fetch(`/api/finance/daily-breakdown?from=${dateFrom.toISOString()}&to=${dateTo.toISOString()}&tzOffsetMinutes=${tz}`, { headers });
       if (!res.ok) throw new Error("Failed");
       return res.json();
@@ -296,7 +271,8 @@ export default function FinancePage() {
       date: srv.date,
       revenue: srv.revenue || 0,
       expenses: srv.expenses || 0,
-      profit: (srv.totalProfit || 0) - (srv.expenses || 0),
+      profit: srv.profit ?? 0,
+      profitKnown:srv.profitKnown===true,
       payments: srv.payments || {},
     }));
   }, [serverDailyData]);
@@ -487,14 +463,15 @@ export default function FinancePage() {
     onSuccess: () => { invalidateAll(); toast({ title: "Yozuv o'chirildi" }); },
   });
 
+  const [debtPayMethod,setDebtPayMethod]=useState("cash");
   const handleDebtPay = async () => {
     if (!selectedDebt || !payAmount) return;
-    const amount = parseInt(payAmount);
+    const amount = Number(payAmount);
     if (!amount || amount <= 0) return;
     try {
       const res = await fetch(`/api/debts/${selectedDebt.id}/pay`, {
         method: "POST", headers,
-        body: JSON.stringify({ amount, note: payNote }),
+        body: JSON.stringify({ amount, note: payNote, paymentMethod:debtPayMethod }),
       });
       if (res.ok) {
         toast({ title: "To'lov qabul qilindi!", description: `${amount.toLocaleString()} so'm`, className: "bg-green-500 text-white border-none" });
@@ -517,7 +494,7 @@ export default function FinancePage() {
   // Cost of goods sold for the period: revenue minus gross profit per txn.
   // This is the REAL "tovar uchun ketgan pul" for the period — not the
   // all-time inventory snapshot from supplier-summary.
-  const cogs = Math.max(0, revenue - totalProfit);
+  const cogs = revenue - totalProfit;
   const paymentBreakdown = summary?.paymentBreakdown || {};
   const periodLabel = period === "day" ? "Bugun" : period === "week" ? "Hafta" : period === "lastmonth" ? "O'tgan oy" : period === "custom" ? monthLabel(selectedMonth) : "Oy";
   const getCatById = (id: string) => categories.find((c: any) => c.id === id);
@@ -779,9 +756,9 @@ export default function FinancePage() {
               <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
                 <Card className="border-0 shadow-sm bg-gradient-to-br from-emerald-500 to-green-600 text-white">
                   <CardContent className="p-3 md:p-4">
-                    <div className="flex items-center gap-1.5 mb-1 opacity-80"><Wallet className="h-3.5 w-3.5" /><span className="text-[10px] font-medium">MAVJUD SUMMA</span></div>
+                    <div className="flex items-center gap-1.5 mb-1 opacity-80"><Wallet className="h-3.5 w-3.5" /><span className="text-[10px] font-medium">YAKUNIY PUL QOLDIG‘I</span>{balance?.uncertain && <span className="text-xs">Eski usuli noma’lum yozuvlar bor</span>}</div>
                     <p className="text-xl font-bold" data-testid="text-total-balance">{(balance?.total || 0).toLocaleString()}</p>
-                  </CardContent>
+                  <p className="text-xs">Ochilish + barcha pul kirimi − chiqimi. {balanceError?'Aloqa yo‘q: oldingi natija ko‘rsatilmoqda.':''}</p>{Object.entries(balance?.otherAccounts||{}).filter(([key])=>!['cash','card'].includes(key)).map(([key,value])=><p className="text-xs" key={key}>{key==='unknown'?'Usuli aniqlanmagan':key}: {Number(value).toLocaleString()} so‘m</p>)}</CardContent>
                 </Card>
                 <Card className="border-0 shadow-sm bg-gradient-to-br from-green-400 to-emerald-500 text-white">
                   <CardContent className="p-3 md:p-4">
@@ -1326,8 +1303,8 @@ export default function FinancePage() {
                 </Card>
                 <Card className={`border-0 shadow-sm text-white ${profit >= 0 ? "bg-gradient-to-br from-blue-500 to-indigo-600" : "bg-gradient-to-br from-orange-500 to-red-600"}`}>
                   <CardContent className="p-3">
-                    <p className="text-[10px] opacity-80 font-medium">Sof foyda</p>
-                    <p className="text-lg font-bold">{profit.toLocaleString()}</p>
+                    <p className="text-[10px] opacity-80 font-medium">Sof foyda</p>{!summary.profitKnown && <p className="text-xs">Eski xarajatlar tasnifi yoki server ma’lumoti yetishmaydi</p>}
+                    <p className="text-lg font-bold">{summary.profitKnown ? profit.toLocaleString() : "Aniqlanmagan"}</p>
                   </CardContent>
                 </Card>
               </div>
@@ -1340,10 +1317,10 @@ export default function FinancePage() {
                     <div className="flex justify-between"><span className="text-slate-600">Tushum</span><span className="text-green-600 font-bold">+{revenue.toLocaleString()}</span></div>
                     <div className="flex justify-between"><span className="text-slate-600">Sotilgan tovar tannarxi</span><span className="text-orange-600 font-bold">−{cogs.toLocaleString()}</span></div>
                     <div className="flex justify-between"><span className="text-slate-600">Xarajat</span><span className="text-red-600 font-bold">−{expTotal.toLocaleString()}</span></div>
-                    <div className="flex justify-between pt-1 border-t border-slate-300"><span className="font-semibold text-slate-700">Sof foyda</span><span className={`font-bold ${profit >= 0 ? "text-blue-600" : "text-red-600"}`}>{profit.toLocaleString()}</span></div>
+                    <div className="flex justify-between pt-1 border-t border-slate-300"><span className="font-semibold text-slate-700">Sof foyda</span><span className={`font-bold ${profit >= 0 ? "text-blue-600" : "text-red-600"}`}>{summary.profitKnown ? profit.toLocaleString() : "Aniqlanmagan"}</span></div>
                   </div>
                   <p className="text-[10px] text-slate-500 mt-2">
-                    Eslatma: <b>Ombor qiymati</b> (hozir omborda turgan tovar narxi: <b>{(supplierSummary?.totals?.totalAmount || 0).toLocaleString()} so'm</b>) bu oylik xarid emas — bu hozirgi qoldiq qiymati. U "Sof foyda" hisobiga kirmaydi.
+                    Ta’minotchiga asosiy qarz to‘lovi pul hisobidan ayriladi, foydadan yana xarajat sifatida ayirilmaydi. Sotilgan tovar tannarxi savdo snapshotidan olinadi.
                   </p>
                 </CardContent>
               </Card>
@@ -1465,7 +1442,7 @@ export default function FinancePage() {
                           <td className="py-2 px-2">Jami</td>
                           <td className="py-2 px-2 text-right text-green-600">{revenue.toLocaleString()}</td>
                           <td className="py-2 px-2 text-right text-red-600">{expTotal.toLocaleString()}</td>
-                          <td className={`py-2 px-2 text-right ${profit >= 0 ? "text-blue-600" : "text-orange-600"}`}>{profit.toLocaleString()}</td>
+                          <td className={`py-2 px-2 text-right ${profit >= 0 ? "text-blue-600" : "text-orange-600"}`}>{summary.profitKnown ? profit.toLocaleString() : "Aniqlanmagan"}</td>
                         </tr>
                       </tfoot>
                     </table>
@@ -1484,13 +1461,13 @@ export default function FinancePage() {
                   <CardContent className="p-4">
                     <div className="flex items-center gap-2 mb-1">
                       <Truck className="h-4 w-4 text-blue-600" />
-                      <span className="text-xs text-blue-700 font-medium">Jami xarid</span>
+                      <span className="text-xs text-blue-700 font-medium">Qayd etilgan kirimlar</span>
                     </div>
                     <p className="text-xl font-bold text-blue-800" data-testid="text-supplier-total">{(supplierSummary?.totals?.totalAmount || 0).toLocaleString()} so'm</p>
                     {(supplierSummary?.totals?.totalAmountUsd || 0) > 0 && (
                       <p className="text-sm font-semibold text-blue-600">${(supplierSummary?.totals?.totalAmountUsd || 0).toLocaleString()}</p>
                     )}
-                  </CardContent>
+                  {(supplierSummary?.totals?.legacyProductsCount||0)>0&&<p className="text-xs text-slate-600">Eski kirim tarixi to‘liq emas; bu ombor qiymati emas</p>}</CardContent>
                 </Card>
                 <Card className="bg-gradient-to-br from-green-50 to-green-100 border-green-200">
                   <CardContent className="p-4">
@@ -1532,7 +1509,7 @@ export default function FinancePage() {
                         )}
                       </>
                     )}
-                  </CardContent>
+                  {(supplierSummary?.totals?.unknownDebtCount||0)>0&&<p className="text-xs text-amber-800">Jami qisman: {supplierSummary.totals.unknownDebtCount} ta eski qarz aniqlanmagan</p>}</CardContent>
                 </Card>
               </div>
 
@@ -1668,7 +1645,7 @@ export default function FinancePage() {
               </div>
             </div>
           )}
-          <DialogFooter>
+          <div><Label>To‘lov hisobi</Label><Select value={debtPayMethod} onValueChange={setDebtPayMethod}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="cash">Naqd</SelectItem><SelectItem value="card">Karta</SelectItem><SelectItem value="click">Click</SelectItem></SelectContent></Select></div><DialogFooter>
             <Button variant="outline" onClick={() => setPayDialogOpen(false)}>Bekor</Button>
             <Button onClick={handleDebtPay} disabled={!payAmount || parseInt(payAmount) <= 0} data-testid="button-confirm-pay">To'lash</Button>
           </DialogFooter>
@@ -1905,6 +1882,8 @@ export default function FinancePage() {
 }
 
 function ExpenseDialog({ isOpen, onClose, expense, categories, onSave, isLoading }: any) {
+  const [paymentMethod,setPaymentMethod]=useState("cash");
+  const [classification,setClassification]=useState("operating");
   const [amount, setAmount] = useState("");
   const [categoryId, setCategoryId] = useState("");
   const [description, setDescription] = useState("");
@@ -1912,11 +1891,13 @@ function ExpenseDialog({ isOpen, onClose, expense, categories, onSave, isLoading
 
   useEffect(() => {
     if (expense) {
+      setPaymentMethod(expense.paymentMethod||"unknown");setClassification(expense.classification||"unclassified");
       setAmount(String(expense.amount));
       setCategoryId(expense.categoryId || "");
       setDescription(expense.description || "");
       setDate(new Date(expense.date).toISOString().split("T")[0]);
     } else {
+      setPaymentMethod("cash");setClassification("operating");
       setAmount("");
       setCategoryId(categories?.[0]?.id || "");
       setDescription("");
@@ -1953,9 +1934,9 @@ function ExpenseDialog({ isOpen, onClose, expense, categories, onSave, isLoading
             <Textarea value={description} onChange={e => setDescription(e.target.value)} placeholder="Izoh yozing..." rows={2} data-testid="input-expense-description" />
           </div>
         </div>
-        <DialogFooter>
+        <div className="grid grid-cols-2 gap-2"><div><Label>Pul hisobi</Label><Select value={paymentMethod} onValueChange={setPaymentMethod}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="unknown">Aniqlanmagan</SelectItem><SelectItem value="cash">Naqd</SelectItem><SelectItem value="card">Karta</SelectItem><SelectItem value="click">Click</SelectItem></SelectContent></Select></div><div><Label>Hisobdagi vazifasi</Label><Select value={classification} onValueChange={setClassification}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="unclassified">Tasniflanmagan</SelectItem><SelectItem value="operating">Operatsion xarajat</SelectItem><SelectItem value="principal">Asosiy qarz / kapital</SelectItem></SelectContent></Select></div></div><DialogFooter>
           <Button variant="outline" onClick={onClose}>Bekor qilish</Button>
-          <Button onClick={() => { const amt = parseInt(amount); if (!amt || amt <= 0 || !categoryId) return; onSave({ amount: amt, categoryId, description, date }); }} disabled={isLoading || !amount || parseInt(amount) <= 0} data-testid="button-save-expense">
+          <Button onClick={() => { const amt = Number(amount); if (!amt || amt <= 0 || !categoryId) return; onSave({ amount: amt, categoryId, description, date, paymentMethod,classification }); }} disabled={isLoading || !amount || parseInt(amount) <= 0} data-testid="button-save-expense">
             {expense ? "Saqlash" : "Qo'shish"}
           </Button>
         </DialogFooter>
@@ -2124,6 +2105,12 @@ function SupplierCard({ supplier, token, categories, debtsInUsdOnly, onUpdate }:
   const [payMode, setPayMode] = useState<"add" | "edit">("add");
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
 
+  const [openingProduct,setOpeningProduct]=useState<any>(null);
+  const [openingAmount,setOpeningAmount]=useState("");
+  const [openingReason,setOpeningReason]=useState("");
+  const [openingCurrency,setOpeningCurrency]=useState("uzs");
+  const [openingRate,setOpeningRate]=useState("");
+  const [openingBusy,setOpeningBusy]=useState(false);
   // Bulk debt-payment dialog state
   const [bulkPayOpen, setBulkPayOpen] = useState(false);
   const [bulkCurrency, setBulkCurrency] = useState<"uzs" | "usd">("uzs");
@@ -2133,7 +2120,7 @@ function SupplierCard({ supplier, token, categories, debtsInUsdOnly, onUpdate }:
   const [bulkRecordExpense, setBulkRecordExpense] = useState(true);
   const [bulkSubmitting, setBulkSubmitting] = useState(false);
 
-  const nasiyaProducts = (supplier.products || []).filter((p: any) => p.paymentMethod === "nasiya");
+  const nasiyaProducts = (supplier.products || []).filter((p: any) => p.paymentMethod === "nasiya" && !p.needsReconciliation);
   const nasiyaTotal = nasiyaProducts.reduce((s: number, p: any) => s + p.amount, 0);
   const nasiyaPaid = nasiyaProducts.reduce((s: number, p: any) => s + (p.paidAmount || 0), 0);
   const nasiyaRemaining = nasiyaTotal - nasiyaPaid;
@@ -2236,10 +2223,6 @@ function SupplierCard({ supplier, token, categories, debtsInUsdOnly, onUpdate }:
       toast({ title: "Miqdor qarzdan ko'p bo'la olmaydi", variant: "destructive" });
       return;
     }
-    if (bulkRecordExpense && !bulkCategoryId) {
-      toast({ title: "Xarajat kategoriyasini tanlang yoki yozuvni o'chiring", variant: "destructive" });
-      return;
-    }
     setBulkSubmitting(true);
     try {
       const res = await fetch("/api/suppliers/pay-debt", {
@@ -2292,6 +2275,9 @@ function SupplierCard({ supplier, token, categories, debtsInUsdOnly, onUpdate }:
 
   return (
     <>
+      {(supplier.unknownDebtCount||0)>0 && <div className="rounded border border-amber-300 bg-amber-50 p-3 text-sm">Eski kirimlar bo‘yicha asl qarz aniqlanmagan. Ular tasdiqlangan jami ichiga qo‘shilmagan. Hujjatga qarab jurnalga kirmagan eski qarzni kiriting.
+      {(supplier.products||[]).filter((p:any)=>p.needsReconciliation).map((p:any)=><Button key={p.id} variant="outline" className="m-1" onClick={()=>{setOpeningProduct(p);setOpeningAmount("");setOpeningReason("");setOpeningCurrency(p.supplierCurrency==='usd'?'usd':'uzs');setOpeningRate(String(p.supplierCurrencyRate||""));}}>{p.name}: qarzni tasdiqlash</Button>)}</div>}
+      <Dialog open={!!openingProduct} onOpenChange={v=>{if(!v&&!openingBusy)setOpeningProduct(null);}}><DialogContent className="max-h-[90dvh] overflow-y-auto"><DialogHeader><DialogTitle>Hujjat asosidagi qolgan qarz</DialogTitle></DialogHeader><p className="text-sm">{openingProduct?.name}. Bu kirim narxi yoki ombor qiymati emas. Faqat yangi kirim jurnaliga kirmagan eski qarzni kiriting; eski qarz bo‘lmasa 0 yozing. Eski to‘lov tarixi taxmin bilan tiklanmaydi.</p><Label>Qolgan qarz</Label><Input type="number" min="0" step="0.01" value={openingAmount} onChange={e=>setOpeningAmount(e.target.value)}/><Select value={openingCurrency} onValueChange={setOpeningCurrency}><SelectTrigger><SelectValue/></SelectTrigger><SelectContent><SelectItem value="uzs">UZS</SelectItem><SelectItem value="usd">USD</SelectItem></SelectContent></Select>{openingCurrency==='usd'&&<><Label>Hujjatdagi tarixiy kurs</Label><Input type="number" value={openingRate} onChange={e=>setOpeningRate(e.target.value)}/></>}<Label>Hujjat / solishtirish asosi</Label><Input value={openingReason} onChange={e=>setOpeningReason(e.target.value)}/><Button disabled={openingBusy||openingAmount===''||openingReason.trim().length<5} onClick={async()=>{setOpeningBusy(true);try{const res=await fetch('/api/suppliers/opening-balance',{method:'POST',headers:{Authorization:`Bearer ${token}`,'Content-Type':'application/json'},body:JSON.stringify({productId:openingProduct.id,amount:Number(openingAmount),currency:openingCurrency,rate:Number(openingRate),reason:openingReason})});const data=await res.json();if(!res.ok)throw new Error(data.error);setOpeningProduct(null);onUpdate();}catch(e:any){toast({title:e.message,variant:'destructive'});}finally{setOpeningBusy(false);}}}>Qolgan qarzni tasdiqlash</Button></DialogContent></Dialog>
       <div className="border rounded-lg overflow-hidden" data-testid={`supplier-card-${supplier.name}`}>
         <div className="w-full flex items-center justify-between p-3 hover:bg-gray-50 transition-colors text-left gap-2">
           <button
@@ -2374,7 +2360,7 @@ function SupplierCard({ supplier, token, categories, debtsInUsdOnly, onUpdate }:
                 </tr>
               </thead>
               <tbody>
-                {(supplier.products || []).map((p: any) => {
+                {(supplier.products || []).filter((p:any)=>!p.needsReconciliation).map((p: any) => {
                   const isNasiya = p.paymentMethod === "nasiya";
                   const remaining = p.amount - (p.paidAmount || 0);
                   const statusLabel = !isNasiya ? "" :
@@ -2429,14 +2415,14 @@ function SupplierCard({ supplier, token, categories, debtsInUsdOnly, onUpdate }:
                               <UserCheck className="h-3.5 w-3.5" />
                             </button>
                             <button
-                              onClick={(e) => { e.stopPropagation(); setPayDialogProduct(p); setPayAmount(""); setPayMode("add"); }}
+                              onClick={(e) => { e.stopPropagation(); openBulkPay(); }}
                               className="p-1 hover:bg-orange-100 rounded text-orange-600" title="Qisman to'lov"
                               data-testid={`btn-partial-${p.id}`}
                             >
                               <Pencil className="h-3.5 w-3.5" />
                             </button>
                             <button
-                              onClick={(e) => { e.stopPropagation(); setDeleteConfirm(p.id); }}
+                              onClick={(e) => { e.stopPropagation(); toast({title:"Kirim hujjati o‘chirilmaydi; tuzatish uchun hisobni solishtiring"}); }}
                               className="p-1 hover:bg-red-100 rounded text-red-600" title="O'chirish"
                               data-testid={`btn-delete-debt-${p.id}`}
                             >
@@ -2672,33 +2658,9 @@ function SupplierCard({ supplier, token, categories, debtsInUsdOnly, onUpdate }:
               </div>
             </div>
 
-            <div className="rounded-lg border p-2.5 space-y-2 bg-gray-50">
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={bulkRecordExpense}
-                  onChange={(e) => setBulkRecordExpense(e.target.checked)}
-                  className="h-4 w-4"
-                  data-testid="checkbox-bulk-record-expense"
-                />
-                <span className="text-xs font-medium text-gray-700">Xarajat sifatida yozilsin (kassadan ayrilsin)</span>
-              </label>
-              {bulkRecordExpense && (
-                <Select value={bulkCategoryId} onValueChange={setBulkCategoryId}>
-                  <SelectTrigger className="h-8 text-xs" data-testid="select-bulk-category">
-                    <SelectValue placeholder="Xarajat kategoriyasi" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {(categories || []).map((c: any) => (
-                      <SelectItem key={c.id} value={c.id} className="text-xs">{c.name}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              )}
-            </div>
-
+            <p className="text-xs text-gray-600">To‘lov tanlangan pul hisobidan ayriladi va ta’minotchi qarzini yopadi. Foydadan yana xarajat sifatida ayirilmaydi.</p>
             <p className="text-[11px] text-gray-500 leading-relaxed">
-              To'lov eng eski qarzdan boshlab tarqatiladi. Tovarlar ro'yxatidagi qarz holati avtomatik yangilanadi.
+              To‘lov eng eski tasdiqlangan kirim hujjatidan boshlab tarqatiladi. Tovarlar ro'yxatidagi qarz holati avtomatik yangilanadi.
             </p>
           </div>
           <DialogFooter className="gap-2">
@@ -2765,34 +2727,7 @@ function ShiftHandoverTab({ token, period, selectedMonth = "", balance, headers 
   const [note, setNote] = useState("");
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
-  const getDateRange = () => {
-    const now = new Date();
-    let dateFrom: Date;
-    let dateTo: Date;
-    if (period === "week") {
-      const d = now.getDay() || 7;
-      dateFrom = new Date(now);
-      dateFrom.setDate(now.getDate() - d + 1);
-      dateFrom.setHours(0, 0, 0, 0);
-      dateTo = new Date(now); dateTo.setHours(23, 59, 59, 999);
-    } else if (period === "month") {
-      dateFrom = new Date(now.getFullYear(), now.getMonth(), 1);
-      dateTo = new Date(now); dateTo.setHours(23, 59, 59, 999);
-    } else if (period === "lastmonth") {
-      // O'tgan oy: oldingi oyning 1-kunidan oxirgi kunigacha.
-      dateFrom = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-      dateTo = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59, 999);
-    } else if (period === "custom" && selectedMonth) {
-      const [y, m] = selectedMonth.split("-").map(Number);
-      dateFrom = new Date(y, m - 1, 1);
-      dateTo = new Date(y, m, 0, 23, 59, 59, 999);
-    } else {
-      dateFrom = new Date(now);
-      dateFrom.setHours(0, 0, 0, 0);
-      dateTo = new Date(now); dateTo.setHours(23, 59, 59, 999);
-    }
-    return { dateFrom, dateTo };
-  };
+  const getDateRange = () => periodBounds(period, selectedMonth);
 
   const { data: handovers = [] } = useQuery<any[]>({
     queryKey: ["shift-handovers"],

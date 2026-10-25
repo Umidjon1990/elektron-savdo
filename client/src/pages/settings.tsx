@@ -354,7 +354,7 @@ export default function SettingsPage() {
   const toggleOptionType = (fieldKey: string, optionId: string) => {
     const updated = orderFormFields.map(f => {
       if (f.key !== fieldKey || !f.options) return f;
-      return { ...f, options: f.options.map(o => o.id === optionId ? { ...o, type: o.type === "pickup" ? "delivery" : "pickup" } : o) };
+      return { ...f, options: f.options.map(o => o.id === optionId ? { ...o, type: (o.type === "pickup" ? "delivery" : "pickup") as "delivery"|"pickup" } : o) };
     });
     setOrderFormFields(updated);
     saveConfigMutation.mutate({ orderFormFields: updated });

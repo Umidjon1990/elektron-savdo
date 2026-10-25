@@ -1,3 +1,4 @@
+import { financialFetch as fetch } from '@/lib/financial-fetch';
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth, getAuthHeaders } from "@/lib/auth-context";

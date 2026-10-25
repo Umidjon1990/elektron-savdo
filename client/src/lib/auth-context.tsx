@@ -1,3 +1,6 @@
+import { useQueryClient } from '@tanstack/react-query';
+import { db } from './db';
+import { toast } from 'sonner';
 import { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from "react";
 import { useLocation } from "wouter";
 import { clearAllData } from "./db";
@@ -60,6 +63,7 @@ export function getAuthHeaders(): Record<string, string> {
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
+  const queryClient=useQueryClient();
   const [user, setUser] = useState<UserInfo | null>(null);
   const [tenant, setTenant] = useState<TenantInfo | null>(null);
   const [token, setToken] = useState<string | null>(getAuthToken());
@@ -85,9 +89,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const newTenantId = data.tenant?.id;
         if (prevTenantId && newTenantId && prevTenantId !== newTenantId) {
           await clearAllData();
+          queryClient.clear();
         }
         if (newTenantId) {
           localStorage.setItem('kitoblar_tenant_id', newTenantId);
+          if(await db.transactions.filter(t=>!t.synced&&!t.tenantId).count())toast.warning('Yuborilmagan eski savdolar bor. Ularni hisob egasi bilan solishtirish kerak.');
         }
         setUser(data.user);
         setTenant(data.tenant);
@@ -139,6 +145,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const newTenantId = data.tenant?.id;
       if (prevTenantId && newTenantId && prevTenantId !== newTenantId) {
         await clearAllData();
+        queryClient.clear();
       }
       if (newTenantId) {
         localStorage.setItem('kitoblar_tenant_id', newTenantId);
@@ -194,6 +201,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     localStorage.removeItem(TOKEN_KEY);
     localStorage.removeItem('kitoblar_tenant_id');
     clearAllData();
+    queryClient.clear();
     setToken(null);
     setUser(null);
     setTenant(null);

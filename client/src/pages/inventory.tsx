@@ -1,3 +1,5 @@
+import { Money } from '@shared/finance';
+import { financialFetch } from '@/lib/financial-fetch';
 import { validateCampaign } from "@shared/pricing";
 import { ProductImage } from "@/components/product-image";
 import { ProductPrice } from "@/components/product-price";
@@ -54,7 +56,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 
 export default function Inventory() {
-  const { products: contextProducts, isOffline, addProduct, updateStock, updateProduct, deleteProduct } = useProducts();
+  const { products: contextProducts, isOffline, addProduct, updateStock, updateProduct, deleteProduct, refreshProducts } = useProducts();
   const { token, tenant } = useAuth();
   const queryClient = useQueryClient();
   const [searchQuery, setSearchQuery] = useState("");
@@ -77,6 +79,7 @@ export default function Inventory() {
     refetchOnWindowFocus: true,
     retry: 1,
   });
+  const {data:supplierDebtSummary}=useQuery<any>({queryKey:['supplier-summary'],queryFn:async()=>{const res=await fetch('/api/supplier-summary',{headers:getAuthHeaders()});if(!res.ok)throw new Error('Qarz hisobi olinmadi');return res.json();},enabled:!!token&&!isOffline});
   const report = !isOffline ? reportQuery.data : undefined;
   const products = report?.products ?? contextProducts;
   const valuation = useMemo(() => report?.totals ?? summarizeInventory(products), [report, products]);
@@ -487,7 +490,7 @@ export default function Inventory() {
       if (amount > 0) {
         try {
           const updates: any = {
-            stock: Math.max(0, restockProduct.stock + amount),
+            quantity: amount,
             supplier: restockData.supplier || "",
             supplierPaymentMethod: restockData.supplierPaymentMethod || "naqd",
             supplierCurrency: restockData.supplierCurrency || "uzs",
@@ -509,7 +512,9 @@ export default function Inventory() {
 
           if (restockData.price) updates.price = Number(restockData.price);
 
-          await updateProduct(restockProduct.id, updates);
+          const response=await financialFetch(`/api/products/${restockProduct.id}/restock`,{method:'POST',headers:{'Content-Type':'application/json',...getAuthHeaders()},body:JSON.stringify(updates)});
+          const result=await response.json();if(!response.ok)throw new Error(result.error||'Kirim saqlanmadi');
+          await refreshProducts();
           toast({
             title: "Kirim qilindi",
             description: `${restockProduct.name} +${amount} ${(restockProduct as any)?.unit || "dona"} qo'shildi`,
@@ -575,38 +580,12 @@ export default function Inventory() {
   // va nasiyaga olingan tovarlardan qancha qarz qolganligi.
   // Hisoblash butun products bo'yicha (qidiruv/tab filterdan qat'iy nazar),
   // chunki bu — umumiy ombor balansi.
-  const inventoryStats = useMemo(() => {
-    let totalCost = 0;       // jami tan narx × qoldiq (so'm)
-    let totalSale = 0;       // jami sotuv narx × qoldiq (so'm)
-    let nasiyaCost = 0;      // nasiya tovarlarning tan narxi × qoldiq
-    let nasiyaDebt = 0;      // nasiya tovarlar bo'yicha qolgan qarz (so'm)
-    let totalUnits = 0;
-    for (const p of products as any[]) {
-      const stock = Number(p.stock) || 0;
-      const cost = Number(p.costPrice) || 0;
-      const price = Number(p.price) || 0;
-      totalCost += cost * stock;
-      totalSale += price * stock;
-      totalUnits += stock;
-      if (p.supplierPaymentMethod === "nasiya") {
-        const origPrice = Number(p.supplierOriginalPrice) || 0;
-        const rate = Number(p.supplierCurrencyRate) || 1;
-        const isUsd = p.supplierCurrency === "usd";
-        // Tovar beruvchi qarzi har doim so'mda hisoblanadi
-        // (USD bo'lsa — original narx × kurs).
-        const totalDebtUzs = isUsd
-          ? origPrice * rate * stock
-          : cost * stock;
-        const paid = Number(p.supplierPaidAmount) || 0;
-        const remaining = Math.max(0, totalDebtUzs - paid);
-        nasiyaCost += cost * stock;
-        nasiyaDebt += remaining;
-      }
-    }
-    return { totalCost, totalSale, nasiyaCost, nasiyaDebt, totalUnits };
-  }, [products]);
+  const inventoryStats = useMemo(()=>({
+    nasiyaCost:products.filter(p=>p.supplierPaymentMethod==='nasiya').reduce((sum,p)=>sum.add(new Money(p.costPrice||0).mul(p.stock)),new Money(0)).toNumber(),
+    nasiyaDebt:supplierDebtSummary?.totals?.totalNasiya
+  }),[products,supplierDebtSummary]);
 
-  const fmt = (n: number) => Math.round(n).toLocaleString('uz-UZ');
+  const fmt = (n: number) => formatUzs(n);
   const exportInventory = async () => {
     if (isOffline || !report || reportQuery.isFetching) return;
     setExporting(true);
@@ -715,10 +694,11 @@ export default function Inventory() {
             <div className="bg-white rounded-lg border p-3 md:p-4" data-testid="stat-nasiya-debt">
               <div className="text-[10px] md:text-xs text-muted-foreground">Qolgan qarz</div>
               <div className="text-sm md:text-lg font-semibold mt-1 text-red-600 truncate">
-                {fmt(inventoryStats.nasiyaDebt)} <span className="text-[10px] md:text-xs font-normal text-muted-foreground">so'm</span>
+                {supplierDebtSummary ? fmt(inventoryStats.nasiyaDebt||0) : "Aniqlanmagan"} <span className="text-[10px] md:text-xs font-normal text-muted-foreground">so'm</span>
               </div>
               <div className="text-[10px] text-muted-foreground mt-0.5">
-                Tovar beruvchiga
+                Tasdiqlangan ta’minotchi qarzi
+                {(supplierDebtSummary?.totals?.unknownDebtCount||0)>0&&<span className="text-amber-700 block">Qisman: {supplierDebtSummary.totals.unknownDebtCount} ta eski qarz tasdiqlanmagan</span>}
               </div>
             </div>
           </div>

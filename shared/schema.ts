@@ -1,7 +1,20 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, integer, timestamp, json, uniqueIndex, index, check, boolean, real } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, integer, timestamp, json, jsonb, primaryKey, uniqueIndex, index, check, boolean, real, customType } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
+
+// NUMERIC values are bounded at API boundaries; Decimal performs arithmetic.
+const decimalNumber = customType<{ data: number; driverData: string }>({
+  dataType() { return "numeric"; },
+  fromDriver(value) { return Number(value); },
+  toDriver(value) { return String(value); },
+});
+
+const moneyNumber = customType<{ data: number; driverData: string }>({
+  dataType() { return "numeric(24,2)"; },fromDriver(value){return Number(value);},toDriver(value){return String(value);}
+});
+const purchaseNumber=customType<{data:number;driverData:string}>({dataType(){return 'numeric(24,8)'},fromDriver:Number,toDriver:String});
+const rateNumber=customType<{data:number;driverData:string}>({dataType(){return 'numeric(24,6)'},fromDriver:Number,toDriver:String});
 
 export const tenants = pgTable("tenants", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -53,15 +66,16 @@ export const products = pgTable("products", {
   costPrice: integer("cost_price").notNull().default(0),
   barcodePrice: integer("barcode_price"),
   wholesalePrice: integer("wholesale_price"),
-  stock: real("stock").notNull(),
+  stock: decimalNumber("stock").notNull(),
   unit: text("unit").notNull().default("dona"),
   category: text("category").notNull(),
   barcode: text("barcode").notNull(),
+  financeTracked: boolean("finance_tracked").notNull().default(false),
   supplier: text("supplier").default(""),
   supplierPaymentMethod: text("supplier_payment_method").default("naqd"),
   supplierCurrency: text("supplier_currency").default("uzs"),
   supplierCurrencyRate: integer("supplier_currency_rate").notNull().default(0),
-  supplierOriginalPrice: real("supplier_original_price").notNull().default(0),
+  supplierOriginalPrice: decimalNumber("supplier_original_price").notNull().default(0),
   supplierDebtStatus: text("supplier_debt_status").default("pending"),
   supplierPaidAmount: integer("supplier_paid_amount").notNull().default(0),
   description: text("description").default(""),
@@ -91,13 +105,13 @@ export const orders = pgTable("orders", {
   customerPhone: text("customer_phone").notNull(),
   customerTelegram: text("customer_telegram"),
   items: json("items").notNull(),
-  totalAmount: integer("total_amount").notNull(),
+  totalAmount: moneyNumber("total_amount").notNull(),
   status: text("status").notNull().default("new"),
   paymentMethod: text("payment_method").notNull(),
   deliveryType: text("delivery_type").notNull(),
   address: text("address").default(""),
   paymentStatus: text("payment_status").notNull().default("unpaid"),
-  debtAmount: integer("debt_amount").notNull().default(0),
+  debtAmount: moneyNumber("debt_amount").notNull().default(0),
   courier: text("courier").default(""),
   courierId: varchar("courier_id"),
   statusHistory: json("status_history").$type<Array<{status: string, date: string, userId?: string, note?: string}>>().default([]),
@@ -116,28 +130,32 @@ export const categories = pgTable("categories", {
 });
 
 export const transactions = pgTable("transactions", {
+  initialPaidAmount: moneyNumber("initial_paid_amount"),
+  voidedAt: timestamp("voided_at"),
+  orderId: varchar("order_id"),
   id: varchar("id").primaryKey(),
   tenantId: varchar("tenant_id").references(() => tenants.id),
   date: timestamp("date").notNull(),
   items: json("items").notNull(),
-  totalAmount: integer("total_amount").notNull(),
-  totalProfit: integer("total_profit").notNull().default(0),
+  totalAmount: moneyNumber("total_amount").notNull(),
+  totalProfit: moneyNumber("total_profit").notNull().default(0),
   paymentMethod: text("payment_method").notNull(),
   status: text("status").notNull().default("completed"),
   customerName: text("customer_name"),
   customerPhone: text("customer_phone"),
   customerInfo: json("customer_info").$type<Record<string, string>>(),
   dueDate: timestamp("due_date"),
-  paidAmount: integer("paid_amount").notNull().default(0),
+  paidAmount: moneyNumber("paid_amount").notNull().default(0),
   debtStatus: text("debt_status").default("none"),
   paymentSplits: json("payment_splits").$type<Array<{ method: string; amount: number }>>(),
 });
 
 export const debtPayments = pgTable("debt_payments", {
+  paymentMethod: text("payment_method"),
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   tenantId: varchar("tenant_id").references(() => tenants.id),
   transactionId: varchar("transaction_id").references(() => transactions.id),
-  amount: integer("amount").notNull(),
+  amount: moneyNumber("amount").notNull(),
   date: timestamp("date").notNull(),
   note: text("note"),
 });
@@ -150,8 +168,8 @@ export const independentDebts = pgTable("independent_debts", {
   debtorName: text("debtor_name").notNull(),
   phone: text("phone").notNull().default(""),
   itemDescription: text("item_description").notNull(),
-  totalAmount: integer("total_amount").notNull(),
-  paidAmount: integer("paid_amount").notNull().default(0),
+  totalAmount: moneyNumber("total_amount").notNull(),
+  paidAmount: moneyNumber("paid_amount").notNull().default(0),
   dueDate: timestamp("due_date").notNull(),
   status: text("status").notNull().default("pending"),
   note: text("note").notNull().default(""),
@@ -167,7 +185,7 @@ export const independentDebtPayments = pgTable("independent_debt_payments", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   tenantId: varchar("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
   debtId: varchar("debt_id").notNull().references(() => independentDebts.id, { onDelete: "cascade" }),
-  amount: integer("amount").notNull(),
+  amount: moneyNumber("amount").notNull(),
   date: timestamp("date").notNull().defaultNow(),
   note: text("note").notNull().default(""),
 }, (table) => [
@@ -193,9 +211,12 @@ export const incomeCategories = pgTable("income_categories", {
 });
 
 export const expenses = pgTable("expenses", {
+  paymentMethod: text("payment_method"),
+  classification: text("classification").notNull().default("unclassified"),
+  voidedAt: timestamp("voided_at"),
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   tenantId: varchar("tenant_id").references(() => tenants.id),
-  amount: integer("amount").notNull(),
+  amount: moneyNumber("amount").notNull(),
   categoryId: varchar("category_id").references(() => expenseCategories.id),
   description: text("description").default(""),
   date: timestamp("date").notNull(),
@@ -229,10 +250,12 @@ export const auditLogs = pgTable("audit_logs", {
 });
 
 export const cashRegisterEntries = pgTable("cash_register_entries", {
+  source: text("source").notNull().default("manual"),
+  voidedAt: timestamp("voided_at"),
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   tenantId: varchar("tenant_id").references(() => tenants.id),
   type: text("type").notNull(),
-  amount: integer("amount").notNull(),
+  amount: moneyNumber("amount").notNull(),
   paymentType: text("payment_type").notNull().default("cash"),
   categoryName: text("category_name").default(""),
   counterparty: text("counterparty").default(""),
@@ -252,7 +275,7 @@ export const shiftHandovers = pgTable("shift_handovers", {
   totalCard: integer("total_card").notNull().default(0),
   totalNasiya: integer("total_nasiya").notNull().default(0),
   totalExpenses: integer("total_expenses").notNull().default(0),
-  totalAmount: integer("total_amount").notNull().default(0),
+  totalAmount: moneyNumber("total_amount").notNull().default(0),
   handedByName: text("handed_by_name").notNull(),
   receivedByName: text("received_by_name").notNull(),
   status: text("status").notNull().default("pending"),
@@ -309,8 +332,35 @@ export const attendanceRecords = pgTable("attendance_records", {
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
+// Financial journals are also described here so schema tooling cannot mistake
+// the versioned migration's tables for abandoned data.
+export const financeMigrations=pgTable('finance_migrations',{
+ version:text('version').primaryKey(),appliedAt:timestamp('applied_at').notNull().defaultNow(),
+});
+export const financeOperations=pgTable('finance_operations',{
+ tenantId:varchar('tenant_id').notNull().references(()=>tenants.id),kind:text('kind').notNull(),id:text('id').notNull(),fingerprint:text('fingerprint').notNull(),response:jsonb('response').notNull(),createdAt:timestamp('created_at').notNull().defaultNow(),
+},t=>[primaryKey({name:'finance_operations_pkey',columns:[t.tenantId,t.kind,t.id]})]);
+export const stockMovements=pgTable('stock_movements',{
+ id:varchar('id').primaryKey().default(sql`gen_random_uuid()`),tenantId:varchar('tenant_id').notNull().references(()=>tenants.id),productId:varchar('product_id').notNull(),operationId:text('operation_id').notNull(),quantity:decimalNumber('quantity').notNull(),reason:text('reason').notNull(),date:timestamp('date').notNull().defaultNow(),
+},t=>[uniqueIndex('stock_movement_operation').on(t.tenantId,t.operationId,t.productId,t.reason)]);
+export const supplierPurchases=pgTable('supplier_purchases',{
+ id:varchar('id').primaryKey().default(sql`gen_random_uuid()`),tenantId:varchar('tenant_id').notNull().references(()=>tenants.id),productId:varchar('product_id').notNull(),supplier:text('supplier').notNull(),currency:text('currency').notNull(),rate:rateNumber('rate'),quantity:decimalNumber('quantity').notNull(),principal:purchaseNumber('principal').notNull(),paid:purchaseNumber('paid').notNull().default(0),source:text('source').notNull(),paymentMethod:text('payment_method').notNull().default('nasiya'),date:timestamp('date').notNull().defaultNow(),
+},t=>[uniqueIndex('supplier_opening_once').on(t.tenantId,t.productId).where(sql`${t.source}='opening'`)]);
+export const supplierPayments=pgTable('supplier_payments',{
+ id:text('id').notNull(),tenantId:varchar('tenant_id').notNull().references(()=>tenants.id),supplier:text('supplier').notNull(),currency:text('currency').notNull(),amount:purchaseNumber('amount').notNull(),account:text('account').notNull(),allocations:jsonb('allocations').notNull(),date:timestamp('date').notNull().defaultNow(),
+},t=>[primaryKey({name:'supplier_payments_pkey',columns:[t.tenantId,t.id]})]);
+export const financeAudit=pgTable('finance_audit',{
+ id:varchar('id').primaryKey().default(sql`gen_random_uuid()`),tenantId:varchar('tenant_id').notNull().references(()=>tenants.id),userId:text('user_id').notNull(),kind:text('kind').notNull(),operationId:text('operation_id').notNull(),beforeValue:jsonb('before_value'),afterValue:jsonb('after_value'),reason:text('reason').notNull(),date:timestamp('date').notNull().defaultNow(),
+});
+
 // Insert schemas
-export const insertTenantSchema = createInsertSchema(tenants).omit({
+export const insertTenantSchema = createInsertSchema(tenants, {
+ paymentMethods:z.array(z.object({id:z.string(),name:z.string()})).nullable(),
+ productFields:z.array(z.object({key:z.string(),label:z.string(),required:z.boolean().optional()})).nullable(),
+ customerFields:z.array(z.object({key:z.string(),label:z.string()})).nullable(),
+ productFormVisibility:z.record(z.boolean()).nullable(),
+ orderFormFields:z.array(z.object({key:z.string(),label:z.string(),enabled:z.boolean(),required:z.boolean(),options:z.array(z.object({id:z.string(),label:z.string(),type:z.string().optional()})).optional()})).nullable()
+}).omit({
   id: true,
   createdAt: true,
 });
@@ -324,7 +374,7 @@ export const insertProductSchema = createInsertSchema(products).omit({
   id: true,
 });
 
-export const insertOrderSchema = createInsertSchema(orders).omit({
+export const insertOrderSchema = createInsertSchema(orders,{statusHistory:z.array(z.object({status:z.string(),date:z.string(),userId:z.string().optional(),note:z.string().optional()})).nullable()}).omit({
   id: true,
   createdAt: true,
 });
@@ -360,12 +410,12 @@ export const insertIncomeCategorySchema = createInsertSchema(incomeCategories).o
   id: true,
 });
 
-export const insertExpenseSchema = createInsertSchema(expenses).omit({
+export const insertExpenseSchema = createInsertSchema(expenses, { amount: z.number().finite().positive().max(1e12) }).omit({
   id: true,
   createdAt: true,
 });
 
-export const insertCustomerSchema = createInsertSchema(customers).omit({
+export const insertCustomerSchema = createInsertSchema(customers, {addresses:z.array(z.object({label:z.string(),address:z.string()})).nullable()}).omit({
   id: true,
   createdAt: true,
 });
@@ -375,12 +425,12 @@ export const insertDeliverySchema = createInsertSchema(deliveries).omit({
   createdAt: true,
 });
 
-export const insertAuditLogSchema = createInsertSchema(auditLogs).omit({
+export const insertAuditLogSchema = createInsertSchema(auditLogs,{changes:z.record(z.any()).nullable()}).omit({
   id: true,
   createdAt: true,
 });
 
-export const insertCashRegisterEntrySchema = createInsertSchema(cashRegisterEntries).omit({
+export const insertCashRegisterEntrySchema = createInsertSchema(cashRegisterEntries, { amount: z.number().finite().positive().max(1e12) }).omit({
   id: true,
   createdAt: true,
 });
@@ -390,7 +440,7 @@ export const insertShiftHandoverSchema = createInsertSchema(shiftHandovers).omit
   createdAt: true,
 });
 
-export const insertStaffMemberSchema = createInsertSchema(staffMembers).omit({
+export const insertStaffMemberSchema = createInsertSchema(staffMembers,{faceDescriptor:z.array(z.number()).nullable()}).omit({
   id: true,
   createdAt: true,
 });

@@ -30,6 +30,10 @@ export interface CachedCategory {
 }
 
 export interface CachedTransaction {
+  tenantId?: string;
+  pendingOperation?: 'sale'|'void';
+  refundConfirmed?: boolean;
+  delivery?: any;
   id: string;
   date: string;
   items: Array<{
@@ -74,6 +78,12 @@ class POSDatabase extends Dexie {
       transactions: 'id, date, synced',
       syncMeta: 'key'
     });
+    this.version(2).stores({
+      products:'id, name, barcode, category',categories:'id, name',transactions:'id, date, synced, tenantId',syncMeta:'key'
+    }).upgrade(async tx => {
+      const tenant=localStorage.getItem('kitoblar_tenant_id');
+      if(tenant)await tx.table('transactions').toCollection().modify({tenantId:tenant});
+    });
   }
 }
 
@@ -106,7 +116,7 @@ export async function clearAllData(): Promise<void> {
   await Promise.all([
     db.products.clear(),
     db.categories.clear(),
-    db.transactions.clear(),
+    db.transactions.filter(t=>t.synced===true).delete(),
     db.syncMeta.clear()
   ]);
 }

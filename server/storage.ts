@@ -1,7 +1,12 @@
+import { finance } from "./finance-runtime";
 import { db } from "@db";
 import { users, products, orders, categories, transactions, tenants, expenses, expenseCategories, incomeCategories, debtPayments, independentDebts, independentDebtPayments, cashRegisterEntries, customers, deliveries, auditLogs, shiftHandovers, staffMembers, attendanceRecords, suppliers } from "@shared/schema";
 import type { User, InsertUser, Product, InsertProduct, Order, InsertOrder, Category, InsertCategory, Transaction, InsertTransaction, Tenant, InsertTenant, Expense, InsertExpense, ExpenseCategory, InsertExpenseCategory, IncomeCategory, InsertIncomeCategory, DebtPayment, InsertDebtPayment, IndependentDebt, InsertIndependentDebt, IndependentDebtPayment, CashRegisterEntry, InsertCashRegisterEntry, Customer, InsertCustomer, Delivery, InsertDelivery, AuditLog, InsertAuditLog, ShiftHandover, InsertShiftHandover, StaffMember, InsertStaffMember, AttendanceRecord, InsertAttendanceRecord, Supplier, InsertSupplier } from "@shared/schema";
 import { eq, desc, sql, and, inArray, gte, lte, or, ilike } from "drizzle-orm";
+
+function protectedUpdates<T extends object>(data:T):T {
+ return Object.fromEntries(Object.entries(data).filter(([key])=>!['id','tenantId','createdAt','createdBy','userId'].includes(key))) as T;
+}
 
 export interface IStorage {
   // Tenants
@@ -290,7 +295,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async updateTenant(id: string, data: Partial<InsertTenant>): Promise<Tenant | undefined> {
-    const [updated] = await db.update(tenants).set(data).where(eq(tenants.id, id)).returning();
+    const [updated] = await db.update(tenants).set(protectedUpdates(data)).where(eq(tenants.id, id)).returning();
     return updated;
   }
 
@@ -335,7 +340,7 @@ export class DatabaseStorage implements IStorage {
     }).from(products)
       .where(inArray(products.tenantId, tenantIds))
       .groupBy(products.tenantId);
-    return new Map(rows.map(r => [r.tenantId, r.count]));
+    return new Map(rows.filter(r=>r.tenantId!==null).map(r => [r.tenantId!, r.count]));
   }
 
   async getProductsPaginated(tenantId: string, limit: number, offset: number, filters?: { search?: string; category?: string }): Promise<{ products: Product[]; total: number }> {
@@ -558,113 +563,9 @@ export class DatabaseStorage implements IStorage {
     return txn;
   }
 
-  async createTransaction(transaction: InsertTransaction): Promise<Transaction> {
-    const existing = await this.getTransaction(transaction.id, transaction.tenantId || undefined);
-    if (existing) {
-      return existing;
-    }
-    // PERF: insert the transaction AND decrement product stock in a single
-    // DB round-trip (atomic db.transaction). Previously the client sent N
-    // separate PATCH /api/products/:id calls AFTER POST /api/transactions
-    // for an N-item cart — meaning 5 items = 1 + 5 = 6 sequential network
-    // round trips per sale. That was the #1 cause of the "to'lov qotmoqda"
-    // freeze. Now: 1 round trip total for any cart size.
-    const rawItems = Array.isArray(transaction.items) ? transaction.items as any[] : [];
-    const normalizedItems = rawItems.map((item) => {
-      const quantity = Number(item?.quantity);
-      if (!Number.isFinite(quantity) || quantity <= 0) {
-        throw new Error("INVALID_TRANSACTION_QUANTITY");
-      }
-      return { ...item, quantity };
-    });
-    const normalizedTransaction = { ...transaction, items: normalizedItems } as InsertTransaction;
-    const itemsToDecrement = normalizedItems
-      .filter(item => item?.product?.id)
-      .map(item => ({ id: String(item.product.id), qty: item.quantity }));
+  async createTransaction(transaction: InsertTransaction): Promise<Transaction> { return finance.sale(transaction.tenantId!, "system", {...transaction, pricingMode:"snapshot"}) as any; }
 
-    // Aggregate quantities by product id (handles cart with duplicate lines).
-    const qtyById = new Map<string, number>();
-    for (const it of itemsToDecrement) {
-      qtyById.set(it.id, (qtyById.get(it.id) || 0) + it.qty);
-    }
-
-    const newTxn = await db.transaction(async (tx) => {
-      const [inserted] = await tx.insert(transactions).values(normalizedTransaction).returning();
-      if (qtyById.size > 0 && normalizedTransaction.status !== "voided" && normalizedTransaction.tenantId) {
-        // SECURITY: scope every product update to this transaction's tenant
-        // so a crafted client payload cannot decrement another tenant's
-        // stock. CONCURRENCY: do the decrement as a single SQL-side
-        // arithmetic update per product (stock = GREATEST(0, stock - X))
-        // — no read-then-write window, so two simultaneous checkouts of
-        // the same item cannot lose an update.
-        await Promise.all(Array.from(qtyById.entries()).map(([id, dec]) => {
-          if (dec <= 0) return Promise.resolve();
-          return tx
-            .update(products)
-            .set({ stock: sql`GREATEST(0, ${products.stock} - ${dec})` })
-            .where(and(
-              eq(products.id, id),
-              eq(products.tenantId, normalizedTransaction.tenantId!)
-            ));
-        }));
-      }
-      return inserted;
-    });
-    return newTxn;
-  }
-
-  async voidTransaction(id: string, tenantId?: string): Promise<{transaction: Transaction, alreadyVoided: boolean} | undefined> {
-    return db.transaction(async (tx) => {
-      const conditions = [eq(transactions.id, id)];
-      if (tenantId) conditions.push(eq(transactions.tenantId, tenantId));
-      const where = and(...conditions);
-      const [existing] = await tx.select().from(transactions).where(where).for("update");
-
-      if (!existing) return undefined;
-      if (existing.status === "voided") {
-        return { transaction: existing, alreadyVoided: true };
-      }
-      if (!existing.tenantId) {
-        throw new Error("TRANSACTION_TENANT_MISSING");
-      }
-      const transactionTenantId = existing.tenantId;
-
-      const items = Array.isArray(existing.items) ? existing.items as any[] : [];
-      const qtyById = new Map<string, number>();
-      for (const item of items) {
-        const quantity = Number(item?.quantity);
-        if (!Number.isFinite(quantity) || quantity <= 0) {
-          throw new Error("INVALID_TRANSACTION_QUANTITY");
-        }
-        if (!item?.product?.id) continue;
-        const productId = String(item.product.id);
-        qtyById.set(productId, (qtyById.get(productId) || 0) + quantity);
-      }
-
-      // One CASE UPDATE avoids N product writes. SQL-side increments prevent
-      // lost updates; the transaction row lock makes restoration idempotent.
-      const adjustments = Array.from(qtyById.entries());
-      if (adjustments.length > 0) {
-        const productIds = adjustments.map(([productId]) => productId);
-        const cases = sql.join(
-          adjustments.map(([productId, quantity]) => sql`when ${products.id} = ${productId} then cast(${quantity} as real)`),
-          sql.raw(" ")
-        );
-        await tx.update(products)
-          .set({ stock: sql`${products.stock} + case ${cases} else cast(0 as real) end` })
-          .where(and(
-            inArray(products.id, productIds),
-            eq(products.tenantId, transactionTenantId)
-          ));
-      }
-
-      const [updated] = await tx.update(transactions)
-        .set({ status: "voided" })
-        .where(where)
-        .returning();
-      return { transaction: updated, alreadyVoided: false };
-    });
-  }
+  async voidTransaction(id: string, tenantId?: string): Promise<{transaction: Transaction, alreadyVoided: boolean} | undefined> { return finance.voidSale(tenantId!, "system", id, {refundConfirmed:true}) as any; }
 
   // Expense Categories (tenant-scoped)
   async getExpenseCategories(tenantId: string): Promise<ExpenseCategory[]> {
@@ -682,7 +583,7 @@ export class DatabaseStorage implements IStorage {
     const condition = tenantId
       ? and(eq(expenseCategories.id, id), eq(expenseCategories.tenantId, tenantId))
       : eq(expenseCategories.id, id);
-    const [updated] = await db.update(expenseCategories).set(data).where(condition).returning();
+    const [updated] = await db.update(expenseCategories).set(protectedUpdates(data)).where(condition).returning();
     return updated;
   }
 
@@ -709,7 +610,7 @@ export class DatabaseStorage implements IStorage {
     const condition = tenantId
       ? and(eq(incomeCategories.id, id), eq(incomeCategories.tenantId, tenantId))
       : eq(incomeCategories.id, id);
-    const [updated] = await db.update(incomeCategories).set(data).where(condition).returning();
+    const [updated] = await db.update(incomeCategories).set(protectedUpdates(data)).where(condition).returning();
     return updated;
   }
 
@@ -723,7 +624,7 @@ export class DatabaseStorage implements IStorage {
 
   // Expenses (tenant-scoped)
   async getExpenses(tenantId: string, dateFrom?: Date, dateTo?: Date, categoryId?: string): Promise<Expense[]> {
-    const conditions = [eq(expenses.tenantId, tenantId)];
+    const conditions = [eq(expenses.tenantId, tenantId), sql`${expenses.voidedAt} IS NULL`];
     if (dateFrom) conditions.push(gte(expenses.date, dateFrom));
     if (dateTo) conditions.push(lte(expenses.date, dateTo));
     if (categoryId) conditions.push(eq(expenses.categoryId, categoryId));
@@ -749,7 +650,7 @@ export class DatabaseStorage implements IStorage {
     const condition = tenantId
       ? and(eq(expenses.id, id), eq(expenses.tenantId, tenantId))
       : eq(expenses.id, id);
-    const [updated] = await db.update(expenses).set(data).where(condition).returning();
+    const [updated] = await db.update(expenses).set(protectedUpdates(data)).where(condition).returning();
     return updated;
   }
 
@@ -919,7 +820,7 @@ export class DatabaseStorage implements IStorage {
 
   // Cash Register Entries
   async getCashRegisterEntries(tenantId: string, type?: string, dateFrom?: Date, dateTo?: Date): Promise<CashRegisterEntry[]> {
-    const conditions = [eq(cashRegisterEntries.tenantId, tenantId)];
+    const conditions = [eq(cashRegisterEntries.tenantId, tenantId), sql`${cashRegisterEntries.voidedAt} IS NULL`];
     if (type) conditions.push(eq(cashRegisterEntries.type, type));
     if (dateFrom) conditions.push(gte(cashRegisterEntries.date, dateFrom));
     if (dateTo) conditions.push(lte(cashRegisterEntries.date, dateTo));
@@ -937,7 +838,7 @@ export class DatabaseStorage implements IStorage {
     const condition = tenantId
       ? and(eq(cashRegisterEntries.id, id), eq(cashRegisterEntries.tenantId, tenantId))
       : eq(cashRegisterEntries.id, id);
-    const [updated] = await db.update(cashRegisterEntries).set(data).where(condition).returning();
+    const [updated] = await db.update(cashRegisterEntries).set(protectedUpdates(data)).where(condition).returning();
     return updated;
   }
 
@@ -949,136 +850,10 @@ export class DatabaseStorage implements IStorage {
     return (result.rowCount ?? 0) > 0;
   }
 
-  async getCashRegisterBalance(tenantId: string, dateFrom?: Date, dateTo?: Date): Promise<{ cash: number; card: number; nasiya: number; withdrawn: number; totalIncome: number; totalExpense: number; total: number }> {
-    const txnConditions = [
-      eq(transactions.tenantId, tenantId),
-      sql`${transactions.status} != 'voided'`,
-    ];
-    if (dateFrom) txnConditions.push(gte(transactions.date, dateFrom));
-    if (dateTo) txnConditions.push(lte(transactions.date, dateTo));
-
-    const txns = await db.select({
-      totalAmount: transactions.totalAmount,
-      paymentMethod: transactions.paymentMethod,
-      paidAmount: transactions.paidAmount,
-      debtStatus: transactions.debtStatus,
-      paymentSplits: transactions.paymentSplits,
-    }).from(transactions).where(and(...txnConditions));
-
-    let cash = 0;
-    let card = 0;
-    let nasiya = 0;
-
-    for (const t of txns) {
-      const splits = (t as any).paymentSplits as Array<{ method: string; amount: number }> | null;
-      if (splits && splits.length > 0) {
-        for (const s of splits) {
-          const m = (s.method || "cash").toLowerCase();
-          const amt = Number(s.amount) || 0;
-          if (m === "nasiya") nasiya += amt;
-          else if (m === "karta" || m === "card") card += amt;
-          else cash += amt;
-        }
-        continue;
-      }
-      const method = (t.paymentMethod || "cash").toLowerCase();
-      if (method === "nasiya") {
-        const remaining = t.totalAmount - (t.paidAmount || 0);
-        nasiya += remaining;
-        cash += t.paidAmount || 0;
-      } else if (method === "karta" || method === "card") {
-        card += t.totalAmount;
-      } else {
-        cash += t.totalAmount;
-      }
-    }
-
-    const entryConditions = [eq(cashRegisterEntries.tenantId, tenantId)];
-    if (dateFrom) entryConditions.push(gte(cashRegisterEntries.date, dateFrom));
-    if (dateTo) entryConditions.push(lte(cashRegisterEntries.date, dateTo));
-
-    const entries = await db.select().from(cashRegisterEntries).where(and(...entryConditions));
-
-    let withdrawn = 0;
-    let totalIncome = 0;
-    let totalExpense = 0;
-
-    for (const e of entries) {
-      const pt = (e.paymentType || "cash").toLowerCase();
-      if (e.type === "income") {
-        totalIncome += e.amount;
-        if (pt === "card" || pt === "karta") card += e.amount;
-        else cash += e.amount;
-      } else if (e.type === "expense" || e.type === "withdrawal") {
-        totalExpense += e.amount;
-        if (e.type === "withdrawal") withdrawn += e.amount;
-        if (pt === "card" || pt === "karta") card -= e.amount;
-        else cash -= e.amount;
-      }
-    }
-
-    const expConditions = [eq(expenses.tenantId, tenantId)];
-    if (dateFrom) expConditions.push(gte(expenses.date, dateFrom));
-    if (dateTo) expConditions.push(lte(expenses.date, dateTo));
-
-    const [expResult] = await db.select({
-      total: sql<number>`COALESCE(SUM(${expenses.amount}), 0)::int`
-    }).from(expenses).where(and(...expConditions));
-
-    const expensesFromTable = expResult?.total || 0;
-    totalExpense += expensesFromTable;
-    cash -= expensesFromTable;
-
-    return { cash: Math.max(cash, 0), card: Math.max(card, 0), nasiya, withdrawn, totalIncome, totalExpense, total: Math.max(cash, 0) + Math.max(card, 0) };
-  }
+  async getCashRegisterBalance(tenantId: string, dateFrom?: Date, dateTo?: Date): Promise<{ cash: number; card: number; nasiya: number; withdrawn: number; totalIncome: number; totalExpense: number; total: number }> { return finance.cashBalance(tenantId,dateFrom,dateTo); }
 
   // Financial summary
-  async getFinancialSummary(tenantId: string, dateFrom: Date, dateTo: Date): Promise<{ revenue: number; expensesTotal: number; profit: number; totalProfit: number; paymentBreakdown: Record<string, number>; transactionCount: number }> {
-    const txns = await db.select({
-      totalAmount: transactions.totalAmount,
-      totalProfit: transactions.totalProfit,
-      paymentMethod: transactions.paymentMethod,
-      paymentSplits: transactions.paymentSplits,
-    }).from(transactions).where(
-      and(
-        eq(transactions.tenantId, tenantId),
-        gte(transactions.date, dateFrom),
-        lte(transactions.date, dateTo),
-        sql`${transactions.status} != 'voided'`
-      )
-    );
-
-    let revenue = 0;
-    let totalProfit = 0;
-    const paymentBreakdown: Record<string, number> = {};
-    for (const t of txns) {
-      revenue += t.totalAmount;
-      totalProfit += t.totalProfit || 0;
-      const splits = (t as any).paymentSplits as Array<{ method: string; amount: number }> | null;
-      if (splits && splits.length > 0) {
-        for (const s of splits) {
-          const m = s.method || "Naqd";
-          paymentBreakdown[m] = (paymentBreakdown[m] || 0) + (Number(s.amount) || 0);
-        }
-      } else {
-        const method = t.paymentMethod || "Naqd";
-        paymentBreakdown[method] = (paymentBreakdown[method] || 0) + t.totalAmount;
-      }
-    }
-
-    const [expResult] = await db.select({
-      total: sql<number>`COALESCE(SUM(${expenses.amount}), 0)::int`
-    }).from(expenses).where(
-      and(
-        eq(expenses.tenantId, tenantId),
-        gte(expenses.date, dateFrom),
-        lte(expenses.date, dateTo)
-      )
-    );
-
-    const expensesTotal = expResult?.total || 0;
-    return { revenue, expensesTotal, profit: totalProfit - expensesTotal, totalProfit, paymentBreakdown, transactionCount: txns.length };
-  }
+  async getFinancialSummary(tenantId: string, dateFrom: Date, dateTo: Date): Promise<{ revenue: number; expensesTotal: number; profit: number; totalProfit: number; paymentBreakdown: Record<string, number>; transactionCount: number }> { return finance.financialSummary(tenantId,dateFrom,dateTo) as any; }
 
   // Customers
   async getCustomers(tenantId: string, search?: string, page?: number, limit?: number): Promise<{ customers: Customer[]; total: number }> {
@@ -1124,7 +899,7 @@ export class DatabaseStorage implements IStorage {
     const condition = tenantId
       ? and(eq(customers.id, id), eq(customers.tenantId, tenantId))
       : eq(customers.id, id);
-    const [updated] = await db.update(customers).set(data).where(condition).returning();
+    const [updated] = await db.update(customers).set(protectedUpdates(data)).where(condition).returning();
     return updated;
   }
 
@@ -1141,7 +916,7 @@ export class DatabaseStorage implements IStorage {
     const condition = tenantId
       ? and(eq(orders.id, id), eq(orders.tenantId, tenantId))
       : eq(orders.id, id);
-    const [updated] = await db.update(orders).set(data).where(condition).returning();
+    const [updated] = await db.update(orders).set(protectedUpdates(data)).where(condition).returning();
     return updated;
   }
 
@@ -1221,7 +996,7 @@ export class DatabaseStorage implements IStorage {
     const condition = tenantId
       ? and(eq(deliveries.id, id), eq(deliveries.tenantId, tenantId))
       : eq(deliveries.id, id);
-    const [updated] = await db.update(deliveries).set(data).where(condition).returning();
+    const [updated] = await db.update(deliveries).set(protectedUpdates(data)).where(condition).returning();
     return updated;
   }
 
@@ -1288,7 +1063,7 @@ export class DatabaseStorage implements IStorage {
     const condition = tenantId
       ? and(eq(staffMembers.id, id), eq(staffMembers.tenantId, tenantId))
       : eq(staffMembers.id, id);
-    const [updated] = await db.update(staffMembers).set(data).where(condition).returning();
+    const [updated] = await db.update(staffMembers).set(protectedUpdates(data)).where(condition).returning();
     return updated;
   }
 
@@ -1313,7 +1088,7 @@ export class DatabaseStorage implements IStorage {
   async updateSupplier(id: string, data: Partial<InsertSupplier>, tenantId?: string): Promise<Supplier | undefined> {
     const conditions: any[] = [eq(suppliers.id, id)];
     if (tenantId) conditions.push(eq(suppliers.tenantId, tenantId));
-    const [updated] = await db.update(suppliers).set(data).where(and(...conditions)).returning();
+    const [updated] = await db.update(suppliers).set(protectedUpdates(data)).where(and(...conditions)).returning();
     return updated;
   }
 
@@ -1353,130 +1128,7 @@ export class DatabaseStorage implements IStorage {
     profit: number;
     totalProfit: number;
     payments: Record<string, number>;
-  }>> {
-    // The client constructs local calendar boundaries and serializes them as
-    // UTC instants. Use those submitted instants directly for filtering;
-    // applying the offset again would drop boundary hours west/east of UTC.
-    // The offset is only for grouping each timestamp into its local day.
-    const utcFrom = from;
-    const utcTo = to;
-
-    const transactionDay = sql<string>`to_char(${transactions.date} - (${tzOffsetMinutes} * interval '1 minute'), 'YYYY-MM-DD')`;
-    const expenseDay = sql<string>`to_char(${expenses.date} - (${tzOffsetMinutes} * interval '1 minute'), 'YYYY-MM-DD')`;
-    const transactionFilter = and(
-      eq(transactions.tenantId, tenantId),
-      gte(transactions.date, utcFrom),
-      lte(transactions.date, utcTo),
-      sql`${transactions.status} != 'voided'`
-    );
-
-    // Revenue/profit, expenses and payment methods are all grouped by local
-    // day in PostgreSQL. No transaction list (or JSON items blob) crosses the
-    // application boundary, even for multi-year reports.
-    const [txDayRows, expRows, paymentResult] = await Promise.all([
-      db.select({
-        day: transactionDay,
-        revenue: sql<number>`COALESCE(SUM(${transactions.totalAmount}), 0)::bigint`,
-        totalProfit: sql<number>`COALESCE(SUM(${transactions.totalProfit}), 0)::bigint`,
-      }).from(transactions)
-        .where(transactionFilter)
-        .groupBy(sql.raw("1")),
-      db.select({
-        day: expenseDay,
-        total: sql<number>`COALESCE(SUM(${expenses.amount}), 0)::bigint`,
-      }).from(expenses).where(
-        and(
-          eq(expenses.tenantId, tenantId),
-          gte(expenses.date, utcFrom),
-          lte(expenses.date, utcTo)
-        )
-      ).groupBy(sql.raw("1")),
-      db.execute(sql`
-        WITH payment_rows AS (
-          SELECT
-            to_char(${transactions.date} - (${tzOffsetMinutes} * interval '1 minute'), 'YYYY-MM-DD') AS day,
-            COALESCE(NULLIF(${transactions.paymentMethod}, ''), 'Naqd') AS method,
-            ${transactions.totalAmount}::numeric AS amount
-          FROM ${transactions}
-          WHERE ${transactions.tenantId} = ${tenantId}
-            AND ${transactions.date} >= ${utcFrom}
-            AND ${transactions.date} <= ${utcTo}
-            AND ${transactions.status} != 'voided'
-            AND COALESCE(
-              jsonb_array_length(
-                CASE
-                  WHEN jsonb_typeof(COALESCE(${transactions.paymentSplits}::jsonb, '[]'::jsonb)) = 'array'
-                    THEN COALESCE(${transactions.paymentSplits}::jsonb, '[]'::jsonb)
-                  ELSE '[]'::jsonb
-                END
-              ),
-              0
-            ) = 0
-
-          UNION ALL
-
-          SELECT
-            to_char(${transactions.date} - (${tzOffsetMinutes} * interval '1 minute'), 'YYYY-MM-DD') AS day,
-            COALESCE(NULLIF(split.value->>'method', ''), 'Naqd') AS method,
-            COALESCE((split.value->>'amount')::numeric, 0) AS amount
-          FROM ${transactions}
-          CROSS JOIN LATERAL jsonb_array_elements(
-            CASE
-              WHEN jsonb_typeof(COALESCE(${transactions.paymentSplits}::jsonb, '[]'::jsonb)) = 'array'
-                THEN COALESCE(${transactions.paymentSplits}::jsonb, '[]'::jsonb)
-              ELSE '[]'::jsonb
-            END
-          ) AS split(value)
-          WHERE ${transactions.tenantId} = ${tenantId}
-            AND ${transactions.date} >= ${utcFrom}
-            AND ${transactions.date} <= ${utcTo}
-            AND ${transactions.status} != 'voided'
-        )
-        SELECT day, method, COALESCE(SUM(amount), 0)::bigint AS total
-        FROM payment_rows
-        GROUP BY day, method
-      `),
-    ]);
-
-    // Step 3 – build zero-filled day map for the requested range
-    const dayKey = (d: Date) =>
-      new Date(d.getTime() - tzOffsetMinutes * 60000).toISOString().split("T")[0];
-
-    const days: Record<string, {
-      date: string; revenue: number; expenses: number; profit: number;
-      totalProfit: number; payments: Record<string, number>;
-    }> = {};
-
-    const cursor = new Date(from);
-    while (cursor <= to) {
-      const key = dayKey(cursor);
-      days[key] = { date: key, revenue: 0, expenses: 0, profit: 0, totalProfit: 0, payments: {} };
-      cursor.setDate(cursor.getDate() + 1);
-    }
-
-    // Step 4 – merge SQL-aggregated transaction and payment rows
-    for (const row of txDayRows) {
-      if (!days[row.day]) continue;
-      days[row.day].revenue = Number(row.revenue) || 0;
-      days[row.day].totalProfit = Number(row.totalProfit) || 0;
-    }
-    for (const row of paymentResult.rows as Array<{ day: string; method: string; total: string | number }>) {
-      if (!days[row.day]) continue;
-      days[row.day].payments[row.method] = Number(row.total) || 0;
-    }
-
-    // Step 5 – merge SQL-aggregated expenses
-    for (const e of expRows) {
-      if (days[e.day]) {
-        days[e.day].expenses += Number(e.total) || 0;
-      }
-    }
-
-    return Object.values(days).map(d => ({
-      ...d,
-      profit: d.totalProfit - d.expenses,
-    }));
-  }
+  }>> { return finance.daily(tenantId,from,to) as any; }
 
   // --------------------------------------------------------------------------
   // Finance: optimised supplier summary
@@ -1521,99 +1173,7 @@ export class DatabaseStorage implements IStorage {
       totalNasiyaUsd: number;
       supplierCount: number;
     };
-  }> {
-    // Query 1 – registered suppliers
-    const registeredSuppliers = await db.select({
-      name:  suppliers.name,
-      phone: suppliers.phone,
-    }).from(suppliers).where(eq(suppliers.tenantId, tenantId));
-
-    // Query 2 – per-product details (only columns needed, no blobs)
-    const productRows = await db.select({
-      id:                     products.id,
-      name:                   products.name,
-      costPrice:              products.costPrice,
-      stock:                  products.stock,
-      supplier:               products.supplier,
-      supplierPaymentMethod:  products.supplierPaymentMethod,
-      supplierCurrency:       products.supplierCurrency,
-      supplierCurrencyRate:   products.supplierCurrencyRate,
-      supplierOriginalPrice:  products.supplierOriginalPrice,
-      supplierDebtStatus:     products.supplierDebtStatus,
-      supplierPaidAmount:     products.supplierPaidAmount,
-    }).from(products).where(
-      and(eq(products.tenantId, tenantId), sql`${products.supplier} IS NOT NULL AND ${products.supplier} != ''`)
-    );
-
-    // Build supplier map seeded with registered suppliers
-    const emptySupplier = () => ({
-      name: "", phone: "", totalAmount: 0, totalAmountUsd: 0,
-      totalProducts: 0, totalItems: 0,
-      naqd: 0, karta: 0, nasiya: 0,
-      naqdUsd: 0, kartaUsd: 0, nasiyaUsd: 0,
-      products: [] as any[],
-    });
-
-    const supplierMap: Record<string, ReturnType<typeof emptySupplier> & { name: string; phone: string }> = {};
-    for (const s of registeredSuppliers) {
-      supplierMap[s.name] = { ...emptySupplier(), name: s.name, phone: s.phone || "" };
-    }
-
-    for (const p of productRows) {
-      const sName = p.supplier || "";
-      if (!sName) continue;
-      if (!supplierMap[sName]) {
-        supplierMap[sName] = { ...emptySupplier(), name: sName, phone: "" };
-      }
-      const costPrice   = p.costPrice || 0;
-      const stock       = Number(p.stock) || 0;
-      const amount      = costPrice * stock;
-      const currency    = p.supplierCurrency || "uzs";
-      const origPrice   = Number(p.supplierOriginalPrice) || 0;
-      const amountUsd   = currency === "usd" ? origPrice * stock : 0;
-      const payMethod   = p.supplierPaymentMethod || "naqd";
-
-      const sup = supplierMap[sName];
-      sup.totalAmount    += amount;
-      sup.totalAmountUsd += amountUsd;
-      sup.totalProducts  += 1;
-      sup.totalItems     += stock;
-      if (payMethod === "karta")        { sup.karta    += amount; sup.kartaUsd    += amountUsd; }
-      else if (payMethod === "nasiya")  { sup.nasiya   += amount; sup.nasiyaUsd   += amountUsd; }
-      else                              { sup.naqd     += amount; sup.naqdUsd     += amountUsd; }
-
-      sup.products.push({
-        id:                    p.id,
-        name:                  p.name,
-        costPrice,
-        stock,
-        amount,
-        amountUsd,
-        supplierCurrency:      currency,
-        supplierOriginalPrice: origPrice,
-        supplierCurrencyRate:  p.supplierCurrencyRate || 0,
-        paymentMethod:         payMethod,
-        debtStatus:            p.supplierDebtStatus || "pending",
-        paidAmount:            p.supplierPaidAmount || 0,
-      });
-    }
-
-    const result = Object.values(supplierMap).sort((a, b) => b.totalAmount - a.totalAmount);
-
-    const totals = {
-      totalAmount:    result.reduce((s, r) => s + r.totalAmount,    0),
-      totalAmountUsd: result.reduce((s, r) => s + r.totalAmountUsd, 0),
-      totalNaqd:      result.reduce((s, r) => s + r.naqd,           0),
-      totalKarta:     result.reduce((s, r) => s + r.karta,          0),
-      totalNasiya:    result.reduce((s, r) => s + r.nasiya,         0),
-      totalNaqdUsd:   result.reduce((s, r) => s + r.naqdUsd,        0),
-      totalKartaUsd:  result.reduce((s, r) => s + r.kartaUsd,       0),
-      totalNasiyaUsd: result.reduce((s, r) => s + r.nasiyaUsd,      0),
-      supplierCount:  result.length,
-    };
-
-    return { suppliers: result, totals };
-  }
+  }> { return finance.supplierSummary(tenantId) as any; }
 }
 
 export const storage = new DatabaseStorage();

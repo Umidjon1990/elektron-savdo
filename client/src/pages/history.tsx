@@ -1,3 +1,4 @@
+import { salesAnalytics } from '@shared/sales-analytics';
 import { useState } from "react";
 import { SidebarNav } from "@/components/layout/sidebar-nav";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -50,41 +51,10 @@ export default function History() {
     }
   };
 
-  const weekDays = ['Dush', 'Sesh', 'Chor', 'Pay', 'Jum', 'Shan', 'Yak'];
-  const chartData = weekDays.map((name, i) => ({
-    name,
-    total: Math.floor(Math.random() * 500000) + 100000,
-    orders: Math.floor(Math.random() * 20) + 5,
-  }));
-
-  const hourlyData = Array.from({ length: 12 }, (_, i) => ({
-    hour: `${9 + i}:00`,
-    sales: Math.floor(Math.random() * 300000) + 50000,
-  }));
-
-  const monthlyData = ['Yan', 'Fev', 'Mar', 'Apr', 'May', 'Iyun'].map(name => ({
-    name,
-    total: Math.floor(Math.random() * 5000000) + 1000000,
-  }));
-
-  const categoryData = [
-    { name: "Biznes", value: 35, color: "#3b82f6" },
-    { name: "Bolalar", value: 25, color: "#8b5cf6" },
-    { name: "O'zbek", value: 20, color: "#10b981" },
-    { name: "Jahon", value: 15, color: "#f59e0b" },
-    { name: "Til", value: 5, color: "#06b6d4" },
-  ];
-
-  const topProducts = [
-    { name: "Atomic Habits", sold: 45, revenue: 8325000 },
-    { name: "Zero to One", sold: 32, revenue: 4800000 },
-    { name: "Rich Dad Poor Dad", sold: 28, revenue: 3920000 },
-    { name: "O'tkan kunlar", sold: 25, revenue: 1625000 },
-    { name: "1984", sold: 22, revenue: 2090000 },
-  ];
-
+  const analytics=salesAnalytics(transactions,period);
+  const {chartData,hourlyData,monthlyData,topProducts,prevDayTotal}=analytics;
+  const categoryData=analytics.categoryData.map((c,i)=>({...c,color:COLORS[i%COLORS.length]}));
   const avgOrderValue = stats.todayCount > 0 ? Math.round(stats.todayTotal / stats.todayCount) : 0;
-  const prevDayTotal = stats.todayTotal * 0.85;
   const growthPercent = prevDayTotal > 0 ? ((stats.todayTotal - prevDayTotal) / prevDayTotal * 100).toFixed(1) : 0;
   const isGrowth = Number(growthPercent) >= 0;
 
@@ -146,7 +116,7 @@ export default function History() {
                   </div>
                   <div className="flex items-center gap-1 text-xs font-semibold bg-white/20 px-2 py-0.5 rounded-full">
                     <ArrowUp className="w-3 h-3" />
-                    12%
+                    {stats.todayCount} ta
                   </div>
                 </div>
                 <p className="text-xs opacity-80 mb-0.5">Cheklar soni</p>
@@ -198,7 +168,7 @@ export default function History() {
                 </div>
                 <div>
                   <p className="text-[10px] md:text-xs text-slate-500">Naqd to'lov</p>
-                  <p className="text-sm md:text-base font-bold text-slate-800">72%</p>
+                  <p className="text-sm md:text-base font-bold text-slate-800">{analytics.cashShare}%</p>
                 </div>
               </CardContent>
             </Card>
@@ -209,7 +179,7 @@ export default function History() {
                 </div>
                 <div>
                   <p className="text-[10px] md:text-xs text-slate-500">Karta to'lov</p>
-                  <p className="text-sm md:text-base font-bold text-slate-800">28%</p>
+                  <p className="text-sm md:text-base font-bold text-slate-800">{analytics.cardShare}%</p>
                 </div>
               </CardContent>
             </Card>
@@ -220,7 +190,7 @@ export default function History() {
                 </div>
                 <div>
                   <p className="text-[10px] md:text-xs text-slate-500">Mijozlar</p>
-                  <p className="text-sm md:text-base font-bold text-slate-800">156</p>
+                  <p className="text-sm md:text-base font-bold text-slate-800">{analytics.customerCount}</p>
                 </div>
               </CardContent>
             </Card>

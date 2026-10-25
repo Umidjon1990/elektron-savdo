@@ -1,3 +1,4 @@
+import { Money,cartTotal } from '@shared/finance';
 import { salePrice } from "@shared/pricing";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
@@ -81,7 +82,7 @@ export function CartSidebar({ items, onUpdateQuantity, onUpdateDiscount, onRemov
   const totalDiscount = items.reduce((acc, item) => acc + (item.discount || 0), 0);
   const skidkaTotal = items.reduce((acc, item) => item.discount && item.discount > 0 ? acc + item.discount : acc, 0);
   const ustamaTotal = items.reduce((acc, item) => item.discount && item.discount < 0 ? acc + Math.abs(item.discount) : acc, 0);
-  const total = subtotal - totalDiscount;
+  const total = cartTotal(items);
   const itemCount = items.reduce((acc, item) => acc + item.quantity, 0);
   const [showCustomer, setShowCustomer] = useState(false);
   const [customerData, setCustomerData] = useState<Record<string, string>>({});
@@ -215,8 +216,8 @@ export function CartSidebar({ items, onUpdateQuantity, onUpdateDiscount, onRemov
   const mixedSplits = methods
     .map(m => ({ method: m.id, amount: Number((mixedAmounts[m.id] || "").replace(/\s/g, "")) || 0 }))
     .filter(s => s.amount > 0);
-  const mixedSum = mixedSplits.reduce((a, b) => a + b.amount, 0);
-  const mixedRemaining = total - mixedSum;
+  const mixedSum = mixedSplits.reduce((a,b)=>a.add(b.amount),new Money(0)).toNumber();
+  const mixedRemaining = new Money(total).sub(mixedSum).toNumber();
   const hasNasiyaInMixed = mixedSplits.some(s => s.method === "nasiya" && s.amount > 0);
 
   const handleMixedConfirm = () => {
@@ -224,7 +225,7 @@ export function CartSidebar({ items, onUpdateQuantity, onUpdateDiscount, onRemov
       setMixedError("Kamida ikkita to'lov turini kiriting");
       return;
     }
-    if (Math.abs(mixedRemaining) > 1) {
+    if (mixedRemaining !== 0) {
       setMixedError(`Yig'indi jamiga teng emas (farq: ${Math.abs(mixedRemaining).toLocaleString()} so'm)`);
       return;
     }

@@ -76,3 +76,21 @@ test('references and documented openings cannot cross a tenant or duplicate a tr
  await assert.rejects(service.opening('a','owner','wrong',{productId:p.id,currency:'uzs',amount:50000,reason:'Already tracked'}));
  await assert.rejects(service.restock('b','owner','cross',p.id,1,{}));
 });
+
+test('a partial-day range includes the final Tashkent day and its expenses',async t=>{
+ const {db,service}=await fixture(t),p=await seed(db);
+ await service.sale('a','owner',sale(p,{date:'2026-10-25T01:00:00Z'}));
+ await service.entry('a','owner','last-day-expense','expenses',{amount:10000,paymentMethod:'cash',classification:'operating',date:'2026-10-25T02:00:00Z'});
+ const rows=await service.daily('a',new Date('2026-10-24T18:00Z'),new Date('2026-10-25T03:00Z'));
+ assert.deepEqual(rows.map((r:any)=>r.date),['2026-10-24','2026-10-25']);
+ assert.equal(rows[1].revenue,150000);assert.equal(rows[1].expenses,10000);assert.equal(rows[1].profit,40000);
+});
+
+test('reused sale IDs reject altered initial collections and customer details',async t=>{
+ const {db,service}=await fixture(t),p=await seed(db);
+ const body=sale(p,{paymentMethod:'nasiya',paidAmount:10000,customerName:'Synthetic',customerPhone:'000',customerInfo:{reference:'original'},dueDate:'2026-11-01'});
+ await service.sale('a','owner',body);
+ await assert.rejects(service.sale('a','owner',{...body,paidAmount:20000}),(e:any)=>e.status===409);
+ await assert.rejects(service.sale('a','owner',{...body,customerInfo:{reference:'changed'}}),(e:any)=>e.status===409);
+ assert.equal(Number((await db.query<any>('SELECT paid_amount FROM transactions')).rows[0].paid_amount),10000);
+});

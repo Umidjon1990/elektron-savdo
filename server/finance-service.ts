@@ -65,8 +65,9 @@ export class FinanceService {
  });}
  async sale(tenant:string,user:string,body:any){
   ensure(Array.isArray(body.items)&&body.items.length>0&&body.items.length<=1000,'Savat tarkibi noto‘g‘ri');
-  const id=String(body.id||'');
-  const intent={id,date:new Date(body.date).toISOString(),items:(body.items||[]).map((l:any)=>({id:l.product?.id,quantity:l.quantity,discount:l.discount||0})),total:Number(body.totalAmount),method:body.paymentMethod,splits:body.paymentSplits||null,customerName:body.customerName||null,customerPhone:body.customerPhone||null,dueDate:body.dueDate||null,delivery:body.delivery||null};
+  const id=String(body.id||''),date=new Date(body.date);
+  ensure(Number.isFinite(date.getTime())&&date.getTime()<=Date.now()+300000,'Savdo sanasi noto‘g‘ri');
+  const intent={id,date:date.toISOString(),items:(body.items||[]).map((l:any)=>({id:l.product?.id,quantity:l.quantity,discount:l.discount||0})),total:Number(body.totalAmount),method:body.paymentMethod,splits:body.paymentSplits||null,initialPaid:amount(body.paidAmount??0,true),customerName:body.customerName||null,customerPhone:body.customerPhone||null,customerInfo:body.customerInfo||null,dueDate:body.dueDate||null,delivery:body.delivery||null};
   return this.operation(tenant,user,'sale',id,intent,async c=>{
    const prior=camel((await c.query('SELECT * FROM transactions WHERE id=$1 AND tenant_id=$2',[id,tenant])).rows[0]);if(prior){ensure(prior.totalAmount===Number(body.totalAmount),'Shu savdo IDsi boshqa summa bilan ishlatilgan',409);return prior;}
    const priced=await priceTransaction(body.items,tenant,async productId=>camel((await c.query('SELECT * FROM products WHERE id=$1 AND tenant_id=$2 FOR UPDATE',[productId,tenant])).rows[0]),body.pricingMode==='snapshot');
@@ -77,7 +78,6 @@ export class FinanceService {
    const byId=new Map<string,DecimalLike>();
    for(const line of priced.items){ensure(new Money(line.quantity).decimalPlaces()<=6,'Miqdor ko‘pi bilan 6 kasrli bo‘lsin');byId.set(line.product.id,(byId.get(line.product.id)||new Money(0)).add(line.quantity));}
    for(const [pid,q] of [...byId].sort(([a],[b])=>a.localeCompare(b))){const r=await c.query('UPDATE products SET stock=stock-$3 WHERE id=$1 AND tenant_id=$2 AND stock >= $3 RETURNING id',[pid,tenant,q.toString()]);ensure(r.rows.length,'Omborda yetarli qoldiq yo‘q',409);await this.movement(c,tenant,id,pid,q.neg().toNumber(),'sale');}
-   const date=new Date(body.date);ensure(Number.isFinite(date.getTime())&&date.getTime()<=Date.now()+300000,'Savdo sanasi noto‘g‘ri');
    const result=await this.insert(c,'transactions',{id,tenantId:tenant,date,items:priced.items,totalAmount:total,totalProfit:new Money(priced.totalProfit).toDecimalPlaces(2).toNumber(),paymentMethod:parts.parts.length>1?'mixed':method,paymentSplits:parts.parts,initialPaidAmount:parts.paid,paidAmount:parts.paid,debtStatus:parts.debt?'pending':'none',status:'completed',customerName:body.customerName||null,customerPhone:body.customerPhone||null,customerInfo:body.customerInfo||null,dueDate:body.dueDate?new Date(body.dueDate):null});
    if(body.delivery){const d=body.delivery;if(d.courierId)ensure((await c.query('SELECT id FROM staff_members WHERE id=$1 AND tenant_id=$2',[d.courierId,tenant])).rows.length,'Kuryer topilmadi');
     const order=await this.insert(c,'orders',{tenantId:tenant,customerName:d.customerName,customerPhone:d.customerPhone,address:d.address||'',items:priced.items.map(l=>({productId:l.product.id,productName:l.product.name,quantity:l.quantity,price:new Money(l.product.price).sub(new Money(l.discount).div(l.quantity)).toNumber()})),totalAmount:total,status:'confirmed',paymentMethod:result.paymentMethod,paymentStatus:parts.debt?(parts.paid?'partial':'unpaid'):'paid',debtAmount:parts.debt,deliveryType:'delivery',courier:d.courierName||'',courierId:d.courierId||null});
@@ -174,7 +174,9 @@ export class FinanceService {
   ensure(Number.isFinite(from.getTime())&&Number.isFinite(to.getTime())&&from<=to&&to.getTime()-from.getTime()<=3660*86400000,'Hisobot oralig‘i noto‘g‘ri yoki juda katta');
   return this.snapshot(async c=>{
    const [tx,ex]=await Promise.all([c.query("SELECT date,total_amount,total_profit,payment_splits,payment_method FROM transactions WHERE tenant_id=$1 AND status='completed' AND date >= $2 AND date <= $3",[tenant,from,to]),c.query('SELECT date,amount,classification FROM expenses WHERE tenant_id=$1 AND voided_at IS NULL AND date >= $2 AND date <= $3',[tenant,from,to])]);
-   const map=new Map<string,any>();for(let t=from.getTime();t<=to.getTime();t+=86400000){const date=localDay(new Date(t));map.set(date,{date,revenue:new Money(0),totalProfit:new Money(0),expenses:new Money(0),profitKnown:true,payments:{}});}
+   const map=new Map<string,any>();
+   const firstDay=Date.parse(localDay(from)),lastDay=Date.parse(localDay(to));
+   for(let t=firstDay;t<=lastDay;t+=86400000){const date=new Date(t).toISOString().slice(0,10);map.set(date,{date,revenue:new Money(0),totalProfit:new Money(0),expenses:new Money(0),profitKnown:true,payments:{}});}
    for(const t of tx.rows.map(camel)){const row=map.get(localDay(t.date));if(!row)continue;row.revenue=row.revenue.add(t.totalAmount);row.totalProfit=row.totalProfit.add(t.totalProfit);for(const part of t.paymentSplits?.length?t.paymentSplits:[{method:t.paymentMethod,amount:t.totalAmount}]){const key=paymentAccount(part.method);row.payments[key]=new Money(row.payments[key]||0).add(part.amount).toNumber();}}
    for(const e of ex.rows.map(camel)){const row=map.get(localDay(e.date));if(!row)continue;if(e.classification==='unclassified')row.profitKnown=false;if(e.classification==='operating')row.expenses=row.expenses.add(e.amount);}
    return [...map.values()].map(r=>({...r,revenue:r.revenue.toNumber(),totalProfit:r.totalProfit.toNumber(),expenses:r.expenses.toNumber(),profit:r.profitKnown?r.totalProfit.sub(r.expenses).toNumber():null}));

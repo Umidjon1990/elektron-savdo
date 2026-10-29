@@ -55,13 +55,14 @@ export function TransactionProvider({ children }: { children: ReactNode }) {
   const checkoutAttempt = useRef<{ key: string; id: string; date: string } | null>(null);
 
   useEffect(() => {
+    checkoutAttempt.current=null;
     if (token) {
       loadTransactions();
     } else {
       setTransactions([]);
       setPendingCount(0);
     }
-  }, [token]);
+  }, [token,tenant?.id]);
 
   const loadTransactions = async () => {
     try {
@@ -126,7 +127,7 @@ export function TransactionProvider({ children }: { children: ReactNode }) {
       ? (hasNasiyaInSplit ? "pending" : "none")
       : (method === "nasiya" ? "pending" : "none");
 
-    const attemptKey = JSON.stringify({ items, total, method, customerData, nasiyaData, paymentSplits });
+    const attemptKey = JSON.stringify({ tenantId:tenant?.id,items, total, method, customerData, nasiyaData, paymentSplits,delivery });
     if(checkoutAttempt.current&&checkoutAttempt.current.key!==attemptKey){const pending=await db.transactions.get(checkoutAttempt.current.id);if(pending&&!pending.synced)throw new Error('Oldingi to‘lov natijasi kutilmoqda. Avval uni sinxronlang.');}
     if (checkoutAttempt.current?.key !== attemptKey) checkoutAttempt.current = {
       key: attemptKey, id: crypto.randomUUID(), date: new Date().toISOString(),
@@ -142,7 +143,10 @@ export function TransactionProvider({ children }: { children: ReactNode }) {
       items: items.map(item => ({
         product: { ...item.product, price: salePrice(item.product), regularPrice: item.product.price, discountPrice: null },
         quantity: item.quantity,
-        discount: item.discount
+        discount: item.discount,
+        adjustmentType:item.adjustmentType,
+        adjustmentInputType:item.adjustmentInputType,
+        adjustmentValue:item.adjustmentValue
       })),
       totalAmount: total,
       totalProfit: profit,
@@ -169,12 +173,13 @@ export function TransactionProvider({ children }: { children: ReactNode }) {
       });
       const result = await res.json();
       if (!res.ok) {
-        if(res.status>=400&&res.status<500){await db.transactions.delete(newTransaction.id);checkoutAttempt.current=null;}
+        if(res.status>=400&&res.status<500&&![401,403,408,429].includes(res.status)){await db.transactions.delete(newTransaction.id);checkoutAttempt.current=null;}
         throw Object.assign(new Error(result.error || "To‘lovni saqlab bo‘lmadi"), { items: result.items });
       }
       newTransaction.items = result.items;
       newTransaction.totalProfit = result.totalProfit;
       newTransaction.synced = true;
+      newTransaction.serverAcknowledged=true;
       newTransaction.pendingOperation=undefined;
     }
     await db.transactions.put(newTransaction);
@@ -238,7 +243,7 @@ export function TransactionProvider({ children }: { children: ReactNode }) {
    const result=await res.json();if(!res.ok)throw new Error(result.error||'Bekor qilish saqlanmadi');
  }
  for(const item of transaction.items||[]){const p=await db.products.get(item.product.id);if(p)await db.products.update(p.id,{stock:new Money(p.stock).add(item.quantity).toNumber()});}
- await db.transactions.update(id,{status:'voided',pendingOperation:online?undefined:'void',refundConfirmed:true,synced:online});
+ await db.transactions.update(id,{status:'voided',pendingOperation:online?undefined:'void',refundConfirmed:true,synced:online,serverAcknowledged:online||transaction.serverAcknowledged||transaction.synced});
  if(online)await queryClient.refetchQueries({queryKey:['products']});
  await queryClient.invalidateQueries({queryKey:['finance-summary']});await loadTransactions();
 };

@@ -22,18 +22,22 @@ export function getOnlineStatus(): boolean {
 
 export async function syncProductsFromServer(): Promise<CachedProduct[]> {
   try {
-    const res = await fetch('/api/products', { headers: getAuthHeaders() });
+    const tenantAtStart=activeTenant(),headers=getAuthHeaders();
+    const sameSession=()=>activeTenant()===tenantAtStart&&getAuthHeaders().Authorization===headers.Authorization;
+    const res = await fetch('/api/products', { headers });
     if (!res.ok) throw new Error('Failed to fetch products');
     const products: CachedProduct[] = await res.json();
     
-    await db.products.clear();
-    await db.products.bulkPut(products);
-    
-    const version = new Date().toISOString();
-    await setCatalogVersion(version);
-    await setLastSyncTime(version);
-    
-    return products;
+    if(!sameSession())return [];
+    await db.transaction('rw',db.products,db.syncMeta,async()=>{
+      if(!sameSession())return;
+      await db.products.clear();
+      await db.products.bulkPut(products);
+      const version = new Date().toISOString();
+      await setCatalogVersion(version);
+      await setLastSyncTime(version);
+    });
+    return sameSession()?products:[];
   } catch (error) {
     console.error('Failed to sync products from server:', error);
     throw error;
@@ -42,14 +46,19 @@ export async function syncProductsFromServer(): Promise<CachedProduct[]> {
 
 export async function syncCategoriesFromServer(): Promise<CachedCategory[]> {
   try {
-    const res = await fetch('/api/categories', { headers: getAuthHeaders() });
+    const tenantAtStart=activeTenant(),headers=getAuthHeaders();
+    const sameSession=()=>activeTenant()===tenantAtStart&&getAuthHeaders().Authorization===headers.Authorization;
+    const res = await fetch('/api/categories', { headers });
     if (!res.ok) throw new Error('Failed to fetch categories');
     const categories: CachedCategory[] = await res.json();
     
-    await db.categories.clear();
-    await db.categories.bulkPut(categories);
-    
-    return categories;
+    if(!sameSession())return [];
+    await db.transaction('rw',db.categories,async()=>{
+      if(!sameSession())return;
+      await db.categories.clear();
+      await db.categories.bulkPut(categories);
+    });
+    return sameSession()?categories:[];
   } catch (error) {
     console.error('Failed to sync categories from server:', error);
     throw error;
@@ -117,6 +126,7 @@ export async function syncTransactionsFromServer(): Promise<CachedTransaction[]>
           totalProfit: txn.totalProfit || 0,
           paymentMethod: txn.paymentMethod,
           synced: true,
+          serverAcknowledged:true,
           pendingOperation:undefined,
           tenantId:tenantAtStart||undefined,
           status: txn.status || 'completed',
@@ -137,6 +147,7 @@ export async function syncTransactionsFromServer(): Promise<CachedTransaction[]>
           items:txn.items||[],
           paymentSplits:txn.paymentSplits||undefined,
           synced: true,
+          serverAcknowledged:true,
           pendingOperation:undefined,
           tenantId:tenantAtStart||undefined,
           status: txn.status || 'completed',
@@ -169,7 +180,7 @@ export async function getPendingTransactions(): Promise<CachedTransaction[]> {
 }
 
 export async function markTransactionSynced(id: string): Promise<void> {
-  await db.transactions.update(id, { synced: true });
+  await db.transactions.update(id, { synced: true,serverAcknowledged:true });
 }
 
 let syncRunning=false;
@@ -184,7 +195,9 @@ export async function syncPendingTransactions(): Promise<void> {
   for (const txn of pending) {
     if(activeTenant()!==tenantAtStart||getAuthHeaders().Authorization!==headers.Authorization)break;
     try {
-      const res = await fetch('/api/transactions', {
+      // An acknowledged sale may now contain updated debt balances and server
+      // splits. A reversal must not resubmit those as a new checkout intent.
+      const res = txn.serverAcknowledged&&(txn.pendingOperation==='void'||txn.status==='voided')?null:await fetch('/api/transactions', {
         method: 'POST',
         headers,
         body: JSON.stringify({
@@ -192,7 +205,7 @@ export async function syncPendingTransactions(): Promise<void> {
           date: txn.date,
           pricingVersion: 1,
           delivery:txn.delivery,
-          pricingMode: "snapshot",
+          pricingMode: txn.pricingMode || "snapshot",
           items: (txn.items || []).filter(item => item && item.product).map(item => ({
             product: {
               id: item.product.id,
@@ -205,7 +218,10 @@ export async function syncPendingTransactions(): Promise<void> {
               barcode: item.product.barcode
             },
             quantity: item.quantity,
-            discount: item.discount || 0
+            discount: item.discount || 0,
+            adjustmentType:item.adjustmentType,
+            adjustmentInputType:item.adjustmentInputType,
+            adjustmentValue:item.adjustmentValue
           })),
           totalAmount: txn.totalAmount,
           totalProfit: txn.totalProfit || 0,
@@ -221,12 +237,23 @@ export async function syncPendingTransactions(): Promise<void> {
         })
       });
       
-      if (res.ok) {
-        if(txn.pendingOperation==='void'||txn.status==='voided') {
-          const reversal=await fetch(`/api/transactions/${txn.id}/void`,{method:'POST',headers,body:JSON.stringify({refundConfirmed:txn.refundConfirmed===true})});
+      if (!res||res.ok) {
+        if(activeTenant()!==tenantAtStart||getAuthHeaders().Authorization!==headers.Authorization)break;
+        const latest=await db.transactions.get(txn.id);
+        if(!latest||latest.tenantId!==tenantAtStart)continue;
+        await db.transactions.update(txn.id,{serverAcknowledged:true});
+        if(latest.pendingOperation==='void'||latest.status==='voided') {
+          const reversal=await fetch(`/api/transactions/${txn.id}/void`,{method:'POST',headers,body:JSON.stringify({refundConfirmed:latest.refundConfirmed===true})});
           if(!reversal.ok)continue;
+          await db.transactions.update(txn.id,{synced:true,pendingOperation:undefined});
+        }else{
+          // Do not erase a reversal queued between the response and this write.
+          await db.transactions.where('id').equals(txn.id).modify(current=>{
+            if(current.pendingOperation!=='void'&&current.status!=='voided'){
+              current.synced=true;current.pendingOperation=undefined;
+            }
+          });
         }
-        await db.transactions.update(txn.id,{synced:true,pendingOperation:undefined});
         // Stock decrement is now done atomically server-side inside
         // POST /api/transactions (storage.createTransaction). The previous
         // per-item sequential PATCH loop here was 1 extra round trip PER

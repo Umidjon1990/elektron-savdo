@@ -84,6 +84,41 @@ Browser QA uses synthetic API responses, including desktop/mobile dialogs.
 The private production transaction history was not available during the audit;
 historical loss/recovery totals have not been certified.
 
+## Follow-up review (2026-10-29)
+
+Production still runs the `main` source; the October 25 financial changes were
+only on `fix/financial-audit-2026-10-25`. The follow-up branch includes those
+changes and corrects these additional cases:
+
+- Online attempts keep current-price validation during replay. Percentage
+  adjustment intent survives local persistence and upload.
+- Catalog/category responses are discarded after a tenant or token change.
+  Catalog replacement and metadata writes are atomic in IndexedDB.
+- Legacy v1 local sales without tenant identity remain unattributed for owner
+  reconciliation. The account active during upgrade is not proof of ownership.
+- A void queued while an upload is in flight is preserved and sent explicitly.
+  Acknowledged sales replay only their reversal, including when later debt
+  collections changed their paid balance. Failed reversal retries never recreate
+  the original checkout.
+- Daily reports enumerate calendar days, including the final day of a partial
+  day range. The SQL query continues to honor the exact requested timestamps.
+- Reusing a new sale ID with different initial collection/customer information
+  is rejected. Invalid sale dates fail validation before any database operation.
+- Checkout attempts include tenant/delivery identity and reset on session
+  changes. Authentication, timeout and rate-limit responses retain the outbox.
+
+Release prerequisites: set a strong production `JWT_SECRET` before deploying
+the fail-closed code, retain a database backup/previous deployment, then apply
+the versioned startup migration in a controlled release. Existing sessions must
+sign in again. Supplier opening balances and unclassified historical expenses
+still require documents; no historical balances are invented by this patch.
+
+Follow-up validation: 49 SQL/IndexedDB/pricing/inventory tests; TypeScript check;
+client/server production build. The build is invoked with
+`node --import tsx script/build.ts` in hosts that prohibit the tsx CLI IPC pipe.
+No live financial writes, configuration changes or deployment were performed
+during this follow-up review.
+
 ## Release verification (2026-10-25)
 
 - 41 automated tests passed (20 existing, 16 SQL/finance, 5 IndexedDB/retry).

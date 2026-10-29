@@ -32,6 +32,7 @@ export interface CachedCategory {
 export interface CachedTransaction {
   tenantId?: string;
   pendingOperation?: 'sale'|'void';
+  serverAcknowledged?: boolean;
   refundConfirmed?: boolean;
   delivery?: any;
   id: string;
@@ -40,6 +41,9 @@ export interface CachedTransaction {
     product: CachedProduct;
     quantity: number;
     discount?: number;
+    adjustmentType?: 'skidka' | 'ustama';
+    adjustmentInputType?: 'summa' | 'percent';
+    adjustmentValue?: number;
   }>;
   totalAmount: number;
   totalProfit: number;
@@ -80,10 +84,9 @@ class POSDatabase extends Dexie {
     });
     this.version(2).stores({
       products:'id, name, barcode, category',categories:'id, name',transactions:'id, date, synced, tenantId',syncMeta:'key'
-    }).upgrade(async tx => {
-      const tenant=localStorage.getItem('kitoblar_tenant_id');
-      if(tenant)await tx.table('transactions').toCollection().modify({tenantId:tenant});
     });
+    // A v1 record has no reliable tenant identity. Keep it for reconciliation;
+    // the account active during an upgrade does not establish ownership.
   }
 }
 

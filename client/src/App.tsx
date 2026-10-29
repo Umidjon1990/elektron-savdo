@@ -12,6 +12,8 @@ import { AuthProvider, useAuth } from "@/lib/auth-context";
 import { SettingsProvider } from "@/lib/settings-context";
 import React, { lazy, Suspense, useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import {SubscriptionNotice} from '@/components/subscription-notice';
+import {Clock} from 'lucide-react';
 
 const importDashboard = () => import("@/pages/dashboard");
 const importInventory = () => import("@/pages/inventory");
@@ -149,16 +151,17 @@ class ErrorBoundary extends React.Component<
 }
 
 function ExpiredPage({ message }: { message: string }) {
-  const { logout } = useAuth();
+  const { logout,refreshUser } = useAuth();
   return (
     <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: "linear-gradient(135deg, #f8fafc, #e2e8f0)" }}>
       <div style={{ textAlign: "center", maxWidth: 400, padding: 40, background: "white", borderRadius: 16, boxShadow: "0 4px 24px rgba(0,0,0,0.08)" }}>
         <div style={{ width: 64, height: 64, borderRadius: "50%", background: "#fef2f2", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 16px" }}>
-          <span style={{ fontSize: 28 }}>⏰</span>
+          <Clock className="h-8 w-8 text-red-500"/>
         </div>
         <h2 style={{ fontSize: 20, fontWeight: 700, color: "#1e293b", marginBottom: 8 }}>Muddat tugagan</h2>
         <p style={{ color: "#64748b", fontSize: 14, lineHeight: 1.6, marginBottom: 24 }}>{message}</p>
-        <p style={{ color: "#64748b", fontSize: 13, marginBottom: 24 }}>Obunani yangilash uchun admin bilan bog'laning.</p>
+        <p style={{ color: "#64748b", fontSize: 13, marginBottom: 24 }}>To‘lov qiling va obunani yangilash uchun admin bilan bog‘laning. Ma’lumotlaringiz saqlanadi. Muddat uzaytirilgach kirish avtomatik tiklanadi.</p>
+        <button onClick={()=>refreshUser()} className="mb-3 block w-full rounded-lg border border-indigo-200 px-4 py-3 text-sm font-semibold text-indigo-600" data-testid="button-recheck-subscription">To‘lovdan keyin qayta tekshirish</button>
         <button
           onClick={logout}
           style={{ padding: "10px 32px", background: "#4f46e5", color: "white", border: "none", borderRadius: 8, cursor: "pointer", fontWeight: 600, fontSize: 14 }}
@@ -194,7 +197,7 @@ function ProtectedRoute({ component: Component }: { component: React.ComponentTy
     }
     return <Redirect to="/login" />;
   }
-  return <Component />;
+  return <><Component /><SubscriptionNotice /></>;
 }
 
 function SlugProtectedRoute({ component: Component, slug }: { component: React.ComponentType; slug: string }) {
@@ -222,7 +225,7 @@ function SlugProtectedRoute({ component: Component, slug }: { component: React.C
     return <Redirect to={`/store/${tenant.slug}/admin`} />;
   }
 
-  return <Component />;
+  return <><Component /><SubscriptionNotice /></>;
 }
 
 function LegacyAdminRedirect({ component: Component, subPath }: { component: React.ComponentType; subPath?: string }) {
@@ -247,7 +250,7 @@ function LegacyAdminRedirect({ component: Component, subPath }: { component: Rea
     return <Redirect to="/login" />;
   }
 
-  return <Component />;
+  return <><Component /><SubscriptionNotice /></>;
 }
 
 function HomeRedirect() {

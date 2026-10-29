@@ -20,11 +20,11 @@ export async function getTenantBySlug(slug: string): Promise<Tenant | null> {
   return tenant || null;
 }
 
-export async function getTenantById(id: string): Promise<Tenant | null> {
+export async function getTenantById(id: string, fresh=false): Promise<Tenant | null> {
   const keys = Array.from(tenantCache.keys());
   for (const key of keys) {
     const entry = tenantCache.get(key)!;
-    if (entry.tenant.id === id && Date.now() - entry.cachedAt < CACHE_TTL) {
+    if (!fresh && entry.tenant.id === id && Date.now() - entry.cachedAt < CACHE_TTL) {
       return entry.tenant;
     }
   }

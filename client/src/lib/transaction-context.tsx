@@ -184,7 +184,7 @@ export function TransactionProvider({ children }: { children: ReactNode }) {
     }
     await db.transactions.put(newTransaction);
     checkoutAttempt.current = null;
-    for(const key of ["cash-balance","finance-summary","finance-daily"])queryClient.invalidateQueries({queryKey:[key]});
+    for(const key of ["cash-balance","finance-summary","finance-daily","pos-report"])queryClient.invalidateQueries({queryKey:[key]});
     const returnedTransaction: Transaction = {
       id: newTransaction.id,
       date: newTransaction.date,
@@ -245,7 +245,7 @@ export function TransactionProvider({ children }: { children: ReactNode }) {
  for(const item of transaction.items||[]){const p=await db.products.get(item.product.id);if(p)await db.products.update(p.id,{stock:new Money(p.stock).add(item.quantity).toNumber()});}
  await db.transactions.update(id,{status:'voided',pendingOperation:online?undefined:'void',refundConfirmed:true,synced:online,serverAcknowledged:online||transaction.serverAcknowledged||transaction.synced});
  if(online)await queryClient.refetchQueries({queryKey:['products']});
- await queryClient.invalidateQueries({queryKey:['finance-summary']});await loadTransactions();
+ for(const key of ['finance-summary','cash-balance','finance-daily','pos-report'])await queryClient.invalidateQueries({queryKey:[key]});await loadTransactions();
 };
 
   const getStats = () => {
@@ -274,6 +274,7 @@ export function TransactionProvider({ children }: { children: ReactNode }) {
     if (!isOffline) {
       await syncPendingTransactions();
       await loadTransactions();
+      await queryClient.invalidateQueries({queryKey:['pos-report']});
     }
   };
 

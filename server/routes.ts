@@ -15,6 +15,9 @@ import { authMiddleware, optionalAuth, superAdminOnly, hashPassword, comparePass
 import { getTenantBySlug, getTenantById, invalidateTenantCache } from "./tenant";
 import { registerInventoryRoutes } from "./inventory-report";
 import { hasCostChange, usdCostInUzs } from "@shared/inventory-valuation";
+import {subscriptionUpdate} from '@shared/subscription';
+import {registerSubscriptionRoutes,tenantSession} from './subscription-routes';
+import {eq} from 'drizzle-orm';
 
 
 function financialId(req: any) { return String(req.body?.requestId || req.headers['idempotency-key'] || randomUUID()); }
@@ -112,6 +115,7 @@ export async function registerRoutes(
   });
   
   registerR2Routes(app);
+  registerSubscriptionRoutes(app,{auth:authMiddleware,superOnly:superAdminOnly,getTenant:id=>storage.getTenant(id),getTenants:()=>storage.getAllTenants()});
   registerInventoryRoutes(app, {
     auth: authMiddleware,
     getProducts: tenantId => storage.getAllProducts(tenantId),
@@ -175,7 +179,7 @@ export async function registerRoutes(
       res.json({
         token,
         user: { id: user.id, username: user.username, role: user.role, isSuper: user.isSuper },
-        tenant: tenant ? { id: tenant.id, slug: tenant.slug, name: tenant.name, logo: tenant.logo, brandColor: tenant.brandColor } : null,
+        tenant:tenantSession(tenant),serverNow:new Date().toISOString(),
       });
     } catch (error: any) {
       console.error("Login error:", error);
@@ -192,7 +196,7 @@ export async function registerRoutes(
 
       res.json({
         user: { id: user.id, username: user.username, role: user.role, isSuper: user.isSuper },
-        tenant: tenant ? { id: tenant.id, slug: tenant.slug, name: tenant.name, logo: tenant.logo, brandColor: tenant.brandColor, plan: tenant.plan, status: tenant.status, telegramBotToken: !!tenant.telegramBotToken, telegramChatId: !!tenant.telegramChatId } : null,
+        tenant:tenantSession(tenant),serverNow:new Date().toISOString(),
       });
     } catch (error) {
       res.status(500).json({ error: "Server xatoligi" });
@@ -327,6 +331,7 @@ export async function registerRoutes(
   app.get("/api/admin/tenants", authMiddleware, superAdminOnly, async (req, res) => {
     try {
       const tenantsWithStats = await storage.getAllTenantsWithStats();
+      res.setHeader('Cache-Control','no-store');res.setHeader('X-Server-Time',new Date().toISOString());
       res.json(tenantsWithStats);
     } catch (error) {
       console.error("Get tenants error:", error);
@@ -357,13 +362,7 @@ export async function registerRoutes(
       const { db } = await import("@db");
       const result = await db.transaction(async (tx) => {
         const { tenants, users } = await import("@shared/schema");
-        const rawDays = subscriptionDays ? Number(subscriptionDays) : 0;
-        const days = (!isNaN(rawDays) && rawDays >= 0) ? Math.floor(rawDays) : 0;
-        let trialEnd: Date | null = null;
-        if (days > 0) {
-          trialEnd = new Date();
-          trialEnd.setDate(trialEnd.getDate() + days);
-        }
+        const term=subscriptionUpdate({...req.body,subscriptionDays:subscriptionDays??0},{});
         const [tenant] = await tx.insert(tenants).values({
           slug,
           name: storeName,
@@ -372,8 +371,7 @@ export async function registerRoutes(
           maxUsers: maxUsers || 1,
           ownerUsername: username,
           ownerPassword: password,
-          subscriptionDays: days,
-          trialEnd,
+          ...term,
         }).returning();
         const [user] = await tx.insert(users).values({
           username,
@@ -388,13 +386,13 @@ export async function registerRoutes(
       res.status(201).json(result);
     } catch (error: any) {
       console.error("Create tenant error:", error);
-      res.status(500).json({ error: "Do'kon yaratishda xatolik" });
+      res.status(error instanceof RangeError?400:500).json({ error:error instanceof RangeError?error.message:"Do'kon yaratishda xatolik" });
     }
   });
 
   app.patch("/api/admin/tenants/:id", authMiddleware, superAdminOnly, async (req, res) => {
     try {
-      const allowedFields = ["name", "plan", "status", "maxProducts", "maxUsers", "brandColor", "logo", "telegramBotToken", "telegramChatId", "subscriptionDays"];
+      const allowedFields = ["name", "plan", "status", "maxProducts", "maxUsers", "brandColor", "logo", "telegramBotToken", "telegramChatId"];
       const data: Record<string, any> = {};
       for (const key of allowedFields) {
         if (req.body[key] !== undefined) data[key] = req.body[key];
@@ -411,27 +409,20 @@ export async function registerRoutes(
           return res.status(400).json({ error: "Noto'g'ri status" });
         }
       }
-      if (data.subscriptionDays !== undefined) {
-        const days = Number(data.subscriptionDays);
-        if (isNaN(days) || days < 0) {
-          return res.status(400).json({ error: "Noto'g'ri kunlar soni" });
-        }
-        data.subscriptionDays = days;
-        if (days > 0) {
-          const trialEnd = new Date();
-          trialEnd.setDate(trialEnd.getDate() + days);
-          data.trialEnd = trialEnd;
-        } else {
-          data.trialEnd = null;
-        }
-      }
-      const updated = await storage.updateTenant(req.params.id, data);
+      for(const key of ['maxProducts','maxUsers'])if(data[key]!==undefined&&(!Number.isInteger(data[key])||data[key]<1||data[key]>1000000))return res.status(400).json({error:'Limitlar musbat butun son bo‘lsin'});
+      const {db}=await import('@db');const {tenants}=await import('@shared/schema');
+      const updated=await db.transaction(async tx=>{
+        const [current]=await tx.select().from(tenants).where(eq(tenants.id,req.params.id)).for('update');
+        if(!current)return undefined;
+        const term=subscriptionUpdate(req.body,current);
+        const [row]=await tx.update(tenants).set({...data,...term}).where(eq(tenants.id,req.params.id)).returning();return row;
+      });
       if (!updated) return res.status(404).json({ error: "Tenant topilmadi" });
       invalidateTenantCache(updated.slug);
       res.json(updated);
-    } catch (error) {
+    } catch (error:any) {
       console.error("Update tenant error:", error);
-      res.status(500).json({ error: "Server xatoligi" });
+      res.status(error.status||(error instanceof RangeError?400:500)).json({ error:error.status||error instanceof RangeError?error.message:"Server xatoligi" });
     }
   });
 
@@ -893,6 +884,14 @@ export async function registerRoutes(
     } catch (error) {
       res.status(500).json({ error: "Failed to fetch transactions" });
     }
+  });
+
+  app.get('/api/pos/report',authMiddleware,async(req,res)=>{
+    try{
+      const {dateFrom,dateTo}=periodBounds('today');
+      const from=req.query.from?new Date(String(req.query.from)):dateFrom,to=req.query.to?new Date(String(req.query.to)):dateTo;
+      res.setHeader('Cache-Control','no-store');res.json(await finance.posReport(req.tenantId!,from,to));
+    }catch(error){financialFailure(res,error);}
   });
 
   app.post("/api/transactions", authMiddleware, async (req, res) => {

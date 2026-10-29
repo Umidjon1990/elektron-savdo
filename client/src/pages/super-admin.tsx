@@ -1,4 +1,7 @@
-import { useState } from "react";
+import { useState,useEffect,useRef } from "react";
+import {useServerTime} from "@/hooks/use-server-time";
+import {subscriptionState} from "@shared/subscription";
+import {SubscriptionTermEditor,TenantCountdown,initialTerm,termRequest} from "@/components/subscription-term-editor";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/lib/auth-context";
 import { Redirect } from "wouter";
@@ -46,7 +49,12 @@ const statusConfig: Record<string, { label: string; color: string }> = {
 };
 
 export default function SuperAdminPage() {
-  const { user, token } = useAuth();
+  const { user, token,tenant:ownTenant,refreshUser } = useAuth();
+  const now=useServerTime(30000);
+  const [search,setSearch]=useState("");
+  const [expiryFilter,setExpiryFilter]=useState("all");
+  const [createTerm,setCreateTerm]=useState(()=>initialTerm(null,true));
+  const handledLink=useRef("");
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [createOpen, setCreateOpen] = useState(false);
@@ -66,17 +74,14 @@ export default function SuperAdminPage() {
     subscriptionDays: "30",
   });
 
-  if (!user?.isSuper) {
-    return <Redirect to="/admin" />;
-  }
-
   const headers = {
     "Content-Type": "application/json",
     Authorization: `Bearer ${token}`,
   };
 
   const { data: tenantsList = [], isLoading } = useQuery<TenantWithStats[]>({
-    queryKey: ["admin-tenants"],
+    queryKey: ["admin-tenants",user?.id],
+    enabled:!!user?.isSuper,refetchInterval:30000,refetchOnWindowFocus:true,
     queryFn: async () => {
       const res = await fetch("/api/admin/tenants", { headers });
       if (!res.ok) throw new Error("Xatolik");
@@ -89,7 +94,7 @@ export default function SuperAdminPage() {
       const res = await fetch("/api/admin/tenants", {
         method: "POST",
         headers,
-        body: JSON.stringify(data),
+        body: JSON.stringify({...data,...termRequest(createTerm)}),
       });
       if (!res.ok) {
         const err = await res.json();
@@ -99,7 +104,7 @@ export default function SuperAdminPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["admin-tenants"] });
-      setCreateOpen(false);
+      setCreateOpen(false);setCreateTerm(initialTerm(null,true));
       setCreatedStore({ slug: newStore.slug, name: newStore.storeName, username: newStore.username, password: newStore.password });
       setNewStore({ storeName: "", slug: "", username: "", password: "", plan: "free", subscriptionDays: "30" });
     },
@@ -115,14 +120,17 @@ export default function SuperAdminPage() {
         headers,
         body: JSON.stringify(data),
       });
-      if (!res.ok) throw new Error("Xatolik");
+      if (!res.ok) {const err=await res.json();throw new Error(err.error||"Xatolik");}
       return res.json();
     },
-    onSuccess: () => {
+    onSuccess: (updated) => {
       queryClient.invalidateQueries({ queryKey: ["admin-tenants"] });
+      queryClient.invalidateQueries({ queryKey: ["subscription-alerts"] });
+      if(updated.id===ownTenant?.id)void refreshUser();
       setEditTenant(null);
       toast({ title: "O'zgartirildi" });
     },
+    onError:(err:Error)=>toast({title:"Saqlanmadi",description:err.message,variant:"destructive"}),
   });
 
   const resetPasswordMutation = useMutation({
@@ -179,13 +187,17 @@ export default function SuperAdminPage() {
       .trim();
   };
 
-  const getDaysLeft = (t: TenantWithStats) => {
-    if (!t.trialEnd || t.subscriptionDays === 0) return null;
-    const end = new Date(t.trialEnd);
-    const now = new Date();
-    const diff = Math.ceil((end.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
-    return diff;
-  };
+  useEffect(()=>{
+    const id=new URLSearchParams(window.location.search).get('tenantId');
+    if(id&&handledLink.current!==id){const selected=tenantsList.find(t=>t.id===id);if(selected){setEditTenant(selected);handledLink.current=id;}}
+  },[tenantsList]);
+  const expiredCount=tenantsList.filter(t=>subscriptionState(t,now).expired).length;
+  const warningCount=tenantsList.filter(t=>subscriptionState(t,now).warning).length;
+  const visibleTenants=tenantsList.filter(t=>{
+    const state=subscriptionState(t,now),match=`${t.name} ${t.slug} ${t.ownerUsername||''}`.toLocaleLowerCase().includes(search.toLocaleLowerCase());
+    return match&&(expiryFilter==='all'||expiryFilter==='expired'&&state.expired||expiryFilter==='expiring'&&state.warning||expiryFilter==='unlimited'&&state.unlimited||expiryFilter==='suspended'&&state.suspended||expiryFilter==='active'&&!state.blocked);
+  }).sort((a,b)=>(a.trialEnd?Date.parse(a.trialEnd):Infinity)-(b.trialEnd?Date.parse(b.trialEnd):Infinity));
+  if(!user?.isSuper)return <Redirect to="/admin"/>;
 
   const totalProducts = tenantsList.reduce((s, t) => s + t.productsCount, 0);
   const totalOrders = tenantsList.reduce((s, t) => s + t.ordersCount, 0);
@@ -217,7 +229,7 @@ export default function SuperAdminPage() {
                   Yangi do'kon
                 </Button>
               </DialogTrigger>
-              <DialogContent className="max-w-md">
+              <DialogContent className="max-w-md max-h-[90dvh] overflow-y-auto">
                 <DialogHeader>
                   <DialogTitle>Yangi do'kon yaratish</DialogTitle>
                 </DialogHeader>
@@ -285,18 +297,7 @@ export default function SuperAdminPage() {
                       </SelectContent>
                     </Select>
                   </div>
-                  <div>
-                    <label className="text-sm font-medium text-slate-700 mb-1 block">Muddat (kun)</label>
-                    <Input
-                      type="number"
-                      min="0"
-                      placeholder="30"
-                      value={newStore.subscriptionDays}
-                      onChange={(e) => setNewStore((s) => ({ ...s, subscriptionDays: e.target.value }))}
-                      data-testid="input-subscription-days"
-                    />
-                    <p className="text-xs text-slate-500 mt-1">0 = cheksiz muddat</p>
-                  </div>
+                  <SubscriptionTermEditor value={createTerm} onChange={setCreateTerm} create />
                   <Button
                     className="w-full"
                     disabled={!newStore.storeName || !newStore.slug || !newStore.username || newStore.password.length < 6 || createMutation.isPending}
@@ -360,6 +361,11 @@ export default function SuperAdminPage() {
           </Card>
         </div>
 
+        <div className="flex flex-wrap gap-2">
+          <Button variant={expiryFilter==='expired'?'default':'outline'} onClick={()=>setExpiryFilter('expired')} className="border-red-200 text-red-700">Muddati tugagan: {expiredCount}</Button>
+          <Button variant={expiryFilter==='expiring'?'default':'outline'} onClick={()=>setExpiryFilter('expiring')} className="border-amber-200 text-amber-700">3 kun ichida tugaydi: {warningCount}</Button>
+        </div>
+        <div className="flex flex-col gap-2 sm:flex-row"><Input placeholder="Do‘kon nomi, login yoki manzil bo‘yicha qidirish" value={search} onChange={e=>setSearch(e.target.value)} aria-label="Obunachilarni qidirish"/><select className="h-10 rounded-lg border bg-white px-3 text-sm" value={expiryFilter} onChange={e=>setExpiryFilter(e.target.value)} aria-label="Obuna holati filtri"><option value="all">Barcha do‘konlar</option><option value="active">Faol obunalar</option><option value="expiring">3 kun ichida tugaydi</option><option value="expired">Muddati tugagan</option><option value="suspended">To‘xtatilgan</option><option value="unlimited">Cheksiz</option></select></div>
         {isLoading ? (
           <div className="flex items-center justify-center h-32">
             <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-indigo-600"></div>
@@ -367,7 +373,7 @@ export default function SuperAdminPage() {
         ) : (
           <Card>
             <CardHeader>
-              <CardTitle className="text-lg">Do'konlar ro'yxati ({tenantsList.length})</CardTitle>
+              <CardTitle className="text-lg">Do'konlar ro'yxati ({visibleTenants.length}/{tenantsList.length})</CardTitle>
             </CardHeader>
             <CardContent className="p-0">
               <div className="overflow-x-auto">
@@ -386,9 +392,10 @@ export default function SuperAdminPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {tenantsList.map((t) => {
+                    {visibleTenants.map((t) => {
                       const plan = planConfig[t.plan] || planConfig.free;
-                      const status = statusConfig[t.status] || statusConfig.active;
+                      const expiry=subscriptionState(t,now);
+                      const status = expiry.suspended?statusConfig.suspended:expiry.expired?{label:'Muddati tugagan',color:'bg-red-100 text-red-700'}:statusConfig[t.status] || statusConfig.active;
                       return (
                         <tr key={t.id} className="border-b last:border-0 hover:bg-slate-50/50 transition-colors" data-testid={`row-tenant-${t.id}`}>
                           <td className="px-4 py-3">
@@ -436,37 +443,7 @@ export default function SuperAdminPage() {
                             <Badge className={`${plan.color} border-0 font-medium`} data-testid={`badge-plan-${t.id}`}>{plan.label}</Badge>
                           </td>
                           <td className="px-4 py-3">
-                            {(() => {
-                              const daysLeft = getDaysLeft(t);
-                              if (daysLeft === null) {
-                                return <span className="text-xs text-slate-400">Cheksiz</span>;
-                              }
-                              if (daysLeft <= 0) {
-                                return (
-                                  <div className="flex items-center gap-1">
-                                    <AlertTriangle className="h-3.5 w-3.5 text-red-500" />
-                                    <span className="text-xs font-semibold text-red-600">Tugagan</span>
-                                  </div>
-                                );
-                              }
-                              if (daysLeft <= 3) {
-                                return (
-                                  <div className="flex items-center gap-1">
-                                    <Clock className="h-3.5 w-3.5 text-orange-500" />
-                                    <span className="text-xs font-semibold text-orange-600">{daysLeft} kun</span>
-                                  </div>
-                                );
-                              }
-                              return (
-                                <div className="flex items-center gap-1">
-                                  <Clock className="h-3.5 w-3.5 text-green-500" />
-                                  <span className="text-xs font-medium text-green-700">{daysLeft} kun</span>
-                                </div>
-                              );
-                            })()}
-                            {t.subscriptionDays > 0 && (
-                              <div className="text-[10px] text-slate-400 mt-0.5">{t.subscriptionDays} kunlik</div>
-                            )}
+                            <TenantCountdown tenant={t}/>
                           </td>
                           <td className="px-4 py-3 hidden md:table-cell">
                             <Badge className={`${status.color} border-0`}>{status.label}</Badge>
@@ -475,6 +452,7 @@ export default function SuperAdminPage() {
                           <td className="text-center px-4 py-3 hidden lg:table-cell text-slate-600">{t.ordersCount}</td>
                           <td className="px-4 py-3 text-right">
                             <div className="flex items-center justify-end gap-1">
+                              {t.trialEnd&&<Button size="sm" variant="outline" disabled={updateMutation.isPending} onClick={()=>updateMutation.mutate({id:t.id,data:{subscriptionAction:'extend',subscriptionDays:30,expectedSubscriptionEnd:t.trialEnd}})}>+30 kun</Button>}
                               <Button
                                 variant="ghost"
                                 size="sm"
@@ -513,7 +491,7 @@ export default function SuperAdminPage() {
       </div>
 
       <Dialog open={!!createdStore} onOpenChange={(open) => { if (!open) { setCreatedStore(null); setLinkCopied(false); } }}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-w-md max-h-[90dvh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-green-700">
               <Check className="h-5 w-5" />
@@ -627,12 +605,13 @@ export default function SuperAdminPage() {
       </Dialog>
 
       <Dialog open={!!editTenant} onOpenChange={(open) => !open && setEditTenant(null)}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-w-md max-h-[90dvh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Do'konni tahrirlash: {editTenant?.name}</DialogTitle>
           </DialogHeader>
           {editTenant && (
             <EditTenantForm
+              key={editTenant.id}
               tenant={editTenant}
               onSave={(data) => updateMutation.mutate({ id: editTenant.id, data })}
               isPending={updateMutation.isPending}
@@ -658,7 +637,8 @@ function EditTenantForm({
   const [name, setName] = useState(tenant.name);
   const [maxProducts, setMaxProducts] = useState(String(tenant.maxProducts));
   const [maxUsers, setMaxUsers] = useState(String(tenant.maxUsers));
-  const [subscriptionDays, setSubscriptionDays] = useState(String(tenant.subscriptionDays || 0));
+  const [term,setTerm]=useState(()=>initialTerm(tenant.trialEnd));
+  const [termError,setTermError]=useState("");
 
   const handlePlanChange = (newPlan: string) => {
     setPlan(newPlan);
@@ -701,22 +681,8 @@ function EditTenantForm({
           </SelectContent>
         </Select>
       </div>
-      <div>
-        <label className="text-sm font-medium text-slate-700 mb-1 block">Muddat (kun)</label>
-        <Input
-          type="number"
-          min="0"
-          value={subscriptionDays}
-          onChange={(e) => setSubscriptionDays(e.target.value)}
-          data-testid="input-edit-subscription-days"
-        />
-        <p className="text-xs text-slate-500 mt-1">0 = cheksiz muddat. Yangi muddat bugundan boshlab hisoblanadi.</p>
-        {tenant.trialEnd && (
-          <p className="text-xs text-slate-500 mt-1">
-            Hozirgi muddat tugashi: {new Date(tenant.trialEnd).toLocaleDateString("uz-UZ")}
-          </p>
-        )}
-      </div>
+      <SubscriptionTermEditor value={term} onChange={setTerm} end={tenant.trialEnd}/>
+      {termError&&<p role="alert" className="text-sm text-red-600">{termError}</p>}
       <div className="grid grid-cols-2 gap-3">
         <div>
           <label className="text-sm font-medium text-slate-700 mb-1 block">Max mahsulot</label>
@@ -730,7 +696,7 @@ function EditTenantForm({
       <Button
         className="w-full"
         disabled={isPending}
-        onClick={() => onSave({ name, plan, status, maxProducts: Number(maxProducts), maxUsers: Number(maxUsers), subscriptionDays: Number(subscriptionDays) })}
+        onClick={() => {try{setTermError("");onSave({ name, plan, status, maxProducts: Number(maxProducts), maxUsers: Number(maxUsers), ...termRequest(term,tenant.trialEnd) });}catch(e){setTermError((e as Error).message);}}}
         data-testid="button-save-edit"
       >
         {isPending ? "Saqlanmoqda..." : "Saqlash"}

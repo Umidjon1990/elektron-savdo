@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { Money, amount, paymentParts, paymentAccount, cashSummary, localDay, type CashEvent } from '@shared/finance';
 import { priceTransaction } from './sale-pricing';
+import {posSummary,validateSalesRange} from '@shared/pos-report';
 
 type Client = { query: (sql:string, values?:any[])=>Promise<any>; release?:()=>void };
 type Pool = { connect:()=>Promise<Client>; query:Client['query'] };
@@ -12,6 +13,13 @@ const snake=(s:string)=>s.replace(/[A-Z]/g,c=>'_'+c.toLowerCase());
 function json(v:any){return JSON.stringify(v??null)}
 export class FinanceService {
  constructor(private pool:Pool){}
+ async posReport(tenant:string,from:Date,to:Date){
+  validateSalesRange(from,to);
+  return this.snapshot(async c=>{
+   const rows=(await c.query('SELECT * FROM transactions WHERE tenant_id=$1 AND date >= $2 AND date <= $3 ORDER BY date DESC,id',[tenant,from,to])).rows.map(camel);
+   return {transactions:rows,summary:posSummary(rows),from:from.toISOString(),to:to.toISOString(),serverNow:new Date().toISOString()};
+  });
+ }
  private async snapshot(fn:(c:Client)=>Promise<any>){const c=await this.pool.connect();try{await c.query('BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY');const result=await fn(c);await c.query('COMMIT');return result;}catch(e){await c.query('ROLLBACK');throw e;}finally{c.release?.();}}
  async operation(tenant:string,user:string,kind:string,id:string,body:any,fn:(c:Client)=>Promise<any>) {
   ensure(tenant&&id&&id.length<=200,'Amal identifikatori kerak');

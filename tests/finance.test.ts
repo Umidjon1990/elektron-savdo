@@ -94,3 +94,14 @@ test('reused sale IDs reject altered initial collections and customer details',a
  await assert.rejects(service.sale('a','owner',{...body,customerInfo:{reference:'changed'}}),(e:any)=>e.status===409);
  assert.equal(Number((await db.query<any>('SELECT paid_amount FROM transactions')).rows[0].paid_amount),10000);
 });
+
+test('POS report is tenant scoped, complete beyond page size and agrees with receipt details',async t=>{
+ const {db,service}=await fixture(t),p=await seed(db);
+ await service.sale('a','owner',sale(p));
+ await db.query("INSERT INTO transactions(id,tenant_id,date,items,total_amount,total_profit,payment_method) SELECT 'bulk-'||n,'a','2026-10-24T12:00:00Z','[]',10,2,'cash' FROM generate_series(1,250) n");
+ await db.query("INSERT INTO transactions(id,tenant_id,date,items,total_amount,total_profit,payment_method) VALUES('foreign','b','2026-10-24T12:00:00Z','[]',999999,1,'cash')");
+ const report=await service.posReport('a',new Date('2026-10-23T19:00Z'),new Date('2026-10-24T18:59:59.999Z'));
+ assert.equal(report.transactions.length,251);assert.equal(report.summary.receiptCount,251);assert.equal(report.summary.revenue,152500);assert.equal(report.summary.grossProfit,50500);
+ assert.ok(report.transactions.every((r:any)=>r.tenantId==='a'));
+ await assert.rejects(service.posReport('a',new Date('bad'),new Date()));
+});

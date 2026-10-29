@@ -2,7 +2,7 @@ import Decimal from "decimal.js";
 import {adjustment} from '@shared/finance';
 import { salePrice, validateCampaign, type PricedProduct } from "@shared/pricing";
 export class PricingError extends Error { constructor(message: string, public status = 400) { super(message); } }
-type Product = PricedProduct & { id: string; tenantId?: string | null; name: string; costPrice?: number; stock?: number };
+type Product = PricedProduct & { id: string; tenantId?: string | null; name: string; costPrice?: number; stock?: number;unit?:string };
 type Lookup = (id: string, tenant: string) => Promise<Product | undefined>;
 function quantity(value: unknown) {
   const n = Number(value);
@@ -44,7 +44,7 @@ export async function priceTransaction(raw: any, tenant: string, lookup: Lookup,
     if (amount.lt(0)) throw new PricingError("Chegirma mahsulot summasidan katta");
     total = total.add(amount); profit = profit.add(amount.sub(new Decimal(cost).mul(q)));
     // Frozen sale price: no campaign recalculation in historical receipts.
-    return { ...line, quantity: q, discount: manual, product: { ...line.product, id: p.id, name: p.name, price, discountPrice: null, regularPrice: source.regularPrice ?? source.price, costPrice: cost } };
+    return { ...line, quantity: q, discount: manual, product: { ...line.product, id: p.id, name: p.name, unit:source.unit||p.unit||'dona',price, discountPrice: null, regularPrice: source.regularPrice ?? source.price, costPrice: cost } };
   }));
   if(total.gt(1e12))throw new PricingError("Savdo summasi chegaradan katta");
   const payable=total.toDecimalPlaces(2),cost=total.sub(profit).toDecimalPlaces(2);

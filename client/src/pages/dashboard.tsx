@@ -24,8 +24,7 @@ import { ScannerOverlay } from "@/components/pos/scanner-overlay";
 import { ProductInfoDialog } from "@/components/pos/product-info-dialog";
 import { ReceiptDialog } from "@/components/pos/receipt-dialog";
 import { buildReceiptHtml } from "@/lib/receipt-html";
-import { ReceiptsListDialog } from "@/components/pos/receipts-list-dialog";
-import { SoldItemsDialog } from "@/components/pos/sold-items-dialog";
+import { SalesOverview } from "@/components/pos/sales-overview";
 import { useToast } from "@/hooks/use-toast";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
@@ -45,10 +44,9 @@ const beepSound = typeof window !== 'undefined' ? new Audio("https://codeskulpto
 
 export default function Dashboard() {
   const { products, updateStock, isOffline, refreshProducts } = useProducts();
-  const { addTransaction, getStats, pendingCount, syncTransactions } = useTransactions();
+  const { addTransaction, pendingCount, syncTransactions } = useTransactions();
   const { settings } = useSettings();
   const { token } = useAuth();
-  const stats = getStats();
 
   const { data: tenantSettings } = useQuery<any>({
     queryKey: ["tenant-settings"],
@@ -110,8 +108,6 @@ export default function Dashboard() {
   // can read the receipt while the OS print dialog is on screen.
   const preOpenedPreviewWindowRef = useRef<Window | null>(null);
   const [isMobileCartOpen, setIsMobileCartOpen] = useState(false);
-  const [isReceiptsListOpen, setIsReceiptsListOpen] = useState(false);
-  const [isSoldItemsOpen, setIsSoldItemsOpen] = useState(false);
   const { toast } = useToast();
   const barcodeBufferRef = useRef("");
   const barcodeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -731,42 +727,7 @@ export default function Dashboard() {
         {/* Content */}
         <div className="flex-1 flex min-h-0 bg-gray-50/50 overflow-hidden">
           <div className="flex-1 flex flex-col p-4 md:p-6 min-w-0 overflow-y-auto md:pr-[460px] lg:pr-[500px]">
-            {/* KPI Stats Row */}
-            <div className="grid grid-cols-5 gap-2 md:gap-3 mb-4">
-              <div className="bg-gradient-to-br from-green-500 to-emerald-600 rounded-xl p-2.5 md:p-4 shadow-sm text-white text-center">
-                <DollarSign className="w-5 h-5 md:w-6 md:h-6 mx-auto mb-1 opacity-80" />
-                <p className="text-[9px] md:text-xs opacity-80 font-medium">Bugun</p>
-                <p className="text-xs md:text-lg font-bold">{stats.todayTotal.toLocaleString()}</p>
-              </div>
-              <div className="bg-gradient-to-br from-emerald-600 to-teal-600 rounded-xl p-2.5 md:p-4 shadow-sm text-white text-center">
-                <TrendingUp className="w-5 h-5 md:w-6 md:h-6 mx-auto mb-1 opacity-80" />
-                <p className="text-[9px] md:text-xs opacity-80 font-medium">Daromad</p>
-                <p className="text-xs md:text-lg font-bold">{stats.todayProfit.toLocaleString()}</p>
-              </div>
-              <div 
-                className="bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl p-2.5 md:p-4 shadow-sm text-white text-center cursor-pointer hover:opacity-90 transition-opacity"
-                onClick={() => setIsReceiptsListOpen(true)}
-                data-testid="button-receipts-list"
-              >
-                <CreditCard className="w-5 h-5 md:w-6 md:h-6 mx-auto mb-1 opacity-80" />
-                <p className="text-[9px] md:text-xs opacity-80 font-medium">Cheklar</p>
-                <p className="text-xs md:text-lg font-bold">{stats.todayCount}</p>
-              </div>
-              <div 
-                className="bg-gradient-to-br from-purple-500 to-purple-600 rounded-xl p-2.5 md:p-4 shadow-sm text-white text-center cursor-pointer hover:opacity-90 transition-opacity"
-                onClick={() => setIsSoldItemsOpen(true)}
-                data-testid="button-sold-items"
-              >
-                <Package className="w-5 h-5 md:w-6 md:h-6 mx-auto mb-1 opacity-80" />
-                <p className="text-[9px] md:text-xs opacity-80 font-medium">Sotildi</p>
-                <p className="text-xs md:text-lg font-bold">{stats.totalItemsSold}</p>
-              </div>
-              <div className="bg-gradient-to-br from-orange-500 to-orange-600 rounded-xl p-2.5 md:p-4 shadow-sm text-white text-center">
-                <TrendingUp className="w-5 h-5 md:w-6 md:h-6 mx-auto mb-1 opacity-80" />
-                <p className="text-[9px] md:text-xs opacity-80 font-medium">Oylik</p>
-                <p className="text-xs md:text-lg font-bold">{stats.monthTotal.toLocaleString()}</p>
-              </div>
-            </div>
+            <SalesOverview />
 
             {/* Pinned Category Quick Filters */}
             {categories.filter(c => c.isPinned).length > 0 && (
@@ -957,15 +918,6 @@ export default function Dashboard() {
         }}
       />
 
-      <ReceiptsListDialog
-        isOpen={isReceiptsListOpen}
-        onClose={() => setIsReceiptsListOpen(false)}
-      />
-
-      <SoldItemsDialog
-        isOpen={isSoldItemsOpen}
-        onClose={() => setIsSoldItemsOpen(false)}
-      />
     </div>
   );
 }

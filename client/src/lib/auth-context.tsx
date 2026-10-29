@@ -4,6 +4,7 @@ import { toast } from 'sonner';
 import { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from "react";
 import { useLocation } from "wouter";
 import { clearAllData } from "./db";
+import {subscriptionState} from '@shared/subscription';
 
 interface UserInfo {
   id: string;
@@ -20,6 +21,8 @@ interface TenantInfo {
   brandColor: string;
   plan?: string;
   status?: string;
+  trialEnd?: string|null;
+  subscriptionDays?: number;
   telegramBotToken?: boolean;
   telegramChatId?: boolean;
 }
@@ -36,6 +39,7 @@ interface AuthContextType {
   isExpired: boolean;
   expiredMessage: string;
   refreshUser: () => Promise<void>;
+  serverClock: {timestamp:number;receivedAt:number};
 }
 
 interface RegisterData {
@@ -70,6 +74,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
   const [isExpired, setIsExpired] = useState(false);
   const [expiredMessage, setExpiredMessage] = useState("");
+  const [serverClock,setServerClock]=useState(()=>({timestamp:Date.now(),receivedAt:performance.now()}));
   const [, setLocation] = useLocation();
 
   const refreshUser = useCallback(async () => {
@@ -85,6 +90,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       });
       if (res.ok) {
         const data = await res.json();
+        if(getAuthToken()!==savedToken)return;
+        if(data.serverNow)setServerClock({timestamp:Date.parse(data.serverNow),receivedAt:performance.now()});
         const prevTenantId = localStorage.getItem('kitoblar_tenant_id');
         const newTenantId = data.tenant?.id;
         if (prevTenantId && newTenantId && prevTenantId !== newTenantId) {
@@ -111,7 +118,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           setUser(null);
           setTenant(null);
         }
-      } else {
+      } else if(res.status===401||res.status===404) {
         localStorage.removeItem(TOKEN_KEY);
         setToken(null);
         setUser(null);
@@ -128,6 +135,39 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     refreshUser();
   }, [refreshUser]);
 
+  useEffect(()=>{
+    if(!token)return;
+    let cancelled=false,busy=false;
+    const refresh=async()=>{
+      if(busy||!navigator.onLine)return;busy=true;
+      try{
+        const res=await fetch('/api/auth/subscription',{headers:{Authorization:`Bearer ${token}`},cache:'no-store'});
+        if(!res.ok)return;const data=await res.json();
+        if(cancelled||getAuthToken()!==token)return;
+        if(data.serverNow)setServerClock({timestamp:Date.parse(data.serverNow),receivedAt:performance.now()});
+        setTenant(data.tenant);setIsExpired(false);setExpiredMessage('');
+      }catch{/* Existing verified deadline keeps running while offline. */}finally{busy=false;}
+    };
+    const visible=()=>{if(document.visibilityState==='visible')void refresh();};
+    void refresh();const timer=setInterval(refresh,30000);
+    window.addEventListener('focus',refresh);window.addEventListener('online',refresh);document.addEventListener('visibilitychange',visible);
+    return()=>{cancelled=true;clearInterval(timer);window.removeEventListener('focus',refresh);window.removeEventListener('online',refresh);document.removeEventListener('visibilitychange',visible);};
+  },[token]);
+
+  useEffect(()=>{
+    if(user?.isSuper||!tenant){setIsExpired(false);return;}
+    const now=serverClock.timestamp+performance.now()-serverClock.receivedAt,state=subscriptionState(tenant,now);
+    const block=()=>{setIsExpired(true);setExpiredMessage(state.suspended?'Do‘koningiz to‘xtatilgan. Admin bilan bog‘laning.':'Obuna muddati tugagan. To‘lov qiling va admin bilan bog‘laning.');};
+    setIsExpired(state.blocked);
+    if(state.blocked){block();return;}
+    if(state.remainingMs===null)return;
+    // Long deadlines are rechecked by the heartbeat; avoid setTimeout overflow.
+    const timer=setTimeout(()=>{
+      if(subscriptionState(tenant,serverClock.timestamp+performance.now()-serverClock.receivedAt).blocked)block();
+    },Math.min(state.remainingMs+10,2147483647));
+    return()=>clearTimeout(timer);
+  },[tenant,user?.isSuper,serverClock]);
+
   const login = async (username: string, password: string, slug?: string) => {
     try {
       const res = await fetch("/api/auth/login", {
@@ -141,6 +181,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
 
       const data = await res.json();
+      if(data.serverNow)setServerClock({timestamp:Date.parse(data.serverNow),receivedAt:performance.now()});
       const prevTenantId = localStorage.getItem('kitoblar_tenant_id');
       const newTenantId = data.tenant?.id;
       if (prevTenantId && newTenantId && prevTenantId !== newTenantId) {
@@ -212,6 +253,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  const currentSubscription=tenant?subscriptionState(tenant,serverClock.timestamp+performance.now()-serverClock.receivedAt):null;
+  const blocked=!user?.isSuper&&(isExpired||!!currentSubscription?.blocked);
   return (
     <AuthContext.Provider
       value={{
@@ -223,9 +266,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         logout,
         isAuthenticated: !!user,
         isLoading,
-        isExpired,
-        expiredMessage,
+        isExpired:blocked,
+        expiredMessage:expiredMessage||(currentSubscription?.suspended?'Do‘koningiz to‘xtatilgan. Admin bilan bog‘laning.':'Obuna muddati tugagan. To‘lov qiling va admin bilan bog‘laning.'),
         refreshUser,
+        serverClock,
       }}
     >
       {children}

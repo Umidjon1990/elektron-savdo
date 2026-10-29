@@ -215,6 +215,7 @@ export async function syncPendingTransactions(): Promise<void> {
               regularPrice: item.product.regularPrice,
               costPrice: item.product.costPrice || 0,
               stock: item.product.stock,
+              unit:item.product.unit,
               barcode: item.product.barcode
             },
             quantity: item.quantity,

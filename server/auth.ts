@@ -3,6 +3,8 @@ import jwt from "jsonwebtoken";
 import type { Request, Response, NextFunction } from "express";
 import { getTenantById } from "./tenant";
 import { authSecret } from './auth-secret';
+import {subscriptionGate} from './subscription-gate';
+const checkSubscription=subscriptionGate(id=>getTenantById(id,true));
 
 const JWT_SECRET = authSecret(process.env);
 const JWT_EXPIRES_IN = "30d";
@@ -70,21 +72,7 @@ export async function authMiddleware(req: Request, res: Response, next: NextFunc
     return res.status(403).json({error:'Bu moliyaviy amal uchun rahbar huquqi kerak'});
   }
 
-  if (!payload.isSuper && payload.tenantId) {
-    const tenant = await getTenantById(payload.tenantId);
-    if (tenant) {
-      if (tenant.status === "suspended") {
-        return res.status(403).json({ error: "Do'koningiz to'xtatilgan. Admin bilan bog'laning.", expired: true });
-      }
-      if (tenant.trialEnd && new Date(tenant.trialEnd) < new Date()) {
-        if (tenant.plan === "trial" || tenant.plan === "free") {
-          return res.status(403).json({ error: "Sinov muddatingiz tugagan. Obunani yangilang.", expired: true });
-        }
-      }
-    }
-  }
-
-  next();
+  return checkSubscription(req,res,next);
 }
 
 export function optionalAuth(req: Request, res: Response, next: NextFunction) {

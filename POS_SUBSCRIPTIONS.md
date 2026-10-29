@@ -24,11 +24,17 @@ business API reads and writes remain forbidden. Super admins can manage expired
 tenants. Access checks load current tenant data rather than a five-minute cache.
 
 Tenant editing defaults to **keep the existing term**. Explicit operations are:
-set a future date/time in Toshkent, extend a dated subscription, or make it
-unlimited. Extension starts from the later of the current deadline or now.
-Quick +30-day extensions include the expected prior deadline; the server locks
-the tenant row and rejects concurrent stale edits. Creation also offers a day
-count. Invalid/fractional/negative/excessive terms are rejected.
+set a future date/time in Toshkent, add or subtract days from a dated subscription,
+or make it unlimited. Extension starts from the later of the current deadline or
+now. Subtraction always uses the saved deadline, even if already expired, so it
+can correct accidental extra days without resetting the term. A correction may
+expire an account; the dialog previews the new Toshkent date/time and warns that
+access will be blocked. The old one-click +30 action opens this day editor instead,
+with a positive custom count, operation selector, cancel and save buttons.
+Updates include the expected prior deadline; the server locks the tenant row and
+rejects concurrent stale edits (including duplicate corrections). Creation also
+offers a day count. Invalid/fractional/negative/excessive day counts are rejected;
+subtraction uses its own explicit action rather than a negative day count.
 
 Client countdowns anchor to server time and advance with a monotonic clock.
 There is a small corner indicator, a full-screen warning within 72 hours with an

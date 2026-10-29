@@ -27,7 +27,7 @@ export function fromTashkentInput(value: string) {
 }
 export function subscriptionUpdate(body: Record<string,any>, current: SubscriptionTenant, now=new Date()) {
   const action=body.subscriptionAction??(body.subscriptionDays!==undefined?'reset':'keep');
-  if(!['keep','set','extend','unlimited','reset'].includes(action))throw new RangeError('Muddat amali noto‘g‘ri');
+  if(!['keep','set','extend','reduce','unlimited','reset'].includes(action))throw new RangeError('Muddat amali noto‘g‘ri');
   if(action==='keep')return {};
   if(Object.hasOwn(body,'expectedSubscriptionEnd')){
     const actual=current.trialEnd?new Date(current.trialEnd).toISOString():null;
@@ -41,16 +41,18 @@ export function subscriptionUpdate(body: Record<string,any>, current: Subscripti
     if(!Number.isFinite(end)||end<=now.getTime()||end>now.getTime()+3650*DAY)throw new RangeError('Tugash sanasi kelajakda, 10 yil chegarasida bo‘lsin');
   }else{
     const days=Number(body.subscriptionDays);
-    if(!Number.isInteger(days)||days<0||days>3650||(action==='extend'&&days===0))throw new RangeError('Muddat 1–3650 butun kun bo‘lsin');
+    if(!Number.isInteger(days)||days<0||days>3650||(['extend','reduce'].includes(action)&&days===0))throw new RangeError('Muddat 1–3650 butun kun bo‘lsin');
     if(days===0){
       if(body.subscriptionAction===undefined)return {trialEnd:null,subscriptionDays:0};
       throw new RangeError('Cheksiz muddat uchun alohida amalni tanlang');
     }
-    if(action==='extend'&&!current.trialEnd)throw new RangeError('Cheksiz obunaga aniq tugash sanasini belgilang');
+    if(['extend','reduce'].includes(action)&&!current.trialEnd)throw new RangeError('Cheksiz obunaga aniq tugash sanasini belgilang');
     const previous=current.trialEnd?new Date(current.trialEnd).getTime():now.getTime();
     if(!Number.isFinite(previous))throw new RangeError('Avval tugash sanasini to‘g‘rilang');
-    end=(action==='extend'?Math.max(now.getTime(),previous):now.getTime())+days*DAY;
+    // Corrections always subtract from the saved deadline, including expired terms.
+    // Renewals retain their existing behavior of starting no earlier than now.
+    end=action==='reduce'?previous-days*DAY:(action==='extend'?Math.max(now.getTime(),previous):now.getTime())+days*DAY;
     if(end>now.getTime()+3650*DAY)throw new RangeError('Obuna muddati 10 yildan oshmasin');
   }
-  return {trialEnd:new Date(end),subscriptionDays:Math.ceil((end-now.getTime())/DAY)};
+  return {trialEnd:new Date(end),subscriptionDays:Math.max(0,Math.ceil((end-now.getTime())/DAY))};
 }

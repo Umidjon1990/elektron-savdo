@@ -1,7 +1,8 @@
 import { useState,useEffect,useRef } from "react";
 import {useServerTime} from "@/hooks/use-server-time";
 import {subscriptionState} from "@shared/subscription";
-import {SubscriptionTermEditor,TenantCountdown,initialTerm,termRequest} from "@/components/subscription-term-editor";
+import {SubscriptionTermEditor,TenantCountdown,initialTerm,termRequest,termPreview} from "@/components/subscription-term-editor";
+import type {TermDraft} from "@/components/subscription-term-editor";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/lib/auth-context";
 import { Redirect } from "wouter";
@@ -59,6 +60,8 @@ export default function SuperAdminPage() {
   const queryClient = useQueryClient();
   const [createOpen, setCreateOpen] = useState(false);
   const [editTenant, setEditTenant] = useState<TenantWithStats | null>(null);
+  const [adjustTenant,setAdjustTenant]=useState<TenantWithStats|null>(null);
+  const [adjustTerm,setAdjustTerm]=useState<TermDraft>(()=>({...initialTerm(),action:'extend',days:'1'}));
   const [showPassword, setShowPassword] = useState(false);
   const [createdStore, setCreatedStore] = useState<{ slug: string; name: string; username: string; password: string } | null>(null);
   const [linkCopied, setLinkCopied] = useState(false);
@@ -128,6 +131,7 @@ export default function SuperAdminPage() {
       queryClient.invalidateQueries({ queryKey: ["subscription-alerts"] });
       if(updated.id===ownTenant?.id)void refreshUser();
       setEditTenant(null);
+      setAdjustTenant(null);
       toast({ title: "O'zgartirildi" });
     },
     onError:(err:Error)=>toast({title:"Saqlanmadi",description:err.message,variant:"destructive"}),
@@ -452,7 +456,7 @@ export default function SuperAdminPage() {
                           <td className="text-center px-4 py-3 hidden lg:table-cell text-slate-600">{t.ordersCount}</td>
                           <td className="px-4 py-3 text-right">
                             <div className="flex items-center justify-end gap-1">
-                              {t.trialEnd&&<Button size="sm" variant="outline" disabled={updateMutation.isPending} onClick={()=>updateMutation.mutate({id:t.id,data:{subscriptionAction:'extend',subscriptionDays:30,expectedSubscriptionEnd:t.trialEnd}})}>+30 kun</Button>}
+                              {t.trialEnd&&<Button size="sm" variant="outline" disabled={updateMutation.isPending} data-testid={`button-adjust-term-${t.id}`} onClick={()=>{setAdjustTerm({...initialTerm(t.trialEnd),action:'extend',days:'1'});setAdjustTenant(t);}}>Kun qo‘shish / ayirish</Button>}
                               <Button
                                 variant="ghost"
                                 size="sm"
@@ -601,6 +605,20 @@ export default function SuperAdminPage() {
               </Button>
             </div>
           )}
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!adjustTenant} onOpenChange={open=>{if(!open&&!updateMutation.isPending)setAdjustTenant(null);}}>
+        <DialogContent className="max-w-md max-h-[90dvh] overflow-y-auto" hideClose={updateMutation.isPending}>
+          <DialogHeader><DialogTitle>Kun qo‘shish / ayirish</DialogTitle></DialogHeader>
+          {adjustTenant&&<form className="space-y-4" onSubmit={e=>{e.preventDefault();if(!updateMutation.isPending&&!termPreview(adjustTerm,adjustTenant.trialEnd,now).error)updateMutation.mutate({id:adjustTenant.id,data:termRequest(adjustTerm,adjustTenant.trialEnd)});}}>
+            <p className="font-medium text-slate-900">{adjustTenant.name}</p>
+            <fieldset disabled={updateMutation.isPending}><SubscriptionTermEditor value={adjustTerm} onChange={setAdjustTerm} end={adjustTenant.trialEnd} adjustOnly/></fieldset>
+            <div className="flex justify-end gap-2">
+              <Button type="button" variant="outline" disabled={updateMutation.isPending} onClick={()=>setAdjustTenant(null)}>Bekor qilish</Button>
+              <Button type="submit" disabled={updateMutation.isPending||!!termPreview(adjustTerm,adjustTenant.trialEnd,now).error} data-testid="button-save-term">{updateMutation.isPending?'Saqlanmoqda...':adjustTerm.action==='reduce'?'Kunlarni ayirish':'Kunlarni qo‘shish'}</Button>
+            </div>
+          </form>}
         </DialogContent>
       </Dialog>
 

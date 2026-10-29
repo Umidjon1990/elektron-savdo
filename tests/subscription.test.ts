@@ -30,6 +30,31 @@ test('renewal extends a live term from its end and an expired term from now',()=
  assert.equal(subscriptionUpdate({subscriptionAction:'extend',subscriptionDays:7}, {trialEnd:'2026-10-01'},now).trialEnd?.toISOString(),'2026-11-05T05:00:00.000Z');
  assert.throws(()=>subscriptionUpdate({subscriptionAction:'extend',subscriptionDays:30}, {trialEnd:null},now));
 });
+test('subtracting days corrects the saved deadline and reverses an accidental active renewal exactly',()=>{
+ const current={trialEnd:future};
+ const renewed=subscriptionUpdate({subscriptionAction:'extend',subscriptionDays:30},current,now);
+ const corrected=subscriptionUpdate({subscriptionAction:'reduce',subscriptionDays:30,expectedSubscriptionEnd:renewed.trialEnd!.toISOString()},renewed,now);
+ assert.equal(corrected.trialEnd?.toISOString(),future);
+ assert.equal(subscriptionUpdate({subscriptionAction:'reduce',subscriptionDays:'2'},current,now).trialEnd?.toISOString(),'2026-11-08T05:00:00.000Z');
+ // Correction across the leap day preserves the time of day.
+ assert.equal(subscriptionUpdate({subscriptionAction:'reduce',subscriptionDays:2},{trialEnd:'2028-03-01T13:24:56.789Z'},now).trialEnd?.toISOString(),'2028-02-28T13:24:56.789Z');
+});
+test('a reduction may expire an account and never resets an already expired deadline to now',()=>{
+ const expired=subscriptionUpdate({subscriptionAction:'reduce',subscriptionDays:20},{trialEnd:future},now);
+ assert.equal(expired.trialEnd?.toISOString(),'2026-10-21T05:00:00.000Z');
+ assert.equal(expired.subscriptionDays,0);
+ assert.equal(subscriptionState(expired,now.getTime()).blocked,true);
+ assert.equal(subscriptionUpdate({subscriptionAction:'reduce',subscriptionDays:1},{trialEnd:now},now).trialEnd?.toISOString(),'2026-10-28T05:00:00.000Z');
+ assert.equal(subscriptionUpdate({subscriptionAction:'reduce',subscriptionDays:3},{trialEnd:'2026-10-01T05:00:00.000Z'},now).trialEnd?.toISOString(),'2026-09-28T05:00:00.000Z');
+});
+test('reductions validate day counts, require a dated term, and reject stale duplicate corrections',()=>{
+ for(const subscriptionDays of [-1,0,'',1.5,Infinity,NaN,3651,undefined,'abc'])assert.throws(()=>subscriptionUpdate({subscriptionAction:'reduce',subscriptionDays},{trialEnd:future},now));
+ for(const trialEnd of [null,undefined,'bad-date'])assert.throws(()=>subscriptionUpdate({subscriptionAction:'reduce',subscriptionDays:1},{trialEnd},now));
+ const body={subscriptionAction:'reduce',subscriptionDays:2,expectedSubscriptionEnd:future};
+ const corrected=subscriptionUpdate(body,{trialEnd:future},now);
+ assert.throws(()=>subscriptionUpdate(body,corrected,now),(e:any)=>e.status===409);
+ assert.equal(subscriptionUpdate({subscriptionAction:'reduce',subscriptionDays:3650},{trialEnd:future},now).subscriptionDays,0);
+});
 test('exact Toshkent expiry is independent of browser/server timezone and checks revision',()=>{
  const iso=fromTashkentInput('2026-11-10T10:30');assert.equal(iso,'2026-11-10T05:30:00.000Z');assert.equal(tashkentInput(iso),'2026-11-10T10:30');
  assert.equal(subscriptionUpdate({subscriptionAction:'set',subscriptionExpiresAt:iso,expectedSubscriptionEnd:future},{trialEnd:future},now).trialEnd?.toISOString(),iso);
